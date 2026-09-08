@@ -66,7 +66,8 @@
         "hold",
         "ratio",
         "style",
-        "audio"
+        "audio",
+        "sheetLora"
       ],
       "defaults": {
         "duration": 2
@@ -83,7 +84,8 @@
         "turbo",
         "mp",
         "lora",
-        "refs"
+        "refs",
+        "sheetLora"
       ],
       "defaults": {
         "duration": 2

@@ -1630,6 +1630,10 @@
                 Style (LoRA)
                 <select id="loraStyleSelect"><option value="">Aucun</option></select>
               </label>
+              <label class="gb-field" id="sheetLoraWrap" style="display:none">
+                Style fiches perso/décor (LoRA)
+                <select id="sheetLoraSelect"><option value="">Aucun</option></select>
+              </label>
               <label class="gb-field" id="variantsWrap">
                 Variantes
                 <input type="number" id="variants" min="1" max="8" value="2" />
@@ -1944,10 +1948,11 @@
       for (const f of list) if (f.startsWith("Krea2/")) KREA2_LORAS.push([f, loraLabel(f)]);
       for (const f of list) if (f.startsWith("H3/") && !H3_TURBO_LORAS.has(f)) H3_STYLE_LORAS.push([f, loraLabel(f)]);
       renderLoraSelect();
+      renderSheetLoraSelect();
     });
 
     // Fallback si le manifest ne fournit pas la section "pipelines" (manifest v2).
-    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora}
+    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora, sheetLora}
     const PIPELINES_FALLBACK = [
       { id: "text2image", label: "Text2Image", controls: ["variants", "ratio", "lora"] },
       { id: "image2image", label: "Image2Image / Edit", controls: ["variants", "ratio", "image", "markets"] },
@@ -1955,9 +1960,9 @@
       { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps", "lora"] },
       { id: "sequence2video", label: "Animatic (FLF2V)", scenario: "storyboard", controls: ["seq", "audio"] },
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
-        controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio"], defaults: { duration: 2 } },
+        controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio", "sheetLora"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["duration", "ratio", "audio", "turbo", "mp", "lora", "refs"], defaults: { duration: 2 } },
+        controls: ["duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
         controls: ["duration", "variants", "audio"], defaults: { duration: 5 } }
     ];
@@ -2345,7 +2350,7 @@
       seq: "seqWrap", shots: "shotCountWrap", hold: "holdWrap",
       variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap", mode: "modeWrap",
       style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap",
-      lora: "loraStyleWrap", refs: "refExtrasWrap"
+      lora: "loraStyleWrap", refs: "refExtrasWrap", sheetLora: "sheetLoraWrap"
     };
     function updateModelOptions() {
       const wfs = manifest.workflows.filter(w => w.pipeline === pipelineSelect.value);
@@ -2414,6 +2419,11 @@
       const prev = sel.value;
       sel.innerHTML = list.map(([v, l]) => `<option value="${v}">${tr(l)}</option>`).join("");
       if (list.some(([v]) => v === prev)) sel.value = prev;
+    }
+    // Style Krea 2 des fiches perso/décor (storyboard_v2/reference2video) : toujours le bucket
+    // Krea2, pas de branchement par pipeline/moteur contrairement à renderLoraSelect ci-dessus.
+    function renderSheetLoraSelect() {
+      $("sheetLoraSelect").innerHTML = KREA2_LORAS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
     }
 
     pipelineSelect.addEventListener("change", updateModelOptions);
@@ -3632,8 +3642,9 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     // ── Branche image Krea 2 Turbo (8 steps, cfg 1 — copie de api/krea2_t2i.json) ──
     // ATTENTION (LESSONS piège n°16) : le négatif passe par ConditioningZeroOut, il n'est
     // même pas encodé — TOUTE contrainte doit être formulée POSITIVEMENT dans le prompt.
-    function addKrea2Shared(add) {
-      const unet = add("UNETLoader", { unet_name: "krea2_turbo_fp8_scaled.safetensors", weight_dtype: "default" });
+    function addKrea2Shared(add, loraName) {
+      let unet = add("UNETLoader", { unet_name: "krea2_turbo_fp8_scaled.safetensors", weight_dtype: "default" });
+      if (loraName) unet = add("LoraLoaderModelOnly", { model: [unet, 0], lora_name: loraName, strength_model: 1 });
       const clip = add("CLIPLoader", { clip_name: "qwen3vl_4b_fp8_scaled.safetensors", type: "krea2", device: "default" });
       const vae = add("VAELoader", { vae_name: "qwen_image_vae.safetensors" });
       return { unet, clip, vae };
@@ -4060,9 +4071,9 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
 
     // Planche personnage multi-vues (ancre d'apparence, image 1 des keyframes duales).
     // Format 16:9 large obligatoire (layout prouvé au Lot 1), indépendant du ratio UI.
-    function buildCharsheetGraph(charDesc, negText, seed, width, height) {
+    function buildCharsheetGraph(charDesc, negText, seed, width, height, loraName) {
       const { g, add } = makeGraphBuilder();
-      const kx = addKrea2Shared(add);
+      const kx = addKrea2Shared(add, loraName);
       const styleText = currentStyleText();
       const dec = addKrea2Shot(add, kx,
         `A professional photorealistic character reference sheet of one single person, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. Arranged neatly, the sheet shows a full-body turnaround of the same person in four standing poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a neutral relaxed stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the face. A row of several smaller close-up headshots of the face showing different facial expressions: neutral, smiling, surprised, determined. A cluster of detailed close-up photographs of costume details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the outfit and hair. Every view shows the exact same single person with identical face, hair and costume, consistent character design. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
@@ -4072,9 +4083,9 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     }
 
     // Planche décor multi-vues (ancre d'environnement, image 2 des keyframes duales).
-    function buildLocsheetGraph(locDesc, negText, seed, width, height) {
+    function buildLocsheetGraph(locDesc, negText, seed, width, height, loraName) {
       const { g, add } = makeGraphBuilder();
-      const kx = addKrea2Shared(add);
+      const kx = addKrea2Shared(add, loraName);
       const styleText = currentStyleText();
       const dec = addKrea2Shot(add, kx,
         `A professional photorealistic environment reference sheet of one single location, composited as a clean multi-view layout on a smooth seamless dark neutral background: ${locDesc}. Arranged neatly, the sheet shows several wide establishing photographs of the same location from different angles across the top, below them a row of medium shots of key structures, and along the bottom a cluster of tight close-up material and detail studies. The location is completely empty and deserted, showing only architecture, materials and scenery. Consistent art direction, matching lighting and color palette across every view. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
@@ -4106,11 +4117,11 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     // en fonctions réutilisables pour que le mode Réalisateur puisse s'arrêter entre
     // chaque étape sans dupliquer la logique de construction de graphe.
     async function submitCharsheetJob(charDesc, negText, seed, width, height, wf) {
-      return submitGraph(buildCharsheetGraph(charDesc, negText, seed, width, height),
+      return submitGraph(buildCharsheetGraph(charDesc, negText, seed, width, height, $("sheetLoraSelect").value),
         "Storyboard · fiche personnage", `${wf.model} · charsheet · seed ${seed}`);
     }
     async function submitLocsheetJob(locDesc, negText, seed, width, height, wf) {
-      return submitGraph(buildLocsheetGraph(locDesc, negText, seed, width, height),
+      return submitGraph(buildLocsheetGraph(locDesc, negText, seed, width, height, $("sheetLoraSelect").value),
         "Storyboard · fiche décor", `${wf.model} · locsheet · seed ${seed}`);
     }
     // Attend un job image et le ré-uploade (pattern charsheet→ancre / keyframe→cut).
