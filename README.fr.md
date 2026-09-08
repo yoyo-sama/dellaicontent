@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — démo Media & Entertainment sur GB10
 
-**Version actuelle : 1.0.3** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
+**Version actuelle : 1.0.4** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
 Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception d'un petit service `updater` dédié aux mises à jour, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 

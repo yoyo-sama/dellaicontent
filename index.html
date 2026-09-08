@@ -561,6 +561,8 @@
       box-shadow: 0 0 0 3px rgba(52, 60, 237, 0.14);
     }
 
+    textarea:disabled, input:disabled, select:disabled { opacity: .45; cursor: not-allowed; }
+
     .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
     /* ── Barre Generate : prompt + contrôles contextuels sur une seule ligne ── */
@@ -1595,6 +1597,25 @@
                   <option>4:5</option>
                 </select>
               </label>
+              <label class="gb-field" id="mpWrap" style="display:none">
+                Mégapixels
+                <select id="mpSelect">
+                  <option value="0.2">0.2</option>
+                  <option value="0.3">0.3</option>
+                  <option value="0.4">0.4</option>
+                  <option value="0.5">0.5</option>
+                  <option value="0.6">0.6</option>
+                  <option value="0.7">0.7</option>
+                  <option value="0.8">0.8</option>
+                  <option value="0.9">0.9</option>
+                  <option value="0.98">0.98</option>
+                  <option value="1.0" selected>1.0</option>
+                  <option value="1.2">1.2</option>
+                  <option value="1.5">1.5</option>
+                  <option value="1.8">1.8</option>
+                  <option value="2.0">2.0</option>
+                </select>
+              </label>
               <label class="gb-field" id="variantsWrap">
                 Variantes
                 <input type="number" id="variants" min="1" max="8" value="2" />
@@ -1650,7 +1671,16 @@
 
               <label id="turboWrap" class="check-row" style="display:none">
                 <input type="checkbox" id="turboToggle" checked />
-                <span>Turbo Minimax H3 (LoRA, 8 steps) — désactiver = 20 steps, qualité maximale</span>
+                <span>Turbo Minimax H3 (LoRA) — désactiver = 20 steps, qualité maximale</span>
+              </label>
+
+              <label class="gb-field" id="turboStepsWrap" style="display:none">
+                Steps (LoRA turbo)
+                <select id="turboSteps">
+                  <option value="4">4</option>
+                  <option value="6">6</option>
+                  <option value="8" selected>8</option>
+                </select>
               </label>
             </div>
 
@@ -1821,18 +1851,48 @@
     const OLLAMA = "/ollama";
     const OLLAMA_MODEL = "gemma4:e4b";
     const RATIOS = { "16:9": [1280, 720], "9:16": [720, 1280], "1:1": [1024, 1024], "4:5": [832, 1040] };
+
+    // LoRA turbo alternative pour les pipelines fl2v (t2v/i2v, checkpoint
+    // `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors`) — validée par rendu réel à 4 steps.
+    // PIÈGE N°12 (LESSONS) — PRÉCISION : « 4 steps casse la colorimétrie » ne vaut QUE pour
+    // l'ANCIEN LoRA `H3/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors` (celui
+    // câblé en dur dans les 3 templates Minimax H3). Le LoRA ci-dessous, spécifiquement
+    // entraîné pour 4 steps, ne présente PAS cette dérive : 4 steps est donc exposable dans
+    // l'UI, mais UNIQUEMENT avec ce LoRA-là. Son nom porte `fl2v` : il n'est PAS valide pour
+    // le r2v, dont le checkpoint (`*_ref2va_*`) est différent et non interchangeable —
+    // reference2video appelle donc `applyMinimaxTurbo` SANS 3ᵉ argument et garde l'ancien LoRA.
+    const MINIMAX_FL2V_LORA_4STEP = "H3/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors";
+
+    // ── Résolution pilotée par mégapixels — porté VERBATIM depuis js/engine.js
+    // (fonction `computeMPResolution`). Constante 1.045 (empirique, déjà validée) et
+    // formule INTOUCHÉES.
+    function computeMPResolution(mp, ratioStr, unit) {
+      unit = unit || 32;
+      const [rw, rh] = ratioStr.split(":").map(Number);
+      const ar = rw / rh;
+      const width = Math.round(Math.sqrt(1.045 * mp * 1000000 * ar) / unit) * unit;
+      const height = Math.round(Math.sqrt(1.045 * mp * 1000000 / ar) / unit) * unit;
+      return [width, height];
+    }
+    // LTX 2.5 = architecture 2 passes (arrondi ×64) ; Minimax H3 = arrondi direct ×32.
+    function mpUnitForEngine(engine) {
+      return engine === "ltx25" ? 64 : 32;
+    }
+    // 14 valeurs exposées dans l'UI, mêmes valeurs pour les 2 familles de moteurs (seule
+    // l'unité d'arrondi diffère) — reprises telles quelles de js/engine.js.
+    const MP_VALUES = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.98, 1.0, 1.2, 1.5, 1.8, 2.0];
     // Fallback si le manifest ne fournit pas la section "pipelines" (manifest v2).
-    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq}
+    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps}
     const PIPELINES_FALLBACK = [
       { id: "text2image", label: "Text2Image", controls: ["variants", "ratio"] },
       { id: "image2image", label: "Image2Image / Edit", controls: ["variants", "ratio", "image", "markets"] },
-      { id: "image2video", label: "Image2Video", controls: ["duration", "ratio", "image", "audio", "turbo"] },
-      { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo"] },
+      { id: "image2video", label: "Image2Video", controls: ["duration", "ratio", "image", "audio", "turbo", "mp", "turboSteps"] },
+      { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps"] },
       { id: "sequence2video", label: "Animatic (FLF2V)", scenario: "storyboard", controls: ["seq", "audio"] },
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
         controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["duration", "ratio", "audio", "turbo"], defaults: { duration: 2 } },
+        controls: ["duration", "ratio", "audio", "turbo", "mp"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
         controls: ["duration", "variants", "audio"], defaults: { duration: 5 } }
     ];
@@ -1922,6 +1982,8 @@
           es: "Un trabajo por mercado seleccionado, con adaptación cultural del prompt. Ninguno seleccionado = prompt tal cual.",
           de: "Ein Job pro ausgewähltem Markt, mit kultureller Prompt-Anpassung. Keine Auswahl = Prompt unverändert." },
       "Ratio": { es: "Proporción", de: "Seitenverhältnis" },
+      "Mégapixels": { en: "Megapixels", es: "Megapíxeles", de: "Megapixel" },
+      "Steps (LoRA turbo)": { es: "Pasos (LoRA turbo)", de: "Schritte (LoRA-Turbo)" },
       "Variantes": { en: "Variants", es: "Variantes", de: "Varianten" },
       "Durée vidéo (s)": { en: "Video length (s)", es: "Duración del vídeo (s)", de: "Videolänge (s)" },
       "Nombre de cases": { en: "Number of panels", es: "Número de viñetas", de: "Anzahl der Panels" },
@@ -1973,10 +2035,10 @@
         { en: "Generate audio — soundscape driven by the prompt (native to LTX 2.5 / Minimax H3)",
           es: "Generar audio — ambiente sonoro a partir del prompt (nativo en LTX 2.5 / Minimax H3)",
           de: "Audio generieren — Klangkulisse aus dem Prompt (nativ bei LTX 2.5 / Minimax H3)" },
-      "Turbo Minimax H3 (LoRA, 8 steps) — désactiver = 20 steps, qualité maximale":
-        { en: "Turbo Minimax H3 (LoRA, 8 steps) — disable = 20 steps, maximum quality",
-          es: "Turbo Minimax H3 (LoRA, 8 pasos) — desactivar = 20 pasos, calidad máxima",
-          de: "Turbo Minimax H3 (LoRA, 8 Schritte) — deaktivieren = 20 Schritte, maximale Qualität" },
+      "Turbo Minimax H3 (LoRA) — désactiver = 20 steps, qualité maximale":
+        { en: "Turbo Minimax H3 (LoRA) — disable = 20 steps, maximum quality",
+          es: "Turbo Minimax H3 (LoRA) — desactivar = 20 pasos, calidad máxima",
+          de: "Turbo Minimax H3 (LoRA) — deaktivieren = 20 Schritte, maximale Qualität" },
       "Conservée uniquement pour cet onglet, effacée à sa fermeture. Jamais persistée.":
         { en: "Kept for this tab only, cleared when it closes. Never persisted.",
           es: "Se conserva solo para esta pestaña y se borra al cerrarla. Nunca se persiste.",
@@ -2199,7 +2261,7 @@
       image: "imageInputWrap", duration: "durationWrap", markets: "marketsWrap",
       seq: "seqWrap", shots: "shotCountWrap", hold: "holdWrap",
       variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap", mode: "modeWrap",
-      style: "styleWrap", turbo: "turboWrap"
+      style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap"
     };
     function updateModelOptions() {
       const wfs = manifest.workflows.filter(w => w.pipeline === pipelineSelect.value);
@@ -2239,10 +2301,20 @@
     function updateModelLabel() {
       const wf = currentWorkflow();
       modelLabel.textContent = wf ? `${wf.model} · ${wf.pipeline}` : "—";
+      updateTurboControls();
+    }
+
+    // Turbo LoRA (Minimax H3 uniquement) : sans effet sur LTX 2.5 (nœud absent du template) → désactiver les deux champs.
+    function updateTurboControls() {
+      const wf = currentWorkflow();
+      const isLtx = !!wf && wf.id.startsWith("ltx25_");
+      $("turboToggle").disabled = isLtx;
+      $("turboSteps").disabled = isLtx || !$("turboToggle").checked;
     }
 
     pipelineSelect.addEventListener("change", updateModelOptions);
     modelSelect.addEventListener("change", updateModelLabel);
+    $("turboToggle").addEventListener("change", updateTurboControls);
 
     async function getTemplate(file) {
       if (!templateCache[file]) {
@@ -2729,7 +2801,14 @@
         } else if (autoEnrich) {
           addEvent("SYS", `Enrichissement intégré au workflow ${wf.label} — gemma non sollicité.`, "sys");
         }
-        const [width, height] = RATIOS[ratioSelect.value];
+        // text2video/image2video/reference2video pilotent la résolution par mégapixels
+        // (cf. computeMPResolution) — unité ×64 pour LTX 2.5 (2 passes), ×32 pour Minimax H3.
+        // reference2video n'a que des workflows minimax_h3_r2v : l'unité résout donc
+        // naturellement à 32 sans branche séparée. Les autres pipelines gardent RATIOS.
+        const MP_PIPELINES = ["text2video", "image2video", "reference2video"];
+        const [width, height] = MP_PIPELINES.includes(wf.pipeline)
+          ? computeMPResolution(parseFloat($("mpSelect").value), ratioSelect.value, mpUnitForEngine(wf.id.startsWith("ltx25_") ? "ltx25" : "minimax_h3"))
+          : RATIOS[ratioSelect.value];
         const seedRaw = seedInput.value.trim().toLowerCase();
         const seed = seedRaw === "auto" || seedRaw === ""
           ? Math.floor(Math.random() * 1e15)
@@ -2761,7 +2840,10 @@
           });
           // Audio : tous les moteurs vidéo restants (LTX 2.5, Minimax H3) câblent
           // CreateVideo.audio nativement dans leur template — rien à ajouter côté JS.
-          applyMinimaxTurbo(graph, $("turboToggle").checked);
+          // Steps 4/6/8 exposés uniquement pour text2video/image2video (fl2v) — reference2video
+          // ne passe jamais ici (dispatché par BUILDERS plus haut) mais on garde le guard.
+          applyMinimaxTurbo(graph, $("turboToggle").checked,
+            (wf.pipeline === "text2video" || wf.pipeline === "image2video") ? Number($("turboSteps").value) : undefined);
           const res = await fetch(`${COMFY}/prompt`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3167,15 +3249,28 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       $("seqFiles").value = "";
     });
 
-    // ── Minimax H3 : bascule turbo (LoRA 8 steps ON / 20 steps OFF, LOT 1) ─────
+    // ── Minimax H3 : bascule turbo (LoRA ON / 20 steps OFF, LOT 1 + steps 4/6/8) ────
     // Les 3 templates (t2v/i2v/r2v) câblent la LoRA turbo en dur (LoraLoaderModelOnly,
     // strength_model 1) alimentant à la fois BasicScheduler et BasicGuider ; il n'y a pas
     // de nœud bascule côté ComfyUI. Turbo OFF retire la LoRA du graphe (retour au modèle
-    // brut) et remonte les steps à 20. Ne jamais exposer 4 ou 6 steps (décision LOT 1).
-    // No-op silencieux sur tout graphe sans LoraLoaderModelOnly (Krea 2, LTX 2.5, etc.).
-    function applyMinimaxTurbo(graph, turboOn) {
+    // brut) et remonte les steps à 20. No-op silencieux sur tout graphe sans
+    // LoraLoaderModelOnly (Krea 2, LTX 2.5, etc.).
+    // `steps` est OPTIONNEL et rétrocompatible : omis (appel à 2 arguments), le graphe rendu
+    // est strictement celui d'avant — LoRA du template conservé, steps du template intouchés.
+    // Fourni ET turbo actif : 4 → bascule sur MINIMAX_FL2V_LORA_4STEP + BasicScheduler.steps=4 ;
+    // 6/8 → LoRA du template conservé + BasicScheduler.steps=steps.
+    // turbo OFF : comportement inchangé (LoRA retirée, steps=20), quel que soit `steps`.
+    function applyMinimaxTurbo(graph, turboOn, steps) {
       const loraEntry = Object.entries(graph).find(([, n]) => n.class_type === "LoraLoaderModelOnly");
-      if (!loraEntry || turboOn) return graph;
+      if (!loraEntry) return graph;
+      if (turboOn) {
+        const n = Number(steps);
+        if (n !== 4 && n !== 6 && n !== 8) return graph;   // pas de steps exploitable → historique
+        if (n === 4) loraEntry[1].inputs.lora_name = MINIMAX_FL2V_LORA_4STEP;
+        for (const node of Object.values(graph))
+          if (node.class_type === "BasicScheduler") node.inputs.steps = n;
+        return graph;
+      }
       const [loraId, loraNode] = loraEntry;
       const src = loraNode.inputs.model; // sortie du UNETLoader, en amont de la LoRA
       for (const n of Object.values(graph)) {

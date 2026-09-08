@@ -26,7 +26,9 @@
         "ratio",
         "image",
         "audio",
-        "turbo"
+        "turbo",
+        "mp",
+        "turboSteps"
       ]
     },
     {
@@ -36,7 +38,9 @@
         "duration",
         "ratio",
         "audio",
-        "turbo"
+        "turbo",
+        "mp",
+        "turboSteps"
       ]
     },
     {
@@ -73,7 +77,8 @@
         "duration",
         "ratio",
         "audio",
-        "turbo"
+        "turbo",
+        "mp"
       ],
       "defaults": {
         "duration": 2

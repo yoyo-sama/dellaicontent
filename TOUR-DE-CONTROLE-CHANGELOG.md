@@ -1,5 +1,53 @@
 # Tour de contrôle — changelog
 
+## 2026-09-08 — v1.0.4 — Studio : mégapixels + steps turbo H3, portés depuis Canvas
+
+Canvas (`canvas.html`+`js/engine.js`) avait déjà, depuis une session de dev antérieure, un
+sélecteur de mégapixels et un choix de steps pour la LoRA turbo Minimax H3 ; Studio
+(`index.html`) était resté sur l'ancienne table `RATIOS` fixe et un turbo figé à 8 steps
+implicites. Portage **verbatim** de la logique Canvas déjà validée côté rendu réel, plutôt
+qu'une re-dérivation — mêmes formules, mêmes constantes.
+
+### Mégapixels/résolution (`#mpSelect`, 14 valeurs de 0.2 à 2.0)
+Nouvelle fonction `computeMPResolution(mp, ratioStr, unit)` (formule identique à
+`js/engine.js` : `largeur = round(sqrt(1.045 · mp · 1e6 · ar) / unit) · unit`, `ar` inversé
+pour la hauteur). Remplace la table `RATIOS` pour les 3 pipelines vidéo `text2video`,
+`image2video` et `reference2video` uniquement (`text2image`/`image2image` gardent `RATIOS`
+inchangée). Unité d'arrondi dépendante du moteur (`mpUnitForEngine`) : **64 pour LTX 2.5**
+(architecture 2 passes base+upsample, corruption silencieuse de la résolution sans cet
+arrondi), **32 pour Minimax H3** (inchangé). Moteur déduit du préfixe d'id du workflow
+(`ltx25_*` vs `minimax_h3_*`), pas d'un champ UI séparé.
+
+### Steps LoRA turbo H3 (`#turboSteps`, 4/6/8, défaut 8 — t2v/i2v seulement)
+`applyMinimaxTurbo(graph, turboOn, steps)` passe à 3 arguments (`steps` optionnel,
+rétrocompatible : omis, le comportement est strictement celui d'avant). Turbo ON + `steps`
+fourni : 6 ou 8 conservent la LoRA turbo du template et fixent `BasicScheduler.steps` ; **4
+bascule sur un LoRA différent**, `H3/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors`
+(nouvelle constante `MINIMAX_FL2V_LORA_4STEP`), parce que la LoRA turbo d'origine casse la
+colorimétrie à 4 steps (constat toujours valide, LESSONS piège n°12) alors que cette
+nouvelle LoRA a été spécifiquement entraînée pour 4 steps et validée sans ce défaut (rendu
+réel, session Canvas antérieure). **Contrainte préservée depuis Canvas** : cette LoRA
+`fl2v` n'est compatible qu'avec le checkpoint `*_fl2va_*` de t2v/i2v — `reference2video`
+utilise un checkpoint `*_ref2va_*` différent et non interchangeable, donc pas de sélecteur
+de steps pour r2v : `applyMinimaxTurbo(graph, turboOn)` y reste appelée à 2 arguments,
+comportement turbo-ON-8-steps/turbo-OFF-20-steps inchangé.
+
+### Suivi UI (même session)
+`#turboToggle` est désormais grisé/désactivé quand le workflow sélectionné est LTX 2.5 (la
+LoRA n'existe pas dans ses templates, le contrôle était cliquable mais sans effet).
+`#turboSteps` est grisé dès que LTX 2.5 est sélectionné, ou que `#turboToggle` est décoché.
+Nouvelle fonction `updateTurboControls()`, appelée depuis `updateModelLabel()` et sur
+l'événement `change` de `#turboToggle`. CSS : `textarea:disabled, input:disabled,
+select:disabled { opacity: .45; cursor: not-allowed; }`.
+
+`workflows/manifest.json` : `controls` de `text2video`/`image2video` gagnent `mp` et
+`turboSteps` ; `reference2video` gagne `mp` seul.
+
+**Vérifié en rendu réel** (mp=0.3, ratio 1:1, Minimax H3, steps=4) : graphe soumis avec
+`w0=544 h0=544`, `.mp4` rendu confirmé par `ffprobe` à 544×544, 39 frames @ 24 fps ; graphe
+ComfyUI mis en file confirmé avec `BasicScheduler.steps=4` **et** `lora_name` pointant vers
+le nouveau LoRA `fl2v_turbo_4step`, pas l'ancien.
+
 ## 2026-09-07 (suite 5) — v1.0.3 — Correctif : install.sh ne démarrait jamais le service updater
 
 Bug trouvé lors d'une relecture d'`install.sh` : sur une installation fraîche, le script
