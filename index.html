@@ -1700,6 +1700,11 @@
                   <option value="8" selected>8</option>
                 </select>
               </label>
+
+              <label id="skipSheetsWrap" class="check-row" style="display:none">
+                <input type="checkbox" id="skipSheetsToggle" />
+                <span>Ignorer les fiches, mes références seulement — utilise les 2 premières images de « Images de référence supplémentaires » comme ref_image_0/1</span>
+              </label>
             </div>
 
             <details class="generate-more">
@@ -1779,6 +1784,7 @@
         <button type="button" class="studio-nav-btn" data-section="location">Décor</button>
         <button type="button" class="studio-nav-btn locked" data-section="storyboard" disabled>Storyboard</button>
         <button type="button" class="studio-nav-btn locked" data-section="montage" disabled>Montage</button>
+        <button type="button" class="studio-nav-btn locked" data-section="video" disabled style="display:none">Vidéo</button>
         <div class="studio-nav-foot">
           <button type="button" class="primary-btn" id="directorValidateBtn" disabled>Valider les planches</button>
           <button type="button" class="secondary-btn" id="studioNewBtn">Nouveau projet</button>
@@ -1853,6 +1859,12 @@
           <div class="montage-list" id="montageList"></div>
           <button type="button" class="primary-btn" id="directorAssembleBtn" disabled style="margin-top:12px">Assembler l'animatic</button>
           <div id="montagePlayer"></div>
+        </section>
+
+        <section id="studioVideoR2V" class="studio-section" style="display:none">
+          <h3 class="section-title">Vidéo</h3>
+          <p class="hint" id="studioVideoR2VStatus">Validez les planches personnage et décor pour activer le lancement.</p>
+          <button type="button" class="primary-btn" id="directorR2VLaunchBtn" disabled>Lancer la vidéo</button>
         </section>
       </div>
 
@@ -1962,7 +1974,7 @@
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
         controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio", "sheetLora"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora"], defaults: { duration: 2 } },
+        controls: ["mode", "duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "skipSheets"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
         controls: ["duration", "variants", "audio"], defaults: { duration: 5 } }
     ];
@@ -2350,7 +2362,8 @@
       seq: "seqWrap", shots: "shotCountWrap", hold: "holdWrap",
       variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap", mode: "modeWrap",
       style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap",
-      lora: "loraStyleWrap", refs: "refExtrasWrap", sheetLora: "sheetLoraWrap"
+      lora: "loraStyleWrap", refs: "refExtrasWrap", sheetLora: "sheetLoraWrap",
+      skipSheets: "skipSheetsWrap"
     };
     function updateModelOptions() {
       const wfs = manifest.workflows.filter(w => w.pipeline === pipelineSelect.value);
@@ -2365,6 +2378,7 @@
       if (p !== updateModelOptions.lastPipeline) {
         if (def?.defaults?.duration) $("videoDuration").value = def.defaults.duration;
         resetDirectorZone(); // changement de pipeline = fin de la session Réalisateur en cours
+        if (p === "reference2video") setDirectorMode(true); // Réalisateur par défaut pour r2v
       }
       updateModelOptions.lastPipeline = p;
       updateModelLabel();
@@ -2884,7 +2898,12 @@
         ? directorStep1(seed, width, height)
         : generateStoryboardV2(seed, width, height),
       campaign_full: (seed) => generateCampaignFull(seed),
-      reference2video: (seed, width, height) => generateReference2Video(seed, width, height)
+      // Bypass fiches (#skipSheetsToggle) prime sur le mode : rien à revoir si rien n'est
+      // auto-généré, donc bypass coché ⇒ toujours le chemin Auto (qui gère le bypass en
+      // interne), Réalisateur ou pas. Bypass décoché : Auto ou Réalisateur comme avant.
+      reference2video: (seed, width, height) => $("skipSheetsToggle").checked
+        ? generateReference2Video(seed, width, height)
+        : (directorMode ? directorStepR2V1(seed, width, height) : generateReference2Video(seed, width, height))
     };
 
     async function uploadInputImage() {
@@ -4224,10 +4243,13 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     // dur par famille (9/3/3 côté nœud, moins les 2 planches auto pour les images → 7) et
     // avertissement si dépassement, même idiome que addSeqImage/seqImages.length >= 6.
     const REF_EXTRA_CAPS = { refImagesInput: [7, "images de référence"], refVideosInput: [3, "vidéos de référence"], refAudiosInput: [3, "audios de référence"] };
-    async function collectRefExtras() {
+    // `imageFiles` (optionnel) : override du contenu de #refImagesInput — utilisé par le
+    // bypass fiches (part 5) qui a déjà consommé les 2 premiers fichiers comme image/image2
+    // et ne doit passer que le reste (3e..) au mécanisme d'extras existant, cap 7 inchangé.
+    async function collectRefExtras(imageFiles) {
       const capped = {};
       for (const [inputId, [max, label]] of Object.entries(REF_EXTRA_CAPS)) {
-        const files = Array.from($(inputId).files);
+        const files = inputId === "refImagesInput" && imageFiles ? imageFiles : Array.from($(inputId).files);
         if (files.length > max) addEvent("WARN", `${label[0].toUpperCase()}${label.slice(1)} limitées à ${max} — ${files.length - max} fichier(s) ignoré(s).`, "warn");
         capped[inputId] = files.slice(0, max);
       }
@@ -4239,12 +4261,48 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       return { images, videos, audios, count: images.length + videos.length + audios.length };
     }
 
+    // Tail commun aux 3 chemins (Auto, Auto-bypass, lancement Réalisateur) : références
+    // supplémentaires + graphe Minimax H3 r2v + soumission. Seules différences entre chemins :
+    // d'où viennent prompt/image/image2 (fiches fraîches, upload utilisateur, ou session
+    // director validée) — capturées par l'appelant, pas ici.
+    async function submitReference2VideoGraph({ wf, negText, seed, width, height, duration, turboOn, loraName, prompt, image, image2, extraImageFiles }) {
+      const refs = await collectRefExtras(extraImageFiles);
+      const raw = await getTemplate(wf.file);
+      const graph = buildGraph(raw, {
+        // Ancrage double (piège n°9/n°10 LESSONS) : le prompt rappelle scène + personnage +
+        // décor plutôt que la seule action, pour ne pas laisser le modèle dériver.
+        prompt, negative: negText, seed: seed + 201, width, height, duration, image, image2
+      });
+      addMinimaxRefs(graph, refs);
+      applyMinimaxTurbo(graph, turboOn);
+      applyStyleLora(graph, loraName, "BasicScheduler");
+      const refsLabel = refs.count ? ` · +${refs.count} réf.` : "";
+      await submitGraph(graph, "Personnage + décor cohérents (Minimax H3 r2v)",
+        `${wf.model} · r2v · ${duration}s · ${turboOn ? "turbo 8 steps" : "20 steps"}${refsLabel} · seed ${seed}`);
+    }
+
+    // Mode Auto — et bypass fiches (checkbox #skipSheetsToggle, quel que soit Auto/Réalisateur,
+    // voir BUILDERS.reference2video) : bypass coché ⇒ aucune fiche générée, les 2 premières
+    // images de #refImagesInput deviennent ref_image_0/1 directement.
     async function generateReference2Video(seed, width, height) {
       if (!brief.value.trim()) throw new Error("Décrivez le personnage et le décor dans le brief avant de générer.");
       const wf = currentWorkflow();
       const negText = negative.value.trim();
       const duration = Math.min(10, Math.max(1, parseInt($("videoDuration").value, 10) || 5));
       const turboOn = $("turboToggle").checked;
+      const loraName = $("loraStyleSelect").value;
+
+      if ($("skipSheetsToggle").checked) {
+        const files = Array.from($("refImagesInput").files);
+        if (files.length < 2) throw new Error("Ignorer les fiches nécessite au moins 2 fichiers dans « Images de référence supplémentaires » (ref_image_0/1).");
+        addEvent("REQ", "Fiches ignorées — upload des références fournies…", "req");
+        const [image, image2] = await Promise.all([uploadRefFile(files[0]), uploadRefFile(files[1])]);
+        await submitReference2VideoGraph({
+          wf, negText, seed, width, height, duration, turboOn, loraName,
+          prompt: brief.value.trim(), image, image2, extraImageFiles: files.slice(2)
+        });
+        return;
+      }
 
       addEvent("REQ", `Fiche personnage + fiche décor via ${OLLAMA_MODEL}…`, "req");
       const charDesc = charDescFromFields(await characterSheetFromBrief());
@@ -4255,25 +4313,33 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       const csId = await submitCharsheetJob(charDesc, negText, seed, width, height, wf);
       const lsId = await submitLocsheetJob(locDesc, negText, seed + 101, width, height, wf);
       const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
-      const charName = charRef.name, locName = locRef.name;
       setSoulAnchors(charRef, locRef); // affichage seul (pastille d'identité)
 
-      const refs = await collectRefExtras();
-
-      const raw = await getTemplate(wf.file);
-      const graph = buildGraph(raw, {
-        // Ancrage double (piège n°9/n°10 LESSONS) : le prompt rappelle scène + personnage +
-        // décor plutôt que la seule action, pour ne pas laisser le modèle dériver.
-        prompt: `${charDesc}. ${locDesc}. ${brief.value.trim()}`, negative: negText,
-        seed: seed + 201, width, height, duration, image: charName, image2: locName
+      await submitReference2VideoGraph({
+        wf, negText, seed, width, height, duration, turboOn, loraName,
+        prompt: `${charDesc}. ${locDesc}. ${brief.value.trim()}`, image: charRef.name, image2: locRef.name
       });
-      addMinimaxRefs(graph, refs);
-      applyMinimaxTurbo(graph, turboOn);
-      applyStyleLora(graph, $("loraStyleSelect").value, "BasicScheduler");
-      const refsLabel = refs.count ? ` · +${refs.count} réf.` : "";
-      await submitGraph(graph, "Personnage + décor cohérents (Minimax H3 r2v)",
-        `${wf.model} · r2v · ${duration}s · ${turboOn ? "turbo 8 steps" : "20 steps"}${refsLabel} · seed ${seed}`);
     }
+
+    // Lancement (mode Réalisateur, bouton #directorR2VLaunchBtn) : reprend charName/locName/
+    // charDesc/locDesc de la session `director` validée (getters : variante active + champs
+    // édités) au lieu de régénérer quoi que ce soit — mêmes seed/duration/turbo/style figés
+    // à l'étape 1 (directorStepR2V1) pour ne pas relire un formulaire modifié entre-temps.
+    async function generateReference2VideoFromDirector() {
+      if (!director || director.pipeline !== "reference2video" || !anchorsReady() || !director.validated) return;
+      $("directorR2VLaunchBtn").disabled = true;
+      try {
+        await submitReference2VideoGraph({
+          wf: director.wf, negText: director.negText, seed: director.seed,
+          width: director.width, height: director.height, duration: director.duration,
+          turboOn: director.turboOn, loraName: director.loraName,
+          prompt: `${director.charDesc}. ${director.locDesc}. ${brief.value.trim()}`,
+          image: director.charName, image2: director.locName
+        });
+      } catch (err) { addEvent("WARN", err.message, "warn"); }
+      updateGateState();
+    }
+    $("directorR2VLaunchBtn").addEventListener("click", generateReference2VideoFromDirector);
 
     // ── Mode Réalisateur (storyboard_v2) : studio plein écran ────────────────────
     let directorMode = false; // état non persisté (défaut : Auto)
@@ -4293,12 +4359,23 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     function exitStudio() { delete document.body.dataset.studio; }
 
     const STUDIO_SECTIONS = { character: "studioCharacter", location: "studioLocation",
-                              storyboard: "studioStoryboard", montage: "studioMontage" };
+                              storyboard: "studioStoryboard", montage: "studioMontage", video: "studioVideoR2V" };
     function selectStudioSection(name) {
       for (const [key, id] of Object.entries(STUDIO_SECTIONS))
         $(id).style.display = key === name ? "" : "none";
       document.querySelectorAll("#studioNav .studio-nav-btn")
         .forEach(b => b.classList.toggle("active", b.dataset.section === name));
+    }
+    // Le shell studio est partagé par 2 pipelines structurellement différents :
+    // storyboard_v2 (Personnage/Décor/Storyboard/Montage) et reference2video, qui n'a ni
+    // découpage en plans ni animatic (Personnage/Décor/Vidéo seulement). `director.pipeline`
+    // pilote quels onglets sont visibles ; `director` absent (pas de session) retombe sur la
+    // forme storyboard_v2 par défaut (comportement identique à avant cette évolution).
+    function updateStudioNavForPipeline() {
+      const isR2V = director?.pipeline === "reference2video";
+      document.querySelector('#studioNav [data-section="storyboard"]').style.display = isR2V ? "none" : "";
+      document.querySelector('#studioNav [data-section="montage"]').style.display = isR2V ? "none" : "";
+      document.querySelector('#studioNav [data-section="video"]').style.display = isR2V ? "" : "none";
     }
     document.querySelectorAll("#studioNav .studio-nav-btn").forEach(btn =>
       btn.addEventListener("click", () => selectStudioSection(btn.dataset.section)));
@@ -4332,6 +4409,9 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       $("studioTimeline").innerHTML = "";
       $("directorValidateBtn").disabled = true;
       $("directorValidateBtn").textContent = tr("Valider les planches");
+      $("directorR2VLaunchBtn").disabled = true;
+      $("studioVideoR2VStatus").textContent = tr("Validez les planches personnage et décor pour activer le lancement.");
+      updateStudioNavForPipeline();
       renderSheetMenu("char");
       renderSheetMenu("loc");
       updateGateState();
@@ -4359,6 +4439,7 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
 
       resetDirectorZone();
       director = {
+        pipeline: "storyboard_v2",
         seed, width, height, wf, negText, withAudio, n, segDur, holdDur, shots, keyframes: null,
         style: $("styleSelect").value,           // style figé à l'ouverture de la session
         cutPlan: null, cuts: null, order: null, animatic: null,  // état Montage
@@ -4376,6 +4457,7 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
         get charDesc() { return charDescFromFields(this.charFields); },
         get locDesc() { return locDescFromFields(this.locFields); }
       };
+      updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
       renderSheetMenu("char");
@@ -4391,6 +4473,57 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       watch("char", director.charVariants[0], csId);
       watch("loc", director.locVariants[0], lsId);
       saveProject();
+    }
+
+    // Étape 1 (reference2video, mode Réalisateur) : équivalent de directorStep1 mais SANS
+    // liste de plans/keyframes/montage — r2v est un seul job vidéo une fois les 2 fiches
+    // validées, donc seules les fiches personnage/décor + le contexte du job final (seed,
+    // duration, turbo, style LoRA — capturés ICI pour ne pas relire un formulaire que
+    // l'utilisateur peut modifier pendant la revue) sont posés sur `director`.
+    async function directorStepR2V1(seed, width, height) {
+      if (!brief.value.trim()) throw new Error("Décrivez le personnage et le décor dans le brief avant de générer.");
+      const wf = currentWorkflow();
+      const negText = negative.value.trim();
+      const duration = Math.min(10, Math.max(1, parseInt($("videoDuration").value, 10) || 5));
+      const turboOn = $("turboToggle").checked;
+      const loraName = $("loraStyleSelect").value;
+
+      addEvent("REQ", `Mode Réalisateur : fiche personnage + fiche décor via ${OLLAMA_MODEL}…`, "req");
+      const charFields = await characterSheetFromBrief();
+      const locFields = await locationSheetFromBrief();
+      const csSeed = seed, lsSeed = seed + 101;
+      const csId = await submitCharsheetJob(charDescFromFields(charFields), negText, csSeed, width, height, wf);
+      const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf);
+
+      resetDirectorZone();
+      director = {
+        pipeline: "reference2video",
+        seed, width, height, wf, negText, duration, turboOn, loraName,
+        charFields, locFields,
+        charVariants: [{ file: null, inputName: null, seed: csSeed, source: "generated",
+                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }],
+        locVariants: [{ file: null, inputName: null, seed: lsSeed, source: "generated",
+                        prompt: locDescFromFields(locFields), status: "pending", blob: null, url: null }],
+        charActive: 0, locActive: 0, validated: false,
+        get charName() { return this.charVariants[this.charActive]?.inputName || null; },
+        get locName() { return this.locVariants[this.locActive]?.inputName || null; },
+        get charDesc() { return charDescFromFields(this.charFields); },
+        get locDesc() { return locDescFromFields(this.locFields); }
+      };
+      updateStudioNavForPipeline();
+      enterStudio();
+      selectStudioSection("character");
+      renderSheetMenu("char");
+      renderSheetMenu("loc");
+      updateValidateButtonState();
+      updateGateState();
+      const watch = (kind, variant, promptId) => resolveVariantJob(kind, variant, promptId).catch(err => {
+        variant.status = "error";
+        refreshSheetUI(kind);
+        addEvent("WARN", err.message, "warn");
+      });
+      watch("char", director.charVariants[0], csId);
+      watch("loc", director.locVariants[0], lsId);
     }
 
     // Résout un job planche déjà soumis : attend l'image, la ré-uploade en entrée
@@ -4566,15 +4699,27 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     }
     function updateGateState() {
       const unlocked = anchorsReady() && !!director?.validated;
-      $("shotEditList").style.display = unlocked ? "" : "none";
-      $("directorKeyframesBtn").style.display = unlocked ? "" : "none";
-      const sb = document.querySelector('#studioNav [data-section="storyboard"]');
-      sb.disabled = !unlocked;
-      sb.classList.toggle("locked", !unlocked);
-      const mtReady = keyframesAllReady();
-      const mt = document.querySelector('#studioNav [data-section="montage"]');
-      mt.disabled = !mtReady;
-      mt.classList.toggle("locked", !mtReady);
+      if (director?.pipeline === "reference2video") {
+        // r2v : pas d'étape storyboard/keyframe intermédiaire — "prêt" = prêt à lancer la vidéo.
+        $("directorR2VLaunchBtn").disabled = !unlocked;
+        $("studioVideoR2VStatus").textContent = tr(unlocked
+          ? "Prêt à lancer la vidéo."
+          : "Validez les planches personnage et décor pour activer le lancement.");
+        const vid = document.querySelector('#studioNav [data-section="video"]');
+        vid.disabled = !unlocked;
+        vid.classList.toggle("locked", !unlocked);
+      } else {
+        // storyboard_v2 (ou pas de session : director null retombe ici, ré-verrouille au reset).
+        $("shotEditList").style.display = unlocked ? "" : "none";
+        $("directorKeyframesBtn").style.display = unlocked ? "" : "none";
+        const sb = document.querySelector('#studioNav [data-section="storyboard"]');
+        sb.disabled = !unlocked;
+        sb.classList.toggle("locked", !unlocked);
+        const mtReady = keyframesAllReady();
+        const mt = document.querySelector('#studioNav [data-section="montage"]');
+        mt.disabled = !mtReady;
+        mt.classList.toggle("locked", !mtReady);
+      }
       refreshSoulId();
     }
 
@@ -4962,7 +5107,11 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     }
 
     function saveProject() {
-      if (!director) return;
+      // Persistance/reprise (LOT C) : fonctionnalité storyboard_v2 uniquement (restoreProject
+      // force ce pipeline) — une session reference2video n'a rien à "reprendre" (2 fiches
+      // puis un seul job vidéo), donc no-op silencieux plutôt que d'écrire un projet que
+      // restoreProject() ne saurait pas reconstruire (pas de shots/n/segDur/holdDur).
+      if (!director || director.pipeline !== "storyboard_v2") return;
       const p = {
         version: 1, savedAt: new Date().toISOString(),
         brief: brief.value.trim(), negText: director.negText, wfId: director.wf.id,
@@ -5046,6 +5195,7 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       const revive = it => it && ({ ...it, blob: null, url: null,
         status: !it.status || it.status === "missing" ? (it.file ? "ready" : "error") : it.status });
       director = {
+        pipeline: "storyboard_v2",
         seed: p.seed, width: p.width, height: p.height, wf, negText: p.negText || "",
         withAudio: !!p.withAudio, n: p.n, segDur: p.segDur, holdDur: p.holdDur,
         shots: p.shots, style: p.style, validated: !!p.validated,
@@ -5064,6 +5214,7 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
         director.anchorRaw = await getTemplate(wf.anchor); // régénérations possibles d'emblée
         if (director.cuts) director.cutPlan = buildCutPlan();
       }
+      updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
       renderSheetMenu("char"); renderSheetMenu("loc");

@@ -78,6 +78,7 @@
       "label": "Personnage + Décor cohérents (Minimax H3 reference2video)",
       "scenario": "storyboard",
       "controls": [
+        "mode",
         "duration",
         "ratio",
         "audio",
@@ -85,7 +86,8 @@
         "mp",
         "lora",
         "refs",
-        "sheetLora"
+        "sheetLora",
+        "skipSheets"
       ],
       "defaults": {
         "duration": 2
