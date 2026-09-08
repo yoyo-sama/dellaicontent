@@ -8,7 +8,7 @@ Démo Dell GB10 : page statique unique (`index.html`) qui pilote ComfyUI (`:8188
 docker compose up -d                                  # servir l'app (nginx :8090)
 curl -s http://localhost:8188/system_stats | head -c 200   # ComfyUI vivant ?
 curl -s http://localhost:11434/api/version                 # Ollama vivant ?
-node --check <(python3 -c "import re;print(re.search(r'<script>(.*)</script>', open('index.html').read(), re.S).group(1))")   # valider le JS
+node --check <(python3 -c "import re;print(re.search(r'<script>(.*?)</script>', open('index.html').read(), re.S).group(1))")   # valider le JS
 python3 tools/convert.py workflows/storyboard_animatic.json > /tmp/api.json   # UI→API (brut)
 python3 tools/onboard.py <ui.json> --id X --label "…" --pipeline text2video --model "…"   # UI→API+placeholders+manifest+test
 python3 tools/validate.py workflows/api/ltx25_t2v.json --reduce --frames 0,12 --audio      # rendu réel réduit + inspection
