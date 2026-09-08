@@ -62,8 +62,10 @@ services:
     network_mode: host
     environment:
       - REPO_DIR=/repo
+      - LORAS_DIR=/loras
     volumes:
       - ./:/repo:rw
+      - ${COMFY_LORAS_DIR:-./comfyui/basedir/models/loras}:/loras:rw
     restart: unless-stopped
 
 volumes:

@@ -98,15 +98,9 @@
   }
 
   // ── LoRA de STYLE Minimax H3 — cumulable avec la LoRA turbo ci-dessus ───────────
-  // Inventaire disque de H3/ (déjà fait, cf. AGENTS.md) : AUCUN fichier de style non-
-  // explicite pour la famille fl2va (t2v/i2v — VideoNode/CutVideoNode), seulement des LoRA
-  // d'accélération (turbo/acc). Pour la famille ref2va (r2v — Ref2VideoNode), seuls 2
-  // fichiers de style existent (`AfterMidnight_ref2va_h3_sexytime_rank64_v1.safetensors` et
-  // `..._softer_rank64_v1.safetensors`) et sont à contenu explicite — EXCLUS de l'UI, même
-  // politique de curation que `Krea2/` (KREA2_LORAS n'expose que 3 fichiers curés sur toute
-  // la disquette). Résultat : une seule option réelle pour l'instant, "Aucun". Le mécanisme
-  // (table + injection ci-dessous) est néanmoins construit en entier pour être prêt à
-  // recevoir de vrais fichiers de style dès qu'ils existeront sur disque.
+  // Plus de curation manuelle : la liste réelle vient de fetchLoraOptions() (scan live de
+  // /object_info/LoraLoaderModelOnly), voir plus bas. Seul le premier item ("Aucun") est
+  // fixe ; le reste est peuplé de façon asynchrone après le chargement du module.
   const H3_STYLE_LORAS = [
     ["", "Aucun"]
   ];
@@ -341,15 +335,46 @@
     return { unet, clip, vae };
   }
   // Catalogue des LoRA de style Krea 2 exposées dans l'UI : [nom de fichier, libellé].
-  // Les libellés sont DÉDUITS DU NOM DE FICHIER (aucune prévisualisation de leur effet réel
-  // n'a été faite) ; ils sont volontairement descriptifs et sobres. Le premier item ("")
-  // est l'absence de LoRA, qui laisse le graphe strictement inchangé.
+  // Plus de curation manuelle : peuplé depuis fetchLoraOptions() (scan live de
+  // /object_info/LoraLoaderModelOnly), voir plus bas. Le premier item ("") reste l'absence
+  // de LoRA (graphe strictement inchangé) et reste toujours présent/en premier.
   const KREA2_LORAS = [
-    ["", "Aucun"],
-    ["Krea2/realism_engine_krea2_v2.safetensors", "Réalisme"],
-    ["Krea2/krea2_darkbrush.safetensors", "Dark brush"],
-    ["Krea2/age_krea2_loraholic.safetensors", "Vieillissement"]
+    ["", "Aucun"]
   ];
+
+  // ── Auto-discovery des LoRA (remplace la curation manuelle ci-dessus) ───────────
+  // /object_info/LoraLoaderModelOnly liste TOUS les fichiers présents sous le dossier loras,
+  // rescanné live à chaque appel (vérifié empiriquement — pas de cache ComfyUI à contourner).
+  // Chemins retournés préfixés par sous-dossier ("Krea2/…", "H3/…", …). On en déduit deux
+  // listes filtrées par préfixe ; le libellé est le nom de fichier sans dossier ni extension.
+  // Les 2 LoRA turbo H3 sont exclues de la liste "style" : elles restent pilotées par le
+  // mécanisme dédié turbo/steps (MINIMAX_FL2V_LORA_4STEP, applyMinimaxTurbo), pas un choix
+  // de style — ce sont les 2 SEULS noms exclus, aucun filtre heuristique au-delà.
+  const H3_TURBO_LORAS = new Set([
+    "H3/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors",
+    "H3/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors"
+  ]);
+  function loraLabel(path) { return path.replace(/^.*\//, "").replace(/\.safetensors$/i, ""); }
+  async function fetchLoraOptions() {
+    try {
+      const res = await fetch(`${COMFY}/object_info/LoraLoaderModelOnly`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.LoraLoaderModelOnly.input.required.lora_name[0] || [];
+    } catch {
+      return [];
+    }
+  }
+  // Fire-and-forget au chargement du module : pas de top-level await possible (IIFE, pas un
+  // module ES), et pas besoin d'en bloquer un — KREA2_LORAS/H3_STYLE_LORAS sont mutés EN
+  // PLACE (push, pas réaffectation) pour que toute référence déjà prise sur le tableau (ex.
+  // `global.Engine = { KREA2_LORAS, … }` plus bas) voie la mise à jour. Les points de lecture
+  // (js/nodes-simple.js, js/nodes-advanced.js, canvas.html) relisent ces tableaux au moment
+  // où le menu déroulant s'ouvre réellement, pas seulement à la construction du nœud.
+  fetchLoraOptions().then(list => {
+    for (const f of list) if (f.startsWith("Krea2/")) KREA2_LORAS.push([f, loraLabel(f)]);
+    for (const f of list) if (f.startsWith("H3/") && !H3_TURBO_LORAS.has(f)) H3_STYLE_LORAS.push([f, loraLabel(f)]);
+  });
   function addKrea2Shot(add, kx, prompt, seed, width, height, batch) {
     const lat = add("EmptyLatentImage", { width, height, batch_size: batch });
     const pos = add("CLIPTextEncode", { text: prompt, clip: [kx.clip, 0] });

@@ -5,7 +5,8 @@
       "label": "Text2Image",
       "controls": [
         "variants",
-        "ratio"
+        "ratio",
+        "lora"
       ]
     },
     {
@@ -28,7 +29,8 @@
         "audio",
         "turbo",
         "mp",
-        "turboSteps"
+        "turboSteps",
+        "lora"
       ]
     },
     {
@@ -40,7 +42,8 @@
         "audio",
         "turbo",
         "mp",
-        "turboSteps"
+        "turboSteps",
+        "lora"
       ]
     },
     {
@@ -78,7 +81,9 @@
         "ratio",
         "audio",
         "turbo",
-        "mp"
+        "mp",
+        "lora",
+        "refs"
       ],
       "defaults": {
         "duration": 2

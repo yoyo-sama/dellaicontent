@@ -79,12 +79,24 @@
 
   .panel-title { font-size:10.5px; font-weight:700; letter-spacing:.08em;
                  text-transform:uppercase; color:var(--text-2); margin:0 0 12px; }
-  /* Logo Dell : fond clair fixe (le SVG source est en couleurs fixes #007db8/#808080,
-     pas de variante blanche) pour rester lisible identiquement en thème clair ET sombre,
-     sans filtre CSS conditionnel au thème. */
-  .brand-logo { display:block; margin:0 0 10px; padding:4px 8px; background:#fff;
-                border-radius:6px; width:fit-content; }
+  /* Logo Dell : PNG gris neutre (rgb(169,169,169), fond transparent), lisible tel quel
+     en thème clair ET sombre, pas de fond ni de filtre CSS conditionnel au thème. */
+  .brand-logo { display:block; margin:0 0 10px; width:fit-content; }
   .brand-logo img { display:block; height:15px; width:auto; }
+
+  /* Paire Studio/Canvas sous le logo : même logique visuelle que .rail-top de l'app
+     de prod (index.html) — une pilule active pleine + une pilule outline vers l'autre
+     page — traduite dans les tokens de CE fichier plutôt que copiée telle quelle :
+     dégradé --brand→--highlight pour l'actif (même recette que .btn-primary),
+     contour --brand pour le lien de sortie (même recette que .btn-outline). */
+  .rail-switch { display:flex; gap:8px; margin:0 0 14px; }
+  .rail-pill { flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+               border-radius:10px; padding:7px 0; font-size:11.5px; font-weight:700;
+               text-decoration:none; }
+  .rail-pill svg { width:16px; height:16px; flex:0 0 auto; }
+  .rail-pill-active { border:0; color:#fff; background:linear-gradient(135deg,var(--brand),var(--highlight)); }
+  .rail-pill-outline { border:1px solid var(--brand); color:var(--brand); background:transparent; cursor:pointer; }
+  .rail-pill-outline:hover { background:var(--accent-soft); }
   .field { margin-bottom:10px; }
   .field > label { display:block; font-size:10.5px; color:var(--text-2); margin-bottom:4px; }
   .box, .panel select, .panel input[type=text], .panel input[type=number], .panel textarea {
@@ -173,9 +185,22 @@
 
 <!-- ── Panneau flottant gauche : ajouter une carte ─────────────────────────── -->
 <aside id="palette" class="panel glass">
-  <!-- Identité Dell : fond clair fixe (voir règle .brand-logo) pour rester lisible
-       identiquement quel que soit le thème, sans dupliquer le SVG. -->
-  <div class="brand-logo"><img src="assets/dell-technologies-logo.svg" alt="Dell Technologies"></div>
+  <!-- Identité Dell : PNG gris neutre, lisible identiquement quel que soit le thème. -->
+  <div class="brand-logo"><img src="assets/dell-technologies-logo.png" alt="Dell Technologies"></div>
+  <!-- Paire Studio/Canvas : Canvas = page courante (pilule pleine, non cliquable),
+       Studio = lien de sortie vers index.html (pilule outline). Mêmes icônes SVG que
+       le rail de l'app de prod (index.html, ~ligne 1376/1380), copiées telles quelles
+       pour rester cohérent visuellement entre les deux pages. -->
+  <div class="rail-switch">
+    <span class="rail-pill rail-pill-active" title="Canvas" aria-current="page">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M12 7.2 6.3 16.2M12 7.2l5.7 9M7.2 18h9.6"/></svg>
+      Canvas
+    </span>
+    <a href="index.html" class="rail-pill rail-pill-outline" title="Studio">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 9V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><path d="M8.5 4 6.5 9M14.5 4l-2 5"/></svg>
+      Studio
+    </a>
+  </div>
   <!-- Espace insécable avant le « ? » (typographie FR) : évite aussi le « ? » orphelin
        sur une 2ᵉ ligne dans un panneau étroit (230px). -->
   <p class="panel-title">Qu'est-ce que tu veux produire&nbsp;?</p>
@@ -249,14 +274,14 @@
   </div>
   <!-- Bascule de thème : posée en tête de la rangée d'icônes, donc juste sous le
        sélecteur de langue — les deux préférences d'affichage (langue, thème) se
-       suivent, et les 3 icônes existantes gardent leur ordre relatif. Même balise,
-       même classe `.icon-btn` que ⤢ / 🗑 / ⌂ : aucun style nouveau. Icône ☀️/🌙
-       comme dans l'app de prod (index.html, `themeBtn`). -->
+       suivent, et les 2 icônes existantes gardent leur ordre relatif. Même balise,
+       même classe `.icon-btn` que ⤢ / 🗑. Icône ☀️/🌙 comme dans l'app de prod
+       (index.html, `themeBtn`). Le lien de sortie vers index.html (⌂) est retiré : sa
+       fonction est reprise par la pilule "Studio" sous le logo (cf. .rail-switch). -->
   <div class="icon-row">
     <div class="icon-btn" id="themeBtn" title="Thème clair / sombre">🌙</div>
     <div class="icon-btn" id="btnFit" title="Recadrer la vue">⤢</div>
     <div class="icon-btn" id="btnClear" title="Vider le canvas">🗑</div>
-    <a class="icon-btn" href="index.html" title="App formulaire">⌂</a>
   </div>
 </aside>
 
@@ -341,7 +366,6 @@
     "Thème clair / sombre": { en: "Light / dark theme", es: "Tema claro / oscuro", de: "Helles / dunkles Thema" },
     "Recadrer la vue": { en: "Reset the view", es: "Reencuadrar la vista", de: "Ansicht zurücksetzen" },
     "Vider le canvas": { en: "Clear the canvas", es: "Vaciar el lienzo", de: "Leinwand leeren" },
-    "App formulaire": { en: "Form app", es: "App de formulario", de: "Formular-App" },
 
     // ── Panneau droit ──
     "Propriétés — carte sélectionnée": { en: "Properties — selected card", es: "Propiedades — tarjeta seleccionada", de: "Eigenschaften — ausgewählte Karte" },

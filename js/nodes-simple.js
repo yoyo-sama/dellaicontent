@@ -119,7 +119,10 @@
     this.addWidget("combo", "mégapixels", this.properties.mp, v => { this.properties.mp = v; },
       { values: E.MP_VALUES });
     this.addWidget("combo", "style (LoRA)", this.properties.lora, v => { this.properties.lora = v; },
-      { values: E.KREA2_LORAS.map(l => l[0]) });
+      // Fonction, pas tableau figé : litegraph relit `options.values()` à chaque ouverture
+      // du combo, donc la liste suit E.KREA2_LORAS même peuplée après coup par le fetch
+      // réseau de js/engine.js (fetchLoraOptions).
+      { values: () => E.KREA2_LORAS.map(l => l[0]) });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
     this.size = [320, 240];
     setStatus(this, "idle", "");
@@ -249,7 +252,7 @@
     this.addWidget("combo", "steps", this.properties.steps, v => { this.properties.steps = Number(v); },
       { values: [4, 6, 8] });
     this.addWidget("combo", "style H3 (LoRA)", this.properties.lora, v => { this.properties.lora = v; },
-      { values: E.H3_STYLE_LORAS.map(l => l[0]) });
+      { values: () => E.H3_STYLE_LORAS.map(l => l[0]) });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
     this.size = [340, 260];
     setStatus(this, "idle", "");

@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — démo Media & Entertainment sur GB10
 
-**Version actuelle : 1.0.4** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
+**Version actuelle : 1.0.5** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
 Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception d'un petit service `updater` dédié aux mises à jour, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 
@@ -232,6 +232,13 @@ routing ci-dessus.
 Pipelines génériques disponibles partout : text2image (Krea 2 Turbo), image2image (Qwen-Edit 2509),
 text2video et image2video (LTX 2.5 et Minimax H3, au choix dans le menu Modèle ; audio natif
 optionnel, turbo Minimax H3 activable).
+
+**LoRA de style** : text2image, text2video, image2video et reference2video (Minimax H3) proposent
+un sélecteur de LoRA de style optionnel, aussi bien dans Studio que dans Canvas. La liste est
+découverte en direct depuis les fichiers `.safetensors` présents sous `loras/Krea2/`/`loras/H3/`
+sur le disque (plus de liste curée à la main) — de nouveaux fichiers peuvent être ajoutés
+directement depuis le panneau Model Management de Studio (téléversement navigateur uniquement,
+pas de récupération par URL).
 
 ## Arborescence
 

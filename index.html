@@ -85,22 +85,7 @@
       font-size: 22px;
     }
 
-    .brand-mark {
-      width: 38px; height: 22px;
-      border: 4px solid var(--highlight);
-      border-left: 0;
-      border-radius: 4px;
-      transform: skew(-18deg);
-      position: relative;
-    }
-
-    .brand-mark::before {
-      content: "";
-      position: absolute;
-      inset: 4px 7px;
-      border-left: 4px solid var(--highlight);
-      border-bottom: 4px solid var(--highlight);
-    }
+    .brand img { display: block; height: 28px; width: auto; }
 
     .title-block { text-align: center; }
 
@@ -228,6 +213,9 @@
       flex-direction: row;
       align-items: center;
       gap: 10px;
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 14px;
+      margin-bottom: 4px;
     }
 
     /* Canvas : lien de sortie vers canvas.html, pas un panneau du studio — son
@@ -1448,6 +1436,29 @@
             <div class="model-list" id="diffusionModels"></div>
             <button class="control-btn" id="refreshModelsBtn">Refresh Models</button>
           </details>
+          <details class="right-card" open>
+            <summary class="panel-title"><span class="live-dot">LoRAs</span><span></span></summary>
+            <h3>LoRAs sur disque</h3>
+            <p>Tout fichier ajouté ici apparaît automatiquement dans les sélecteurs de style de Canvas.</p>
+            <div class="model-list" id="loraModels"></div>
+            <h3 style="margin-top:16px">Ajouter un LoRA</h3>
+            <p>Téléversement direct depuis le navigateur, aucune récupération par URL.</p>
+            <div class="form-stack">
+              <label>
+                Dossier cible
+                <select id="loraFolder">
+                  <option value="Krea2">Krea 2 (image)</option>
+                  <option value="H3">Minimax H3 (vidéo)</option>
+                </select>
+              </label>
+              <label>
+                Fichier LoRA (.safetensors)
+                <input type="file" id="loraFile" accept=".safetensors" />
+              </label>
+              <button type="button" class="control-btn primary" id="loraUploadBtn">Téléverser</button>
+              <span class="hint" id="loraUploadStatus"></span>
+            </div>
+          </details>
       </div>
       <button type="button" class="rail-btn" data-panel="llm" title="Local LLM" aria-label="Local LLM">
         <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>
@@ -1505,8 +1516,7 @@
     <div class="app-content">
     <header class="portal-header">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true"></div>
-        Dell Technologies
+        <img src="assets/dell-technologies-logo.png" alt="Dell Technologies">
       </div>
       <div class="title-block">
         <h1>AI Content Studio</h1>
@@ -1616,6 +1626,10 @@
                   <option value="2.0">2.0</option>
                 </select>
               </label>
+              <label class="gb-field" id="loraStyleWrap" style="display:none">
+                Style (LoRA)
+                <select id="loraStyleSelect"><option value="">Aucun</option></select>
+              </label>
               <label class="gb-field" id="variantsWrap">
                 Variantes
                 <input type="number" id="variants" min="1" max="8" value="2" />
@@ -1707,6 +1721,23 @@
               <input type="file" id="seqFiles" accept="image/*" multiple />
               <div class="seq-list" id="seqList"></div>
               <div class="hint" id="seqSummary"></div>
+            </div>
+
+            <div class="form-stack" id="refExtrasWrap" style="display:none; margin-top:22px">
+              <h3 class="section-title">Références supplémentaires (Minimax H3)</h3>
+              <p class="hint">En plus des fiches personnage/décor générées automatiquement (ref_image_0/1). Aucune obligatoire.</p>
+              <label>
+                Images de référence supplémentaires (max 7)
+                <input type="file" id="refImagesInput" accept="image/*" multiple />
+              </label>
+              <label>
+                Vidéos de référence (max 3)
+                <input type="file" id="refVideosInput" accept="video/*" multiple />
+              </label>
+              <label>
+                Audios de référence (max 3)
+                <input type="file" id="refAudiosInput" accept="audio/*" multiple />
+              </label>
             </div>
 
           </section>
@@ -1881,18 +1912,52 @@
     // 14 valeurs exposées dans l'UI, mêmes valeurs pour les 2 familles de moteurs (seule
     // l'unité d'arrondi diffère) — reprises telles quelles de js/engine.js.
     const MP_VALUES = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.98, 1.0, 1.2, 1.5, 1.8, 2.0];
+
+    // ── LoRA de style (Krea 2 / Minimax H3) — même mécanisme de découverte live que
+    // Canvas (js/engine.js : fetchLoraOptions/KREA2_LORAS/H3_STYLE_LORAS/H3_TURBO_LORAS),
+    // dupliqué ici verbatim car index.html n'importe pas js/engine.js (fichier autonome).
+    // Les 2 LoRA turbo H3 sont exclues de la liste "style" : elles restent pilotées par
+    // turbo/steps (turboToggle/turboSteps), pas un choix de style — copie exacte de la liste
+    // exclue côté Canvas.
+    const H3_TURBO_LORAS = new Set([
+      "H3/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors",
+      "H3/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors"
+    ]);
+    let KREA2_LORAS = [["", "Aucun"]];
+    let H3_STYLE_LORAS = [["", "Aucun"]];
+    function loraLabel(path) { return path.replace(/^.*\//, "").replace(/\.safetensors$/i, ""); }
+    async function fetchLoraOptions() {
+      try {
+        const res = await fetch(`${COMFY}/object_info/LoraLoaderModelOnly`);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.LoraLoaderModelOnly.input.required.lora_name[0] || [];
+      } catch {
+        return [];
+      }
+    }
+    // Fire-and-forget au chargement — renderLoraSelect() (définie plus bas, hoisting function
+    // top-level) repeuple le <select> une fois la liste connue : contrairement aux combos
+    // litegraph de Canvas (qui relisent le tableau à l'ouverture), le <select> DOM de Studio
+    // est peuplé statiquement, donc il faut un rendu explicite après résolution du fetch.
+    fetchLoraOptions().then(list => {
+      for (const f of list) if (f.startsWith("Krea2/")) KREA2_LORAS.push([f, loraLabel(f)]);
+      for (const f of list) if (f.startsWith("H3/") && !H3_TURBO_LORAS.has(f)) H3_STYLE_LORAS.push([f, loraLabel(f)]);
+      renderLoraSelect();
+    });
+
     // Fallback si le manifest ne fournit pas la section "pipelines" (manifest v2).
-    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps}
+    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora}
     const PIPELINES_FALLBACK = [
-      { id: "text2image", label: "Text2Image", controls: ["variants", "ratio"] },
+      { id: "text2image", label: "Text2Image", controls: ["variants", "ratio", "lora"] },
       { id: "image2image", label: "Image2Image / Edit", controls: ["variants", "ratio", "image", "markets"] },
-      { id: "image2video", label: "Image2Video", controls: ["duration", "ratio", "image", "audio", "turbo", "mp", "turboSteps"] },
-      { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps"] },
+      { id: "image2video", label: "Image2Video", controls: ["duration", "ratio", "image", "audio", "turbo", "mp", "turboSteps", "lora"] },
+      { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps", "lora"] },
       { id: "sequence2video", label: "Animatic (FLF2V)", scenario: "storyboard", controls: ["seq", "audio"] },
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
         controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["duration", "ratio", "audio", "turbo", "mp"], defaults: { duration: 2 } },
+        controls: ["duration", "ratio", "audio", "turbo", "mp", "lora", "refs"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
         controls: ["duration", "variants", "audio"], defaults: { duration: 5 } }
     ];
@@ -1984,6 +2049,7 @@
       "Ratio": { es: "Proporción", de: "Seitenverhältnis" },
       "Mégapixels": { en: "Megapixels", es: "Megapíxeles", de: "Megapixel" },
       "Steps (LoRA turbo)": { es: "Pasos (LoRA turbo)", de: "Schritte (LoRA-Turbo)" },
+      "Style (LoRA)": { en: "Style (LoRA)", es: "Estilo (LoRA)", de: "Stil (LoRA)" },
       "Variantes": { en: "Variants", es: "Variantes", de: "Varianten" },
       "Durée vidéo (s)": { en: "Video length (s)", es: "Duración del vídeo (s)", de: "Videolänge (s)" },
       "Nombre de cases": { en: "Number of panels", es: "Número de viñetas", de: "Anzahl der Panels" },
@@ -2015,6 +2081,22 @@
       "Modèles présents sur le nœud GB10 (ComfyUI).":
         { en: "Models available on the GB10 node (ComfyUI).", es: "Modelos disponibles en el nodo GB10 (ComfyUI).", de: "Auf dem GB10-Knoten verfügbare Modelle (ComfyUI)." },
       "Refresh Models": { fr: "Rafraîchir les modèles", es: "Actualizar modelos", de: "Modelle aktualisieren" },
+      "LoRAs": { es: "LoRAs", de: "LoRAs" },
+      "LoRAs sur disque": { en: "LoRAs on disk", es: "LoRAs en disco", de: "LoRAs auf der Festplatte" },
+      "Tout fichier ajouté ici apparaît automatiquement dans les sélecteurs de style de Canvas.":
+        { en: "Any file added here appears automatically in Canvas's style pickers.",
+          es: "Cualquier archivo añadido aquí aparece automáticamente en los selectores de estilo de Canvas.",
+          de: "Jede hier hinzugefügte Datei erscheint automatisch in den Stilauswahlen von Canvas." },
+      "Ajouter un LoRA": { en: "Add a LoRA", es: "Añadir un LoRA", de: "LoRA hinzufügen" },
+      "Téléversement direct depuis le navigateur, aucune récupération par URL.":
+        { en: "Direct upload from the browser, no download-by-URL.",
+          es: "Carga directa desde el navegador, sin descarga por URL.",
+          de: "Direkter Upload aus dem Browser, kein Download per URL." },
+      "Dossier cible": { en: "Target folder", es: "Carpeta destino", de: "Zielordner" },
+      "Krea 2 (image)": { es: "Krea 2 (imagen)", de: "Krea 2 (Bild)" },
+      "Minimax H3 (vidéo)": { en: "Minimax H3 (video)", es: "Minimax H3 (vídeo)", de: "Minimax H3 (Video)" },
+      "Fichier LoRA (.safetensors)": { en: "LoRA file (.safetensors)", es: "Archivo LoRA (.safetensors)", de: "LoRA-Datei (.safetensors)" },
+      "Téléverser": { en: "Upload", es: "Subir", de: "Hochladen" },
       "Local LLM": { fr: "LLM local", es: "LLM local", de: "Lokales LLM" },
       "Modèles de langage locaux pour transformer le brief en prompts de diffusion.":
         { en: "Local language models turning the brief into diffusion prompts.", es: "Modelos de lenguaje locales que convierten el brief en prompts de difusión.", de: "Lokale Sprachmodelle, die das Briefing in Diffusions-Prompts umwandeln." },
@@ -2210,6 +2292,7 @@
       refreshCloudUI();
       updateStudioJobs(0);
       renderStyleOptions();
+      renderLoraSelect();
       refreshSoulId();
       if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderAllKeyframeCards(); renderMontage(); renderFooterTimeline(); }
     });
@@ -2261,7 +2344,8 @@
       image: "imageInputWrap", duration: "durationWrap", markets: "marketsWrap",
       seq: "seqWrap", shots: "shotCountWrap", hold: "holdWrap",
       variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap", mode: "modeWrap",
-      style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap"
+      style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap",
+      lora: "loraStyleWrap", refs: "refExtrasWrap"
     };
     function updateModelOptions() {
       const wfs = manifest.workflows.filter(w => w.pipeline === pipelineSelect.value);
@@ -2302,6 +2386,7 @@
       const wf = currentWorkflow();
       modelLabel.textContent = wf ? `${wf.model} · ${wf.pipeline}` : "—";
       updateTurboControls();
+      renderLoraSelect();
     }
 
     // Turbo LoRA (Minimax H3 uniquement) : sans effet sur LTX 2.5 (nœud absent du template) → désactiver les deux champs.
@@ -2310,6 +2395,25 @@
       const isLtx = !!wf && wf.id.startsWith("ltx25_");
       $("turboToggle").disabled = isLtx;
       $("turboSteps").disabled = isLtx || !$("turboToggle").checked;
+    }
+
+    // LoRA de style : la liste dépend du moteur du workflow sélectionné (bucket Krea 2 pour
+    // krea2_t2i, bucket H3 pour les 3 workflows minimax_h3_*), pas du tout pour LTX 2.5 (aucun
+    // concept de LoRA, même comportement no-op que le toggle turbo pour ce moteur). Rappelée à
+    // chaque changement de pipeline/modèle (via updateModelLabel) ET une fois la découverte live
+    // résolue (fetchLoraOptions().then ci-dessus) — la valeur sélectionnée est conservée si elle
+    // existe encore dans la nouvelle liste (même bucket), sinon retombe sur "Aucun" (les noms de
+    // fichiers Krea2/* et H3/* ne se recoupent jamais, donc un changement de bucket la fait
+    // disparaître naturellement de la nouvelle liste).
+    function renderLoraSelect() {
+      const wf = currentWorkflow();
+      const list = wf && wf.id === "krea2_t2i" ? KREA2_LORAS
+        : wf && wf.id.startsWith("minimax_h3_") ? H3_STYLE_LORAS
+        : [["", "Aucun"]];
+      const sel = $("loraStyleSelect");
+      const prev = sel.value;
+      sel.innerHTML = list.map(([v, l]) => `<option value="${v}">${tr(l)}</option>`).join("");
+      if (list.some(([v]) => v === prev)) sel.value = prev;
     }
 
     pipelineSelect.addEventListener("change", updateModelOptions);
@@ -2789,6 +2893,19 @@
       return d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
     }
 
+    // Upload générique (référence r2v : image/vidéo/audio) — même endpoint que
+    // uploadInputImage, non restreint au content-type malgré le chemin "/upload/image"
+    // (déjà utilisé ainsi pour vidéo/audio par uploadBlob côté js/engine.js/Canvas).
+    async function uploadRefFile(file) {
+      const fd = new FormData();
+      fd.append("image", file);
+      fd.append("overwrite", "true");
+      const res = await fetch(`${COMFY}/upload/image`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error(`Upload de la référence "${file.name}" refusé par ComfyUI.`);
+      const d = await res.json();
+      return d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
+    }
+
     $("generateBtn").addEventListener("click", async () => {
       const wf = currentWorkflow();
       if (!wf) { addEvent("WARN", "Aucun workflow sélectionné.", "warn"); return; }
@@ -2844,6 +2961,7 @@
           // ne passe jamais ici (dispatché par BUILDERS plus haut) mais on garde le guard.
           applyMinimaxTurbo(graph, $("turboToggle").checked,
             (wf.pipeline === "text2video" || wf.pipeline === "image2video") ? Number($("turboSteps").value) : undefined);
+          applyStyleLora(graph, $("loraStyleSelect").value, wf.id.startsWith("minimax_h3_") ? "BasicScheduler" : "KSampler");
           const res = await fetch(`${COMFY}/prompt`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3163,6 +3281,12 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       renderModels($("diffusionModels"), names, "diffusion · GB10");
       $("mmState").textContent = names.length ? "Ready" : "Offline";
       try {
+        const loraNames = await (await fetch(`${COMFY}/models/loras`)).json();
+        renderModels($("loraModels"), loraNames, "lora · GB10");
+      } catch {
+        renderModels($("loraModels"), [], "");
+      }
+      try {
         const tags = await (await fetch(`${OLLAMA}/api/tags`)).json();
         const hasGemma = (tags.models || []).some(m => m.name === OLLAMA_MODEL);
         renderModels($("llmModels"), hasGemma ? [OLLAMA_MODEL] : [], "LLM · prompt enrichment");
@@ -3174,6 +3298,45 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
 
     $("refreshModelsBtn").addEventListener("click", loadModels);
     $("llmLabel").textContent = `Ollama · ${OLLAMA_MODEL}`;
+
+    // ── LoRA upload (Model Management panel) ───────────────────────
+    $("loraUploadBtn").addEventListener("click", () => {
+      const fileInput = $("loraFile");
+      const file = fileInput.files[0];
+      const folder = $("loraFolder").value;
+      const statusEl = $("loraUploadStatus");
+      if (!file) { addEvent("WARN", "Aucun fichier LoRA sélectionné.", "warn"); return; }
+      if (!file.name.toLowerCase().endsWith(".safetensors")) {
+        addEvent("WARN", `Fichier "${file.name}" rejeté : extension .safetensors requise.`, "warn");
+        return;
+      }
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/update/loras/upload?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(file.name)}`);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          statusEl.textContent = `${pct}% (${(e.loaded / 1e6).toFixed(1)} / ${(e.total / 1e6).toFixed(1)} Mo)`;
+        }
+      };
+      xhr.onload = () => {
+        statusEl.textContent = "";
+        if (xhr.status >= 200 && xhr.status < 300) {
+          addEvent("OK", `LoRA "${file.name}" téléversé dans ${folder}.`, "ok");
+          fileInput.value = "";
+          loadModels();
+        } else {
+          let msg = xhr.responseText;
+          try { msg = JSON.parse(xhr.responseText).error || msg; } catch { /* corps non-JSON */ }
+          addEvent("WARN", `Échec du téléversement LoRA : ${msg}`, "warn");
+        }
+      };
+      xhr.onerror = () => {
+        statusEl.textContent = "";
+        addEvent("WARN", "Échec du téléversement LoRA : erreur réseau.", "warn");
+      };
+      statusEl.textContent = "0%";
+      xhr.send(file);
+    });
 
     // ── Animatic multi-images (FLF2V) ──────────────────────────────
     const seqImages = []; // {name, blob?, url?, dur}
@@ -3278,6 +3441,70 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
         if (n.class_type === "BasicScheduler") n.inputs.steps = 20;
       }
       delete graph[loraId];
+      return graph;
+    }
+
+    // Greffe une LoRA de style (Krea 2 ou H3) au graphe déjà construit — même technique que
+    // addH3StyleLora (js/engine.js), généralisée sur le class_type d'ancrage puisque les
+    // templates diffèrent (KSampler pour krea2_t2i, BasicScheduler pour les 3 Minimax H3,
+    // même nœud qu'applyMinimaxTurbo ci-dessus) : on retrouve la source actuelle de
+    // `inputs.model` sur ce nœud, on recible tout ce qui pointait vers cette même sortie vers
+    // une nouvelle LoraLoaderModelOnly insérée entre les deux. anchorClassType absent du
+    // graphe (LTX 2.5 : pas de KSampler ni de BasicScheduler pertinent) → no-op.
+    // ORDRE OBLIGATOIRE — appeler APRÈS applyMinimaxTurbo, jamais avant : applyMinimaxTurbo
+    // retrouve SON PROPRE nœud LoraLoaderModelOnly par class_type ; une LoRA de style insérée
+    // avant serait retrouvée à sa place (ou l'ordre d'itération des clés déciderait au hasard).
+    function applyStyleLora(graph, loraName, anchorClassType) {
+      if (!loraName) return graph;
+      const anchor = Object.values(graph).find(n => n.class_type === anchorClassType);
+      if (!anchor) return graph;
+      const src = anchor.inputs.model;
+      let maxId = 0;
+      for (const key of Object.keys(graph)) { const v = Number(key); if (Number.isFinite(v)) maxId = Math.max(maxId, v); }
+      const id = String(maxId + 1);
+      for (const n of Object.values(graph))
+        if (Array.isArray(n.inputs.model) && n.inputs.model[0] === src[0] && n.inputs.model[1] === src[1])
+          n.inputs.model = [id, 0];
+      graph[id] = { class_type: "LoraLoaderModelOnly", inputs: { model: [src[0], src[1]], lora_name: loraName, strength_model: 1 } };
+      return graph;
+    }
+
+    // ── AJOUT : références additionnelles MiniMaxH3ReferenceToVideo (portage verbatim
+    // de js/engine.js — Canvas / Ref2VideoNode, déjà validé côté Canvas) ────────────────
+    // Le template api/minimax_h3_r2v.json ne câble que `ref_images.ref_image_0` et
+    // `ref_images.ref_image_1` (personnage / décor). Ce helper greffe les références
+    // supplémentaires en réutilisant EXACTEMENT la convention de clés du template
+    // ("<famille>.<prefix><N>"), telle que /object_info la déclare pour les 4 familles
+    // COMFY_AUTOGROW_V3 du nœud :
+    //   ref_images       prefix "ref_image_"       IMAGE  max 9  (0/1 = les 2 planches)
+    //   ref_videos       prefix "ref_video_"       IMAGE  max 3  (frames 24 fps, PAS un VIDEO)
+    //   ref_video_audios prefix "ref_video_audio_" AUDIO  max 3  ("soundtrack of the
+    //                                                             same-numbered reference video")
+    //   ref_audios       prefix "ref_audio_"       AUDIO  max 3  (audio autonome)
+    // UNE vidéo de référence = 1 LoadVideo → 1 GetVideoComponents dont les sorties `images`
+    // (slot 0) et `audio` (slot 1) alimentent le COUPLE ref_video_N / ref_video_audio_N :
+    // c'est l'appariement prévu par le nœud, aucune UI séparée n'est nécessaire pour l'audio
+    // d'une vidéo de référence.
+    // Ids des nœuds greffés : préfixe "ref" (non numérique, comme les "w0"/"h32" déjà
+    // présents dans le template) — aucune collision possible avec les ids du template.
+    // `refs` vide (ou absent) ⇒ graphe rendu strictement inchangé.
+    function addMinimaxRefs(graph, refs) {
+      const entry = Object.entries(graph).find(([, n]) => n.class_type === "MiniMaxH3ReferenceToVideo");
+      if (!entry || !refs) return graph;
+      const mm = entry[1];
+      let k = 0;
+      const add = (class_type, inputs) => { const id = "ref" + (++k); graph[id] = { class_type, inputs }; return id; };
+      (refs.images || []).forEach((name, i) => {
+        mm.inputs[`ref_images.ref_image_${i + 2}`] = [add("LoadImage", { image: name }), 0];
+      });
+      (refs.videos || []).forEach((name, i) => {
+        const comp = add("GetVideoComponents", { video: [add("LoadVideo", { file: name }), 0] });
+        mm.inputs[`ref_videos.ref_video_${i}`] = [comp, 0];
+        mm.inputs[`ref_video_audios.ref_video_audio_${i}`] = [comp, 1];
+      });
+      (refs.audios || []).forEach((name, i) => {
+        mm.inputs[`ref_audios.ref_audio_${i}`] = [add("LoadAudio", { audio: name }), 0];
+      });
       return graph;
     }
 
@@ -3982,6 +4209,25 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     // ── Reference2Video (Minimax H3 r2v, LOT 1) : réutilise la génération charsheet/locsheet
     // existante (Krea 2) comme les deux références de MiniMaxH3ReferenceToVideo — personnage
     // ET décor cohérents en un seul clip, sans passer par les keyframes/cuts du storyboard_v2.
+    // Références supplémentaires (#refImagesInput/#refVideosInput/#refAudiosInput) : cap
+    // dur par famille (9/3/3 côté nœud, moins les 2 planches auto pour les images → 7) et
+    // avertissement si dépassement, même idiome que addSeqImage/seqImages.length >= 6.
+    const REF_EXTRA_CAPS = { refImagesInput: [7, "images de référence"], refVideosInput: [3, "vidéos de référence"], refAudiosInput: [3, "audios de référence"] };
+    async function collectRefExtras() {
+      const capped = {};
+      for (const [inputId, [max, label]] of Object.entries(REF_EXTRA_CAPS)) {
+        const files = Array.from($(inputId).files);
+        if (files.length > max) addEvent("WARN", `${label[0].toUpperCase()}${label.slice(1)} limitées à ${max} — ${files.length - max} fichier(s) ignoré(s).`, "warn");
+        capped[inputId] = files.slice(0, max);
+      }
+      const [images, videos, audios] = await Promise.all([
+        Promise.all(capped.refImagesInput.map(uploadRefFile)),
+        Promise.all(capped.refVideosInput.map(uploadRefFile)),
+        Promise.all(capped.refAudiosInput.map(uploadRefFile))
+      ]);
+      return { images, videos, audios, count: images.length + videos.length + audios.length };
+    }
+
     async function generateReference2Video(seed, width, height) {
       if (!brief.value.trim()) throw new Error("Décrivez le personnage et le décor dans le brief avant de générer.");
       const wf = currentWorkflow();
@@ -4001,6 +4247,8 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       const charName = charRef.name, locName = locRef.name;
       setSoulAnchors(charRef, locRef); // affichage seul (pastille d'identité)
 
+      const refs = await collectRefExtras();
+
       const raw = await getTemplate(wf.file);
       const graph = buildGraph(raw, {
         // Ancrage double (piège n°9/n°10 LESSONS) : le prompt rappelle scène + personnage +
@@ -4008,9 +4256,12 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
         prompt: `${charDesc}. ${locDesc}. ${brief.value.trim()}`, negative: negText,
         seed: seed + 201, width, height, duration, image: charName, image2: locName
       });
+      addMinimaxRefs(graph, refs);
       applyMinimaxTurbo(graph, turboOn);
+      applyStyleLora(graph, $("loraStyleSelect").value, "BasicScheduler");
+      const refsLabel = refs.count ? ` · +${refs.count} réf.` : "";
       await submitGraph(graph, "Personnage + décor cohérents (Minimax H3 r2v)",
-        `${wf.model} · r2v · ${duration}s · ${turboOn ? "turbo 8 steps" : "20 steps"} · seed ${seed}`);
+        `${wf.model} · r2v · ${duration}s · ${turboOn ? "turbo 8 steps" : "20 steps"}${refsLabel} · seed ${seed}`);
     }
 
     // ── Mode Réalisateur (storyboard_v2) : studio plein écran ────────────────────

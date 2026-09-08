@@ -165,9 +165,12 @@ else
 fi
 
 # --- Module de mise à jour (updater) ---
+echo "COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras" > "$REPO_ROOT/.env"
+echo "Chemin des LoRAs persisté dans .env : COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras"
+
 UPDATER_STATUS=""
 echo "--- Module de mise à jour (updater) ---"
-$COMPOSE up -d updater >/dev/null 2>&1 && UPDATER_STATUS="démarré" || UPDATER_STATUS="échec du démarrage (voir 'docker compose logs updater')"
+$COMPOSE up -d --build --force-recreate updater >/dev/null 2>&1 && UPDATER_STATUS="démarré" || UPDATER_STATUS="échec du démarrage (voir 'docker compose logs updater')"
 echo "Service updater : $UPDATER_STATUS"
 
 # ---------------------------------------------------------------------------

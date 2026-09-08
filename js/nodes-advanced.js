@@ -184,7 +184,12 @@
     return names;
   }
   const styleIds = () => Object.keys(E.STYLE_PACKS);
+  // Fonctions (pas des tableaux figés) : litegraph relit `options.values()` à chaque
+  // ouverture du combo (cf. litegraph.js, case "combo" du pointerdown), donc la liste
+  // reflète l'état courant de E.KREA2_LORAS/E.H3_STYLE_LORAS même si le fetch réseau qui
+  // les peuple (js/engine.js, fetchLoraOptions) se termine après la construction du nœud.
   const loraIds = () => E.KREA2_LORAS.map(l => l[0]);
+  const h3LoraIds = () => E.H3_STYLE_LORAS.map(l => l[0]);
   const randSeed = () => Math.floor(Math.random() * 1e9);
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -200,7 +205,7 @@
     };
     this.addWidget("text", "personnage", this.properties.brief, v => { this.properties.brief = v; });
     this.addWidget("combo", "style", this.properties.style, v => { this.properties.style = v; }, { values: styleIds() });
-    this.addWidget("combo", "style (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: loraIds() });
+    this.addWidget("combo", "style (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: loraIds });
     this.addWidget("number", "seed (0=auto)", this.properties.seed, v => { this.properties.seed = Math.max(0, Math.round(v)); }, { min: 0, step: 1 });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
     this.size = [340, 260];
@@ -252,7 +257,7 @@
     };
     this.addWidget("text", "décor", this.properties.brief, v => { this.properties.brief = v; });
     this.addWidget("combo", "style", this.properties.style, v => { this.properties.style = v; }, { values: styleIds() });
-    this.addWidget("combo", "style (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: loraIds() });
+    this.addWidget("combo", "style (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: loraIds });
     this.addWidget("number", "seed (0=auto)", this.properties.seed, v => { this.properties.seed = Math.max(0, Math.round(v)); }, { min: 0, step: 1 });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
     this.size = [340, 260];
@@ -473,7 +478,7 @@
     // `when: n => n.properties.engine === "minimax_h3"` sur ces 3 champs.
     this.addWidget("toggle", "turbo (LoRA)", this.properties.turbo, v => { this.properties.turbo = !!v; });
     this.addWidget("combo", "steps", this.properties.steps, v => { this.properties.steps = Number(v); }, { values: [4, 6, 8] });
-    this.addWidget("combo", "style H3 (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: E.H3_STYLE_LORAS.map(l => l[0]) });
+    this.addWidget("combo", "style H3 (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: h3LoraIds });
     this.addWidget("number", "seed (0=auto)", this.properties.seed, v => { this.properties.seed = Math.max(0, Math.round(v)); }, { min: 0, step: 1 });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
     this.size = [340, 260];
@@ -680,7 +685,7 @@
     this.addWidget("combo", "mégapixels", this.properties.mp, v => { this.properties.mp = v; }, { values: E.MP_VALUES });
     this.addWidget("number", "durée (s)", this.properties.duration, v => { this.properties.duration = Math.min(10, Math.max(1, Math.round(v))); }, { min: 1, max: 10, step: 1 });
     this.addWidget("toggle", "turbo (8 steps)", this.properties.turbo, v => { this.properties.turbo = !!v; });
-    this.addWidget("combo", "style H3 (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: E.H3_STYLE_LORAS.map(l => l[0]) });
+    this.addWidget("combo", "style H3 (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: h3LoraIds });
     this.addWidget("number", "seed (0=auto)", this.properties.seed, v => { this.properties.seed = Math.max(0, Math.round(v)); }, { min: 0, step: 1 });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
     this._baseH = 300;
