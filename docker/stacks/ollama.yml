@@ -1,0 +1,29 @@
+# Stack Ollama — déployée par install.sh dans ~/ollama/compose.yaml.
+# Les poids vivent dans ./data (bind-mount) plutôt que dans un volume Docker anonyme :
+# le dossier reste inspectable et sauvegardable depuis le home. Le conteneur tourne en
+# root (image officielle) : les fichiers qu'il écrit dans data/ lui appartiennent.
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-api
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Démarre le serveur puis s'assure que gemma4:e4b est présent (idempotent :
+    # `ollama pull` ne retélécharge pas un modèle déjà local).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 3
+        ollama pull gemma4:e4b
+        wait
+    restart: unless-stopped

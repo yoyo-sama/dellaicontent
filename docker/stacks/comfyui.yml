@@ -1,0 +1,45 @@
+# Stack ComfyUI — déployée par install.sh dans ~/comfyui-spark/compose.yaml.
+# Décalque de la stack GB10 de référence : ces variables ne sont PAS cosmétiques.
+#  - sans BASE_DIRECTORY, ComfyUI ignore /basedir et cherche ses modèles dans
+#    /comfy/mnt/ComfyUI/models — les modèles téléchargés par install.sh sont alors invisibles ;
+#  - sans --disable-pinned-memory / --reserve-vram 8, ComfyUI se fait sortir sur la
+#    mémoire unifiée du GB10 en cours de job ;
+#  - WANTED_UID/GID donnent les fichiers générés à l'utilisateur (sinon dossiers root).
+services:
+  comfyui-nvidia:
+    image: mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest
+    container_name: comfyui-nvidia
+    ports:
+      - "8188:8188"
+    volumes:
+      - ./userscripts_dir:/userscripts_dir
+      - ./run:/comfy/mnt
+      - ./basedir:/basedir
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      WANTED_UID: "${WANTED_UID:-1000}"   # valeurs réelles écrites par install.sh dans le .env de la stack
+      WANTED_GID: "${WANTED_GID:-1000}"
+      BASE_DIRECTORY: /basedir
+      USE_NEW_MANAGER: "true"
+      ENABLE_MANAGER_LEGACY_UI: "true"
+      SECURITY_LEVEL: weak
+      COMFY_CMDLINE_EXTRA: --use-pytorch-cross-attention --disable-pinned-memory --reserve-vram 8 --enable-cors-header
+      NVIDIA_VISIBLE_DEVICES: all
+      USE_UV: "true"
+      FORCE_REINSTALL: "false"
+      CUDA_HOME: /usr/local/cuda
+      CUDA_CACHE_MAXSIZE: "4294967296"   # 4 Go de cache noyau = ~3x sur les reruns
+      NCCL_P2P_DISABLE: "1"              # GPU unique, NCCL inutile
+      HF_TOKEN: ${HF_TOKEN:-}            # jeton Hugging Face : jamais en dur ici
+      HF_HUB_DISABLE_TELEMETRY: "true"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility]
+    restart: unless-stopped

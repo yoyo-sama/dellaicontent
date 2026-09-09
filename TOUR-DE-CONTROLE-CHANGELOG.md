@@ -1,5 +1,52 @@
 # Tour de contrôle — changelog
 
+## 2026-09-09 — v1.0.7 — Une stack Docker par service à la racine du home (déploiement GB10 corrigé)
+
+Déclencheur : installation sur une machine neuve. Génération impossible, `Error: JSON.parse: unexpected character at line 1 column 1` (le `await res.json()` de `submitGraph` sur une page d'erreur HTML de nginx) et `Enhancement failed: NetworkError`. Cause réelle trouvée en remontant depuis un détail signalé par l'utilisateur — un cadenas sur le dossier `comfyui/` du repo :
+
+1. **`docker-compose.yml` et `install.sh` n'étaient pas d'accord sur l'emplacement des modèles.** Le service `comfyui` du compose de l'app n'avait aucun bloc `environment` — donc pas de `BASE_DIRECTORY: /basedir`, alors que l'image `mmartial` ne relocalise ses modèles que sur cette variable. ComfyUI lisait `/comfy/mnt/ComfyUI/models` pendant qu'`install.sh` téléchargeait dans `/basedir/models`. Manquaient aussi les flags GB10 de la stack de référence (`--disable-pinned-memory --reserve-vram 8`) et `WANTED_UID/GID`.
+2. **Dossiers créés par dockerd en `root`.** Les bind-mounts (`./comfyui/basedir`, `./run`, `./userscripts_dir`) étaient créés par Docker au premier `up -d`, donc en root:root : d'où le cadenas, et surtout l'échec en « permission denied » de tous les `mkdir`/`curl` de l'étape 5. Seul `loras/` existait (créé par le bind-mount de l'updater) — d'où un dossier de modèles vide.
+3. **Ordonnancement.** Les userscripts (installation de comfy_kitchen) étaient copiés en étape 4, soit APRÈS la création du conteneur en étape 2 — ils ne sont joués qu'au démarrage, donc jamais sur une installation fraîche. Et le script se terminait « OK » sans jamais attendre que ComfyUI réponde sur :8188, alors que son premier boot dure plusieurs minutes.
+
+### Structure retenue (demandée par l'utilisateur, identique au poste de référence)
+
+Une stack par service, chacune à la racine du home : `~/ai-content-studio` (app + updater), `~/comfyui-spark` (ComfyUI), `~/ollama` (Ollama). Le compose du repo ne déclare plus que `ai-content-studio` et `updater` ; les deux voisines sont créées par `install.sh` depuis les gabarits `docker/stacks/comfyui.yml` et `docker/stacks/ollama.yml`. Le gabarit ComfyUI est le décalque de `~/comfyui-spark/compose.yaml` de la machine de référence, **sans le `HF_TOKEN` en dur** (`${HF_TOKEN:-}`) et sans son réseau externe `ai-studio-net`.
+
+### Fichiers touchés
+
+- `docker-compose.yml` — services `comfyui` et `ollama` retirés ; défaut du montage LoRA sur la stack voisine (`../comfyui-spark/basedir/models/loras`)
+- `docker/stacks/comfyui.yml`, `docker/stacks/ollama.yml` — nouveaux gabarits
+- `install.sh` — `COMFY_DIR`/`OLLAMA_DIR` sous `$HOME`, fonctions `create_comfy_stack`/`create_ollama_stack`/`copy_userscripts`, dossiers créés côté utilisateur AVANT les conteneurs, userscripts déposés avant le premier `up -d`, garde d'écriture sur le dossier de modèles (échec explicite au lieu de 19 téléchargements en erreur), attente de ComfyUI sur :8188 après création, migration depuis l'ancienne mise en page, récapitulatif avec les emplacements réels
+- `README.md`, `README.fr.md`, `AGENTS.md` — trois stacks au lieu de trois services, chemins de modèles en `~/comfyui-spark/basedir/models/`
+- `VERSION` — 1.0.7
+
+### Sortie terminal en anglais + Ollama détecté au niveau service
+
+Tous les messages d'`install.sh` sont en anglais (commentaires du code laissés en français, comme le reste du dépôt). Deux corrections de robustesse remontées par un test sur poste Ubuntu où Ollama était **installé nativement** (systemd, donc pas un conteneur) : `find_container_by_port` ne trouvait rien, le script tombait sur `OLLAMA_CONTAINER="(inconnu)"` et abandonnait silencieusement le pull du modèle.
+
+- **Pull par l'API HTTP** (`POST /api/pull`, résultat revérifié par `/api/tags` car l'API répond 200 même quand le tirage échoue en cours de flux) au lieu de `docker exec` : identique que Ollama tourne dans notre conteneur, dans celui d'un autre projet, ou nativement. La branche « conteneur non identifié » disparaît.
+- **Garde de port** avant toute création de stack : si `:8188`/`:11434` est occupé par un service qui ne répond pas au health-check, rien n'est créé et le script dit quoi libérer — au lieu de laisser Docker échouer sur « port is already allocated ».
+
+Corrigé au passage : `find_container_by_port` pouvait désigner l'updater plutôt que nginx pour le port 8090 (les deux montent la racine du repo en network host) — la destination `/usr/share/nginx/html` les distingue.
+
+### Aucun chemin ni uid en dur
+
+Le poste cible n'a pas le même utilisateur que la machine de référence. `install.sh` ne connaît que `$HOME` et `$REPO_ROOT` (déduit de `BASH_SOURCE`). Le gabarit ComfyUI passe par `WANTED_UID: "${WANTED_UID:-1000}"` / `WANTED_GID` et `install.sh` écrit les valeurs réelles (`id -u`/`id -g`) dans `~/comfyui-spark/.env`, lu par compose y compris lors d'un `docker compose up -d` lancé à la main plus tard. `tools/validate.py` et `tools/onboard.py`, qui pointaient en dur sur `/home/sparks/comfyui-spark/basedir`, dérivent désormais de `COMFY_BASEDIR` avec repli sur `~/comfyui-spark/basedir` ; `docs/TESTING.md` idem. Les chemins `/home/sparks` restants ne sont plus que des relevés historiques (LESSONS, ARCHITECTURE, NOUVEAUX-MODELES, ce changelog).
+
+### Migration d'une machine déjà installée en ancienne mise en page
+
+`install.sh` détecte un conteneur ComfyUI ou Ollama dont le label compose pointe sur le `docker-compose.yml` du repo, le supprime et recrée la stack voisine. Les poids Ollama sont repris du volume nommé `ollama-data` (copie vers `~/ollama/data`, évite 9,6 Go de retéléchargement) ; les modèles ComfyUI de l'ancien `~/ai-content-studio/comfyui/basedir/models` ne sont PAS déplacés automatiquement — le script affiche le chemin et laisse l'utilisateur faire le `mv`.
+
+### Vérification
+
+1. **Chemin réutilisation** : `install.sh` exécuté en vrai sur la machine de référence — les trois services préexistants réutilisés sans être touchés, chemins résolus sur `/home/sparks/comfyui-spark/basedir/models`, 20 modèles reconnus, aucun dossier créé à tort.
+2. **Chemin création (poste vierge)** : `install.sh` rejoué avec `docker` et `curl` remplacés par des stubs (aucun conteneur, santé HTTP en échec) et un `$HOME` temporaire — les deux stacks sont créées, tous les dossiers appartiennent à l'utilisateur (aucun dossier root, le bug d'origine), les userscripts sont déposés AVANT le `up -d`, `.env` pointe sur la stack, la boucle d'attente sur `:8188` sort dès que le service répond.
+3. **Stack Ollama réellement démarrée** (copie isolée, port 21434, conteneur `ollama-selftest`) : `/api/version` répond, l'entrypoint enchaîne sur `ollama pull gemma4:e4b`, le bind-mount `./data` se remplit. Détruit après coup. C'était la seule pièce nouvelle — l'ancien compose utilisait un volume nommé.
+4. **Stack ComfyUI** : `docker compose config` depuis un dossier neuf — `BASE_DIRECTORY`, flags GB10 et les trois montages résolus en absolu sous le dossier de la stack ; `WANTED_UID/GID` prennent bien la valeur du `.env` (testé avec 4242/4343, valeurs arbitraires ≠ 1000).
+5. **Outils** : `HOME=/home/alice` → `validate.MODELS_DIR = /home/alice/comfyui-spark/basedir/models` ; `COMFY_BASEDIR=/srv/comfy` → `/srv/comfy/models`.
+
+Non prouvé ici, et qui ne peut l'être que sur la machine cible : le premier boot réel de ComfyUI (build comfy_kitchen) et les téléchargements de modèles.
+
 ## 2026-09-08 (suite 2) — v1.0.6 — Mode Réalisateur par défaut sur `reference2video` (revue des fiches avant lancement vidéo) + bypass "Ignorer les fiches" (références utilisateur seules, jusqu'à 9)
 
 Deux lots liés autour du pipeline `reference2video` (Minimax H3, cohérence personnage+décor en un seul job vidéo), demandés par l'utilisateur après constat que le flux Auto seul (aucun arrêt de revue avant un rendu vidéo coûteux) ne convenait pas à cet usage. Les deux vérifiés par un vrai rendu ComfyUI inspecté (jamais le seul statut de job).

@@ -1,3 +1,7 @@
+# Stack applicative uniquement (web + updater). ComfyUI et Ollama vivent dans leurs
+# propres stacks, à la racine du home : ~/comfyui-spark et ~/ollama (déployées par
+# install.sh depuis docker/stacks/). Un service ne se déploie jamais deux fois : ici
+# nginx les atteint en 127.0.0.1 puisqu'il tourne en network_mode host.
 services:
   ai-content-studio:
     image: nginx:alpine
@@ -10,52 +14,6 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
-  comfyui:
-    image: mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest
-    container_name: comfyui-nvidia
-    ports:
-      - "8188:8188"
-    volumes:
-      # Chemins hôte par défaut sous ./comfyui/ à la racine du repo (portable).
-      # Adaptez-les si vos modèles vivent déjà ailleurs sur la machine.
-      - ./comfyui/userscripts_dir:/userscripts_dir:rw
-      - ./comfyui/run:/comfy/mnt:rw
-      - ./comfyui/basedir:/basedir:rw
-      - /etc/localtime:/etc/localtime:ro
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu, compute, utility]
-    restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama-api
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    # Démarre le serveur puis s'assure que gemma4:e4b est présent (idempotent :
-    # `ollama pull` ne retélécharge pas un modèle déjà local).
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        ollama serve &
-        sleep 3
-        ollama pull gemma4:e4b
-        wait
-    restart: unless-stopped
-
   updater:
     build: ./docker/updater
     container_name: ai-content-studio-updater
@@ -65,8 +23,7 @@ services:
       - LORAS_DIR=/loras
     volumes:
       - ./:/repo:rw
-      - ${COMFY_LORAS_DIR:-./comfyui/basedir/models/loras}:/loras:rw
+      # Chemin réel écrit dans .env par install.sh ; le défaut suppose la stack
+      # ComfyUI voisine (~/comfyui-spark) du repo (~/ai-content-studio).
+      - ${COMFY_LORAS_DIR:-../comfyui-spark/basedir/models/loras}:/loras:rw
     restart: unless-stopped
-
-volumes:
-  ollama-data:

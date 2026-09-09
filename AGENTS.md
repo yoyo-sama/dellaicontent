@@ -1,11 +1,13 @@
 # AGENTS.md — guide agent pour AI Content Studio
 
-Démo Dell GB10 : page statique unique (`index.html`) qui pilote ComfyUI (`:8188`) et Ollama (`:11434`). Pas de build, pas de dépendances côté frontend. Publique via nginx sur `:8090` (`docker compose up -d`). Seule exception backend : le service `updater` (`docker/updater/`, Python stdlib, `127.0.0.1:8093`) qui expose `/update/status`, `/update/apply` et `/update/loras/upload` (proxifiés par nginx) pour la mise à jour git déclenchée depuis l'UI et le téléversement de LoRA — voir le changelog du 2026-09-07 (suite 3) et du 2026-09-08 (suite).
+Démo Dell GB10 : page statique unique (`index.html`) qui pilote ComfyUI (`:8188`) et Ollama (`:11434`). Pas de build, pas de dépendances côté frontend. Publique via nginx sur `:8090` (`docker compose up -d`). Trois stacks Docker distinctes, une par service, à la racine du home : `~/ai-content-studio` (app + updater), `~/comfyui-spark` (ComfyUI, gabarit `docker/stacks/comfyui.yml`), `~/ollama` (Ollama, gabarit `docker/stacks/ollama.yml`) — `install.sh` crée les deux voisines si rien ne répond déjà sur :8188/:11434. Seule exception backend : le service `updater` (`docker/updater/`, Python stdlib, `127.0.0.1:8093`) qui expose `/update/status`, `/update/apply` et `/update/loras/upload` (proxifiés par nginx) pour la mise à jour git déclenchée depuis l'UI et le téléversement de LoRA — voir le changelog du 2026-09-07 (suite 3) et du 2026-09-08 (suite).
 
 ## Commandes essentielles
 
 ```bash
-docker compose up -d                                  # servir l'app (nginx :8090)
+docker compose up -d                                  # servir l'app (nginx :8090 + updater)
+docker compose -f ~/comfyui-spark/compose.yaml up -d   # stack ComfyUI (:8188)
+docker compose -f ~/ollama/compose.yaml up -d          # stack Ollama (:11434)
 curl -s http://localhost:8188/system_stats | head -c 200   # ComfyUI vivant ?
 curl -s http://localhost:11434/api/version                 # Ollama vivant ?
 node --check <(python3 -c "import re;print(re.search(r'<script>(.*?)</script>', open('index.html').read(), re.S).group(1))")   # valider le JS
@@ -14,7 +16,7 @@ python3 tools/onboard.py <ui.json> --id X --label "…" --pipeline text2video --
 python3 tools/validate.py workflows/api/ltx25_t2v.json --reduce --frames 0,12 --audio      # rendu réel réduit + inspection
 ```
 
-Modèles installés : `ls /home/sparks/comfyui-spark/basedir/models/<dossier>/` (diffusion_models, checkpoints, text_encoders, vae, loras, latent_upscale_models). Ne jamais référencer un `.safetensors` sans vérifier sa présence.
+Modèles installés : `ls ~/comfyui-spark/basedir/models/<dossier>/` (chemin de la stack ComfyUI) (diffusion_models, checkpoints, text_encoders, vae, loras, latent_upscale_models). Ne jamais référencer un `.safetensors` sans vérifier sa présence.
 
 ## Règles du projet (imposées par l'utilisateur)
 

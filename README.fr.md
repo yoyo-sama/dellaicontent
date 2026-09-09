@@ -27,20 +27,27 @@ testé sur deux exécutions consécutives) :
 
 1. Vérifie l'environnement (architecture, `docker`/`docker compose`, runtime NVIDIA).
 2. Détecte les 3 services (app web `:8090`, ComfyUI `:8188`, Ollama `:11434`) **par rôle réel**
-   (santé HTTP), pas par nom de conteneur — réutilise tout ce qui tourne déjà (y compris un
-   service lancé en dehors de ce `docker-compose.yml`) et ne recrée/ne détruit jamais un
-   conteneur qu'il ne possède pas (vérification par les labels docker-compose). Si un
-   ComfyUI existant est bien géré par CE `docker-compose.yml`, il est mis à jour par
-   `pull` + `recreate` ; sinon, aucune mise à jour automatique (message explicite pour le
-   faire manuellement).
+   (santé HTTP), pas par nom de conteneur — réutilise tout ce qui tourne déjà, **y compris un
+   Ollama installé nativement (systemd), qui n'est pas un conteneur**, et ne recrée/ne détruit
+   jamais un service qu'il ne possède pas (vérification par les labels docker-compose). Ce qui
+   manque est créé dans sa propre stack à la racine du home (`~/comfyui-spark`, `~/ollama`)
+   depuis les gabarits `docker/stacks/*.yml`, dossiers créés côté utilisateur AVANT les
+   conteneurs. Si un port est occupé par un service qui ne répond pas, rien n'est créé et le
+   script explique quoi libérer — au lieu de laisser Docker échouer sur « port is already
+   allocated ». Une installation faite avec l'ancienne mise en page (services `comfyui`/`ollama`
+   dans le compose de l'app) est migrée automatiquement.
 3. Copie `docker/userscripts/*.sh` (dont le script d'installation de `comfy_kitchen`, voir
    plus bas) vers le dossier `userscripts_dir` réel du conteneur ComfyUI utilisé.
 4. Télécharge les modèles manquants listés dans `scripts/models.txt` dans
-   `comfyui/basedir/models/<dossier>/` (skip automatique si le fichier est déjà présent avec
+   `~/comfyui-spark/basedir/models/<dossier>/` (skip automatique si le fichier est déjà présent avec
    la bonne taille — aucun retéléchargement inutile).
-5. Tire le modèle Ollama `gemma4:e4b` s'il est absent.
-6. Affiche un récapitulatif final (statut des 3 services, modèles téléchargés/déjà présents/
-   en échec, health-checks).
+5. Tire le modèle Ollama `gemma4:e4b` s'il est absent, **par l'API HTTP** (`POST /api/pull`)
+   et non par `docker exec` : identique que Ollama tourne dans un conteneur ou nativement.
+6. Attend que ComfyUI réponde sur `:8188` quand il vient d'être créé (premier démarrage :
+   plusieurs minutes d'installation des userscripts), puis affiche un récapitulatif final
+   (statut des services, emplacements réels, modèles, health-checks).
+
+La sortie du script est en anglais ; ses commentaires restent en français.
 
 **`HF_TOKEN` (jeton Hugging Face, optionnel mais nécessaire pour LTX 2.5)** : les 4 fichiers
 de modèle LTX 2.5 proviennent d'un dépôt Hugging Face **"gated"** (accès restreint) — un
@@ -67,31 +74,40 @@ Pour qui préfère comprendre chaque étape, n'a pas de connexion internet compl
 télécharger d'un coup, ou veut auditer ce qu'`install.sh` automatise :
 
 ```bash
-git clone <url-du-repo> ai-content-studio
-cd ai-content-studio
-docker compose up -d
+git clone <url-du-repo> ~/ai-content-studio
+cd ~/ai-content-studio
+docker compose up -d                                   # app seule (nginx :8090 + updater)
+docker compose -f ~/comfyui-spark/compose.yaml up -d   # ComfyUI (:8188)
+docker compose -f ~/ollama/compose.yaml up -d          # Ollama  (:11434)
 ```
 
-`docker-compose.yml` définit 3 services :
+Trois stacks distinctes, une par service, chacune à la racine du home :
 
-| Service | Image | Port | Rôle |
-|---|---|---|---|
-| `ai-content-studio` | `nginx:alpine` | 8090 | Sert `index.html`/`canvas.html` + reverse-proxy vers ComfyUI/Ollama |
-| `comfyui` | `mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest` | 8188 | Moteur de génération d'images/vidéos |
-| `ollama` | `ollama/ollama:latest` | 11434 | LLM local pour l'enrichissement de prompt |
+| Dossier | Conteneur | Image | Port | Rôle |
+|---|---|---|---|---|
+| `~/ai-content-studio` | `ai-content-studio-web` + `ai-content-studio-updater` | `nginx:alpine` | 8090 | Sert `index.html`/`canvas.html` + reverse-proxy vers ComfyUI/Ollama |
+| `~/comfyui-spark` | `comfyui-nvidia` | `mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest` | 8188 | Moteur de génération d'images/vidéos |
+| `~/ollama` | `ollama-api` | `ollama/ollama:latest` | 11434 | LLM local pour l'enrichissement de prompt |
 
-Les volumes ComfyUI sont montés par défaut sous `./comfyui/` à la racine du repo
-(`comfyui/basedir`, `comfyui/run`, `comfyui/userscripts_dir`) — modifiables dans
-`docker-compose.yml` si vos modèles vivent déjà ailleurs sur la machine. Le service `ollama`
-tire automatiquement le modèle `gemma4:e4b` au démarrage (`ollama pull` est idempotent, il ne
+`install.sh` crée les deux stacks voisines à partir des gabarits `docker/stacks/*.yml`, en
+créant leurs dossiers **avant** les conteneurs : un bind-mount dont la source n'existe pas
+encore est créé par Docker en `root`, ce qui cadenasse le dossier et fait échouer tous les
+téléchargements de modèles ensuite. Modèles ComfyUI dans `~/comfyui-spark/basedir/models/`,
+poids Ollama dans `~/ollama/data/`.
+
+`BASE_DIRECTORY: /basedir` dans la stack ComfyUI n'est pas optionnel : sans lui, ComfyUI
+ignore `/basedir` et cherche ses modèles dans `/comfy/mnt/ComfyUI/models`. Les flags
+`--disable-pinned-memory --reserve-vram 8` non plus (mémoire unifiée GB10).
+
+Le service Ollama tire `gemma4:e4b` au démarrage (`ollama pull` est idempotent, il ne
 retélécharge pas un modèle déjà présent) ; si besoin, relancez-le manuellement :
 
 ```bash
-docker compose exec ollama ollama pull gemma4:e4b
+curl -X POST http://localhost:11434/api/pull -d '{"model":"gemma4:e4b"}'
 ```
 
 **Important : les poids de modèles ne sont PAS dans le dépôt Git** (plusieurs dizaines de Go
-au total) — à télécharger manuellement dans `comfyui/basedir/models/<dossier>/` selon le
+au total) — à télécharger manuellement dans `~/comfyui-spark/basedir/models/<dossier>/` selon le
 tableau ci-dessous (mêmes URLs que `scripts/models.txt`, utilisé par `install.sh`), avant de
 lancer une génération. Pour LTX 2.5, voir la section `HF_TOKEN` ci-dessus (dépôt gated).
 Les userscripts `docker/userscripts/*.sh` (dont `comfy_kitchen`) sont à copier manuellement
@@ -107,8 +123,8 @@ curl http://localhost:11434/api/version          # Ollama vivant
 
 ### Modèles à télécharger
 
-Chaque fichier va dans `comfyui/basedir/models/<dossier>/` (chemin hôte par défaut ; adaptez
-si vous avez changé le mapping de volume). `install.sh` télécharge automatiquement les 19
+Chaque fichier va dans `~/comfyui-spark/basedir/models/<dossier>/` (chemin de la stack
+ComfyUI ; adaptez si vos modèles vivent ailleurs). `install.sh` télécharge automatiquement les 19
 fichiers ci-dessous depuis `scripts/models.txt` (source de vérité — mêmes URLs, même ordre) ;
 la liste manuelle qui suit est équivalente pour qui préfère `curl`/navigateur.
 
@@ -168,7 +184,7 @@ tailles exactes en octets dans `scripts/models.txt`).
 manuellement :
 
 ```bash
-docker compose exec ollama ollama pull gemma4:e4b
+curl -X POST http://localhost:11434/api/pull -d '{"model":"gemma4:e4b"}'
 ```
 
 ### Mode Canvas (éditeur de nœuds)
@@ -247,7 +263,8 @@ index.html                  ← mode formulaire (CSS + HTML + JS)
 canvas.html                 ← mode éditeur de nœuds (façon ComfyUI)
 js/                         ← moteur du mode canvas (engine.js, nodes-simple.js, nodes-advanced.js)
 install.sh                  ← installation/mise à jour idempotente en une commande (recommandé)
-docker-compose.yml          ← 3 services : nginx (8090), comfyui (8188), ollama (11434)
+docker-compose.yml          ← app seule : nginx (8090) + updater (8093)
+docker/stacks/*.yml         ← gabarits des stacks voisines : ~/comfyui-spark et ~/ollama
 docker/userscripts/         ← scripts déployés dans le conteneur ComfyUI par install.sh (dont comfy_kitchen)
 scripts/models.txt          ← 19 modèles requis : dossier|fichier|taille|URL (source de vérité pour install.sh et le README)
 workflows/

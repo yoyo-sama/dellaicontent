@@ -3,14 +3,20 @@
 # (nginx web, ComfyUI, Ollama) sur GB10/DGX Spark. Détecte les services par rôle réel
 # (santé HTTP) plutôt que par nom de conteneur, réutilise tout ce qui tourne déjà,
 # ne recrée/ne détruit jamais un conteneur qu'on ne possède pas.
+# Commentaires en français (comme le reste du dépôt), sortie terminal en anglais.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 COMPOSE="docker compose"
 
+# Structure cible (identique au poste de référence) : une stack par service, chacune à la
+# racine du home. Le repo ne déploie que l'app ; ComfyUI et Ollama ont leurs propres dossiers.
+COMFY_DIR="$HOME/comfyui-spark"
+OLLAMA_DIR="$HOME/ollama"
+
 section() { printf '\n=== %s ===\n' "$*"; }
-warn()    { printf 'AVERTISSEMENT: %s\n' "$*"; }
+warn()    { printf 'WARNING: %s\n' "$*"; }
 
 is_uint() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
@@ -26,7 +32,12 @@ find_container_by_port() {
     return 0
   fi
   for c in $(docker ps --filter "network=host" --format '{{.Names}}' 2>/dev/null); do
-    if docker inspect --format '{{json .Mounts}}' "$c" 2>/dev/null | grep -qF "\"Source\":\"${REPO_ROOT}\""; then
+    # Le repo est monté par nginx ET par l'updater (tous deux en network host) : c'est la
+    # destination nginx qui distingue celui qui sert vraiment le port.
+    if docker inspect --format '{{json .Mounts}}' "$c" 2>/dev/null \
+       | grep -qF "\"Source\":\"${REPO_ROOT}\"" \
+       && docker inspect --format '{{json .Mounts}}' "$c" 2>/dev/null \
+       | grep -qF '"Destination":"/usr/share/nginx/html"'; then
       printf '%s\n' "$c"
       return 0
     fi
@@ -34,55 +45,117 @@ find_container_by_port() {
   return 1
 }
 
+# Le port est-il tenu par un processus quelconque (docker ou non) ?
+port_busy() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnH "sport = :$1" 2>/dev/null | grep -q .
+  else
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && exec 3>&-
+  fi
+}
+
+# Refuse de créer une stack quand le port est déjà pris par autre chose que le service
+# attendu (Ollama installé nativement mais en panne, ComfyUI hors docker, autre service) :
+# sans ça docker échoue sur « port is already allocated », message opaque.
+port_taken_by_other() {   # $1=port  $2=nom lisible du service
+  port_busy "$1" || return 1
+  warn "port $1 is in use but $2 does not answer its health check."
+  echo "  Another process holds it — a native install that is stopped or broken, or another service."
+  echo "  Free the port (e.g. 'sudo systemctl stop ollama') or start that service, then run this script again."
+  echo "  Nothing was created."
+  return 0
+}
+
+# Dépose les userscripts ComfyUI (dont l'installation de comfy_kitchen) dans le dossier
+# passé en argument et renvoie le nombre de fichiers copiés. Ces scripts ne sont joués
+# qu'au DÉMARRAGE du conteneur : sur une stack qu'on crée, appeler avant le 'up -d'.
+copy_userscripts() {
+  local dest="$1" f copied=0
+  [ -d "$REPO_ROOT/docker/userscripts" ] || { printf '0\n'; return 0; }
+  mkdir -p "$dest" 2>/dev/null || { printf '0\n'; return 1; }
+  for f in "$REPO_ROOT"/docker/userscripts/*; do
+    [ -f "$f" ] || continue
+    cp -f "$f" "$dest/" 2>/dev/null && chmod +x "$dest/$(basename "$f")" && copied=$((copied + 1))
+  done
+  printf '%s\n' "$copied"
+}
+
+create_comfy_stack() {
+  echo "Creating the ComfyUI stack in $COMFY_DIR."
+  # Dossiers créés AVANT le conteneur : un bind-mount dont la source n'existe pas encore
+  # est créé par dockerd en root:root — dossier cadenassé côté utilisateur, et tous les
+  # téléchargements de modèles échouent ensuite en « permission denied ».
+  mkdir -p "$COMFY_DIR/basedir/models" "$COMFY_DIR/run" "$COMFY_DIR/userscripts_dir"
+  [ -f "$COMFY_DIR/compose.yaml" ] || cp "$REPO_ROOT/docker/stacks/comfyui.yml" "$COMFY_DIR/compose.yaml"
+  # uid/gid réels de l'utilisateur courant : compose lit ce .env dans le dossier du projet,
+  # y compris lors d'un 'docker compose up -d' lancé à la main plus tard.
+  [ -f "$COMFY_DIR/.env" ] || printf 'WANTED_UID=%s\nWANTED_GID=%s\n' "$(id -u)" "$(id -g)" > "$COMFY_DIR/.env"
+  echo "Userscripts deployed before first start: $(copy_userscripts "$COMFY_DIR/userscripts_dir") file(s)"
+  ( cd "$COMFY_DIR" && $COMPOSE up -d )
+  COMFY_CREATED=1
+  COMFY_CONTAINER="$(find_container_by_port 8188 || echo "comfyui-nvidia")"
+  COMFY_USERSCRIPTS_DIR="$COMFY_DIR/userscripts_dir"
+  COMFY_MODELS_DIR="$COMFY_DIR/basedir/models"
+}
+
+create_ollama_stack() {
+  echo "Creating the Ollama stack in $OLLAMA_DIR."
+  mkdir -p "$OLLAMA_DIR/data"
+  [ -f "$OLLAMA_DIR/compose.yaml" ] || cp "$REPO_ROOT/docker/stacks/ollama.yml" "$OLLAMA_DIR/compose.yaml"
+  ( cd "$OLLAMA_DIR" && $COMPOSE up -d )
+  OLLAMA_CONTAINER="$(find_container_by_port 11434 || echo "ollama-api")"
+}
+
 # ---------------------------------------------------------------------------
-section "1/7 Vérifications d'environnement"
+section "1/7 Environment checks"
 # ---------------------------------------------------------------------------
 ARCH="$(uname -m)"
 if [ "$ARCH" != "aarch64" ]; then
-  warn "architecture détectée '$ARCH' (ce script cible le matériel GB10/DGX Spark, ARM64)."
-  echo "  Certaines étapes (comfy_kitchen et autres userscripts spécifiques ARM) pourraient ne pas s'appliquer."
-  echo "  Le script continue quand même (dégradation propre)."
+  warn "detected architecture '$ARCH' (this script targets GB10/DGX Spark hardware, ARM64)."
+  echo "  Some steps (comfy_kitchen and other ARM-specific userscripts) may not apply."
+  echo "  Continuing anyway (graceful degradation)."
 else
-  echo "OK: architecture aarch64 (GB10/DGX Spark)."
+  echo "OK: aarch64 architecture (GB10/DGX Spark)."
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "ERREUR: 'docker' introuvable dans le PATH. Installez Docker avant de relancer ce script." >&2
+  echo "ERROR: 'docker' not found in PATH. Install Docker before running this script again." >&2
   exit 1
 fi
 if ! docker compose version >/dev/null 2>&1; then
-  echo "ERREUR: le plugin 'docker compose' (v2) est introuvable. Installez-le avant de relancer ce script." >&2
+  echo "ERROR: the 'docker compose' (v2) plugin is missing. Install it before running this script again." >&2
   exit 1
 fi
-echo "OK: docker + docker compose disponibles."
+echo "OK: docker + docker compose available."
 
 if docker info >/dev/null 2>&1 && docker info 2>/dev/null | grep -qi 'nvidia'; then
-  echo "OK: runtime nvidia détecté par 'docker info'."
+  echo "OK: nvidia runtime detected by 'docker info'."
 elif command -v nvidia-smi >/dev/null 2>&1; then
-  echo "OK: 'nvidia-smi' disponible (nvidia-container-toolkit probablement installé)."
+  echo "OK: 'nvidia-smi' available (nvidia-container-toolkit likely installed)."
 else
-  warn "impossible de confirmer la présence de nvidia-container-toolkit. Les services GPU (ComfyUI/Ollama) pourraient échouer au démarrage. Poursuite du script."
+  warn "cannot confirm nvidia-container-toolkit is installed. GPU services (ComfyUI/Ollama) may fail to start. Continuing."
 fi
 
 # ---------------------------------------------------------------------------
-section "2/7 Détection des services par rôle réel (santé HTTP), pas par nom"
+section "2/7 Detecting services by actual role (HTTP health), not by name"
 # ---------------------------------------------------------------------------
 
 # --- ComfyUI (port 8188) ---
-COMFY_USERSCRIPTS_DIR="$REPO_ROOT/comfyui/userscripts_dir"
-COMFY_MODELS_DIR="$REPO_ROOT/comfyui/basedir/models"
+COMFY_USERSCRIPTS_DIR="$COMFY_DIR/userscripts_dir"
+COMFY_MODELS_DIR="$COMFY_DIR/basedir/models"
 COMFY_CONTAINER=""
 COMFY_STATUS=""
+COMFY_CREATED=0
 
 echo "--- ComfyUI (:8188) ---"
 if curl -sf http://localhost:8188/system_stats >/dev/null 2>&1; then
   COMFY_CONTAINER="$(find_container_by_port 8188 || true)"
   if [ -z "$COMFY_CONTAINER" ]; then
-    warn "ComfyUI répond sur :8188 mais aucun conteneur correspondant n'a pu être identifié formellement. Réutilisation du service tel quel, sans gestion de conteneur."
-    COMFY_STATUS="réutilisé (conteneur non identifié)"
+    warn "ComfyUI answers on :8188 but no matching container could be identified. Reusing the service as is, without container management."
+    COMFY_STATUS="reused (container not identified)"
   else
-    echo "ComfyUI déjà en service dans le conteneur '$COMFY_CONTAINER' — réutilisation, pas de recréation."
-    COMFY_STATUS="réutilisé ($COMFY_CONTAINER)"
+    echo "ComfyUI already running in container '$COMFY_CONTAINER' — reusing it, no recreation."
+    COMFY_STATUS="reused ($COMFY_CONTAINER)"
 
     IMAGE="$(docker inspect --format '{{.Config.Image}}' "$COMFY_CONTAINER" 2>/dev/null || true)"
     PROJECT="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$COMFY_CONTAINER" 2>/dev/null || true)"
@@ -90,23 +163,24 @@ if curl -sf http://localhost:8188/system_stats >/dev/null 2>&1; then
 
     if [[ "$IMAGE" == mmartial/comfyui-nvidia-docker* ]]; then
       if [ "$CONFIGFILE" = "$REPO_ROOT/docker-compose.yml" ]; then
-        echo "Conteneur géré par CE docker-compose.yml (même image) — mise à jour : pull + recreate."
-        if $COMPOSE pull comfyui; then
-          echo "Image comfyui à jour (ou déjà la plus récente)."
-        else
-          warn "échec de 'docker compose pull comfyui' — poursuite avec l'image locale déjà présente."
+        # Conteneur créé par l'ANCIENNE mise en page (services comfyui/ollama dans le
+        # compose de l'app, volumes sous $REPO_ROOT/comfyui, sans BASE_DIRECTORY : ce
+        # ComfyUI-là ne lit même pas /basedir). On le remplace par la stack dédiée.
+        warn "ComfyUI inherited from the old layout — migrating to $COMFY_DIR."
+        docker rm -f "$COMFY_CONTAINER" >/dev/null 2>&1 || true
+        if [ -d "$REPO_ROOT/comfyui/basedir/models" ]; then
+          echo "  Old model folder left untouched: $REPO_ROOT/comfyui/basedir/models"
+          echo "  Move its content to $COMFY_DIR/basedir/models to avoid downloading again."
         fi
-        $COMPOSE up -d --force-recreate comfyui
-        NEW_NAME="$(find_container_by_port 8188 || true)"
-        [ -n "$NEW_NAME" ] && COMFY_CONTAINER="$NEW_NAME"
-        COMFY_STATUS="mis à jour ($COMFY_CONTAINER)"
+        create_comfy_stack
+        COMFY_STATUS="migrated to $COMFY_DIR ($COMFY_CONTAINER)"
       else
-        warn "image identique (mmartial/comfyui-nvidia-docker) mais conteneur géré par un AUTRE projet compose (projet='${PROJECT:-aucun}', fichier='${CONFIGFILE:-aucun/hors-compose}')."
-        echo "  Pas de mise à jour automatique : le recréer via CE docker-compose.yml réutiliserait des chemins de volumes différents des siens et le déconnecterait de ses vrais modèles/userscripts."
-        echo "  Mettez-le à jour manuellement via son propre mécanisme."
+        warn "same image (mmartial/comfyui-nvidia-docker) but the container is managed by ANOTHER compose project (project='${PROJECT:-none}', file='${CONFIGFILE:-none/not-compose}')."
+        echo "  No automatic update: recreating it from THIS docker-compose.yml would use different volume paths and disconnect it from its real models/userscripts."
+        echo "  Update it manually through its own mechanism."
       fi
     else
-      warn "conteneur ComfyUI trouvé avec une image différente ('$IMAGE') — on ne touche jamais à un conteneur qu'on ne possède pas. Pas de mise à jour."
+      warn "ComfyUI container found with a different image ('$IMAGE') — we never touch a container we do not own. No update."
     fi
 
     # Chemins réels d'après les bind-mounts effectifs du conteneur (utile même
@@ -120,16 +194,19 @@ if curl -sf http://localhost:8188/system_stats >/dev/null 2>&1; then
       COMFY_MODELS_DIR="$REAL_BASEDIR/models"
     fi
     if [ -z "$REAL_USERSCRIPTS" ] || [ -z "$REAL_BASEDIR" ]; then
-      warn "montage /userscripts_dir ou /basedir introuvable sur ce conteneur — dépôt des userscripts/modèles à faire manuellement pour ce conteneur."
+      warn "/userscripts_dir or /basedir mount not found on this container — deploy userscripts/models manually for it."
     else
-      echo "Chemins réels détectés : userscripts_dir=$COMFY_USERSCRIPTS_DIR ; models=$COMFY_MODELS_DIR"
+      echo "Actual paths detected: userscripts_dir=$COMFY_USERSCRIPTS_DIR ; models=$COMFY_MODELS_DIR"
     fi
   fi
 else
-  echo "Aucun ComfyUI ne répond sur :8188 — création via docker compose."
-  $COMPOSE up -d comfyui
-  COMFY_CONTAINER="$(find_container_by_port 8188 || echo "comfyui-nvidia")"
-  COMFY_STATUS="créé ($COMFY_CONTAINER)"
+  echo "No ComfyUI answering on :8188."
+  if port_taken_by_other 8188 "ComfyUI"; then
+    COMFY_STATUS="skipped (port 8188 busy)"
+  else
+    create_comfy_stack
+    COMFY_STATUS="created ($COMFY_CONTAINER, stack $COMFY_DIR)"
+  fi
 fi
 
 # --- Ollama (port 11434) ---
@@ -138,14 +215,34 @@ OLLAMA_STATUS=""
 echo "--- Ollama (:11434) ---"
 if curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
   OLLAMA_CONTAINER="$(find_container_by_port 11434 || true)"
-  [ -z "$OLLAMA_CONTAINER" ] && OLLAMA_CONTAINER="(inconnu)"
-  echo "Ollama déjà en service dans '$OLLAMA_CONTAINER' — réutilisation, pas de recréation."
-  OLLAMA_STATUS="réutilisé ($OLLAMA_CONTAINER)"
+  # Ollama peut tourner hors docker (installation native/systemd) : on ne cherche plus
+  # à l'identifier pour agir dessus, le modèle se tire par l'API HTTP (étape 6).
+  [ -z "$OLLAMA_CONTAINER" ] && OLLAMA_CONTAINER="native or unidentified service"
+  OLLAMA_CONFIGFILE="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$OLLAMA_CONTAINER" 2>/dev/null || true)"
+  if [ "$OLLAMA_CONFIGFILE" = "$REPO_ROOT/docker-compose.yml" ]; then
+    warn "Ollama inherited from the old layout — migrating to $OLLAMA_DIR."
+    mkdir -p "$OLLAMA_DIR/data"
+    docker rm -f "$OLLAMA_CONTAINER" >/dev/null 2>&1 || true
+    # Reprise des poids du volume nommé hérité : évite de retélécharger gemma4:e4b (9,6 Go).
+    if docker volume inspect ollama-data >/dev/null 2>&1; then
+      echo "Copying weights from the 'ollama-data' volume into $OLLAMA_DIR/data…"
+      docker run --rm -v ollama-data:/from -v "$OLLAMA_DIR/data":/to alpine sh -c 'cp -a /from/. /to/' \
+        || warn "weight copy failed — gemma4:e4b will be downloaded again."
+    fi
+    create_ollama_stack
+    OLLAMA_STATUS="migrated to $OLLAMA_DIR ($OLLAMA_CONTAINER)"
+  else
+    echo "Ollama already running ($OLLAMA_CONTAINER) — reusing it, no recreation."
+    OLLAMA_STATUS="reused ($OLLAMA_CONTAINER)"
+  fi
 else
-  echo "Aucun Ollama ne répond sur :11434 — création via docker compose."
-  $COMPOSE up -d ollama
-  OLLAMA_CONTAINER="$(find_container_by_port 11434 || echo "ollama-api")"
-  OLLAMA_STATUS="créé ($OLLAMA_CONTAINER)"
+  echo "No Ollama answering on :11434."
+  if port_taken_by_other 11434 "Ollama"; then
+    OLLAMA_STATUS="skipped (port 11434 busy)"
+  else
+    create_ollama_stack
+    OLLAMA_STATUS="created ($OLLAMA_CONTAINER, stack $OLLAMA_DIR)"
+  fi
 fi
 
 # --- App web (port 8090) ---
@@ -155,49 +252,43 @@ echo "--- App web (:8090) ---"
 if curl -sf http://localhost:8090/ >/dev/null 2>&1; then
   WEB_CONTAINER="$(find_container_by_port 8090 || true)"
   [ -z "$WEB_CONTAINER" ] && WEB_CONTAINER="(inconnu)"
-  echo "App web déjà en service dans '$WEB_CONTAINER' — réutilisation, pas de recréation."
-  WEB_STATUS="réutilisé ($WEB_CONTAINER)"
+  echo "Web app already running in '$WEB_CONTAINER' — reusing it, no recreation."
+  WEB_STATUS="reused ($WEB_CONTAINER)"
 else
-  echo "Aucune app web ne répond sur :8090 — création via docker compose."
+  echo "No web app answering on :8090 — creating it via docker compose."
   $COMPOSE up -d ai-content-studio
   WEB_CONTAINER="$(find_container_by_port 8090 || echo "ai-content-studio-web")"
-  WEB_STATUS="créé ($WEB_CONTAINER)"
+  WEB_STATUS="created ($WEB_CONTAINER)"
 fi
 
 # --- Module de mise à jour (updater) ---
+# Créé côté utilisateur avant le bind-mount de l'updater : sinon dockerd le crée en root
+# et le téléversement de LoRA depuis l'UI échoue.
+mkdir -p "$COMFY_MODELS_DIR/loras" 2>/dev/null || warn "cannot create $COMFY_MODELS_DIR/loras (permissions?)."
 echo "COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras" > "$REPO_ROOT/.env"
-echo "Chemin des LoRAs persisté dans .env : COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras"
+echo "LoRA path persisted in .env: COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras"
 
 UPDATER_STATUS=""
-echo "--- Module de mise à jour (updater) ---"
-$COMPOSE up -d --build --force-recreate updater >/dev/null 2>&1 && UPDATER_STATUS="démarré" || UPDATER_STATUS="échec du démarrage (voir 'docker compose logs updater')"
-echo "Service updater : $UPDATER_STATUS"
+echo "--- Updater service ---"
+$COMPOSE up -d --build --force-recreate updater >/dev/null 2>&1 && UPDATER_STATUS="started" || UPDATER_STATUS="failed to start (see 'docker compose logs updater')"
+echo "Updater service: $UPDATER_STATUS"
 
 # ---------------------------------------------------------------------------
-section "3/7 (fusionnée dans l'étape 2 ci-dessus : détection + mise à jour ComfyUI)"
+section "3/7 (merged into step 2 above: detection + ComfyUI update)"
 # ---------------------------------------------------------------------------
-echo "Voir ci-dessus."
+echo "See above."
 
 # ---------------------------------------------------------------------------
-section "4/7 Copie des userscripts comfy_kitchen"
+section "4/7 Deploying comfy_kitchen userscripts"
 # ---------------------------------------------------------------------------
-SRC_USERSCRIPTS="$REPO_ROOT/docker/userscripts"
-if [ -d "$SRC_USERSCRIPTS" ] && [ -n "$(ls -A "$SRC_USERSCRIPTS" 2>/dev/null)" ]; then
-  mkdir -p "$COMFY_USERSCRIPTS_DIR"
-  copied=0
-  for f in "$SRC_USERSCRIPTS"/*; do
-    [ -f "$f" ] || continue
-    cp -f "$f" "$COMFY_USERSCRIPTS_DIR/"
-    chmod +x "$COMFY_USERSCRIPTS_DIR/$(basename "$f")"
-    copied=$((copied + 1))
-  done
-  echo "OK: $copied fichier(s) copiés vers $COMFY_USERSCRIPTS_DIR"
-else
-  echo "Aucun fichier dans docker/userscripts/ (dossier absent ou vide) — rien à copier."
+copied="$(copy_userscripts "$COMFY_USERSCRIPTS_DIR")"
+echo "OK: ${copied:-0} file(s) copied to $COMFY_USERSCRIPTS_DIR"
+if [ "$COMFY_CREATED" -eq 0 ]; then
+  echo "Pre-existing ComfyUI: restart its stack so these userscripts actually run."
 fi
 
 # ---------------------------------------------------------------------------
-section "5/7 Téléchargement des modèles (scripts/models.txt)"
+section "5/7 Downloading models (scripts/models.txt)"
 # ---------------------------------------------------------------------------
 MODELS_FILE="$REPO_ROOT/scripts/models.txt"
 DOWNLOADED_OK=()
@@ -205,7 +296,12 @@ SKIPPED_OK=()
 FAILED_DL=()
 MISSING_MANUAL=()
 
-if [ -f "$MODELS_FILE" ]; then
+mkdir -p "$COMFY_MODELS_DIR" 2>/dev/null || true
+if [ ! -w "$COMFY_MODELS_DIR" ]; then
+  warn "model folder is not writable — downloads skipped: $COMFY_MODELS_DIR"
+  echo "  Usual cause: folder created by Docker as root (padlock in the file manager)."
+  echo "  Fix: sudo chown -R $(id -u):$(id -g) \"$COMFY_DIR\" then run this script again."
+elif [ -f "$MODELS_FILE" ]; then
   while IFS='|' read -r dossier fichier taille url || [ -n "${dossier:-}" ]; do
     [ -z "${dossier:-}" ] && continue
     case "$dossier" in \#*) continue ;; esac
@@ -224,14 +320,14 @@ if [ -f "$MODELS_FILE" ]; then
       tolerance=$((taille / 100))
       [ "$tolerance" -lt 1 ] && tolerance=1
       if [ "$diff" -le "$tolerance" ]; then
-        echo "SKIP (déjà présent, taille conforme): $target_path"
+        echo "SKIP (already present, size matches): $target_path"
         SKIPPED_OK+=("$target_path")
         continue
       fi
     fi
 
     mkdir -p "$target_dir"
-    echo "Téléchargement: $fichier -> $target_path"
+    echo "Downloading: $fichier -> $target_path"
     # Certains dépôts Hugging Face (ex. Lightricks/LTX-2.5) sont "gated" : un
     # téléchargement anonyme échoue en 401 tant que les conditions n'ont pas été
     # acceptées sur huggingface.co avec un compte, et qu'un jeton d'accès n'est
@@ -245,65 +341,97 @@ if [ -f "$MODELS_FILE" ]; then
     if curl -sfL -C - "${HF_AUTH_ARGS[@]}" -o "$target_path" "$url"; then
       DOWNLOADED_OK+=("$target_path")
     else
-      warn "échec du téléchargement de '$fichier' depuis $url"
+      warn "download failed for '$fichier' from $url"
       FAILED_DL+=("$target_path ($url)")
     fi
   done < "$MODELS_FILE"
 else
-  echo "scripts/models.txt introuvable — aucun modèle à télécharger pour l'instant."
+  echo "scripts/models.txt not found — no model to download for now."
 fi
 
 # ---------------------------------------------------------------------------
-section "6/7 Modèle Ollama requis (gemma4:e4b)"
+section "6/7 Required Ollama model (gemma4:e4b)"
 # ---------------------------------------------------------------------------
-GEMMA_STATUS="inconnu"
-if [ "$OLLAMA_CONTAINER" = "(inconnu)" ]; then
-  warn "conteneur Ollama non identifié — impossible de lancer 'ollama pull' automatiquement. Vérifiez manuellement."
+GEMMA_STATUS="unknown"
+if ! curl -sf http://localhost:11434/api/version >/dev/null 2>&1; then
+  warn "Ollama is not answering on :11434 — cannot check or pull gemma4:e4b."
+  GEMMA_STATUS="Ollama unavailable"
+elif curl -sf http://localhost:11434/api/tags 2>/dev/null | grep -q '"gemma4:e4b"'; then
+  echo "OK: gemma4:e4b already present."
+  GEMMA_STATUS="present"
 else
+  echo "gemma4:e4b missing — pulling through the Ollama HTTP API (may take several minutes)..."
+  # Par l'API et non 'docker exec' : identique que Ollama tourne dans notre conteneur,
+  # dans celui d'un autre projet, ou nativement (systemd) — cas qui laissait le modèle
+  # absent sans que le script ne s'en aperçoive.
+  curl -s -X POST http://localhost:11434/api/pull -d '{"model":"gemma4:e4b"}' -o /dev/null
+  # /api/pull répond 200 même quand le tirage échoue en cours de flux : on revérifie.
   if curl -sf http://localhost:11434/api/tags 2>/dev/null | grep -q '"gemma4:e4b"'; then
-    echo "OK: gemma4:e4b déjà présent."
-    GEMMA_STATUS="présent"
+    GEMMA_STATUS="downloaded"
   else
-    echo "gemma4:e4b absent — pull en cours dans '$OLLAMA_CONTAINER' (peut prendre plusieurs minutes)..."
-    if docker exec "$OLLAMA_CONTAINER" ollama pull gemma4:e4b; then
-      GEMMA_STATUS="téléchargé"
-    else
-      warn "échec du pull de gemma4:e4b."
-      GEMMA_STATUS="échec"
-    fi
+    warn "gemma4:e4b pull failed — check 'curl -X POST localhost:11434/api/pull -d '\''{\"model\":\"gemma4:e4b\"}'\''"
+    GEMMA_STATUS="failed"
+  fi
+fi
+
+# ComfyUI rejoue ses userscripts au tout premier démarrage (installation comfy_kitchen) :
+# plusieurs minutes pendant lesquelles :8188 ne répond pas encore. Sans cette attente, le
+# script se terminait « OK » alors que l'app ne pouvait encore rien générer.
+if [ "$COMFY_CREATED" -eq 1 ]; then
+  echo
+  echo "Waiting for ComfyUI on :8188 (first start, userscripts installation)…"
+  for _ in $(seq 1 90); do
+    curl -sf http://localhost:8188/system_stats >/dev/null 2>&1 && break
+    sleep 10
+  done
+  if curl -sf http://localhost:8188/system_stats >/dev/null 2>&1; then
+    echo "OK: ComfyUI answers."
+  else
+    warn "ComfyUI still not answering after 15 min — see 'docker logs comfyui-nvidia'."
   fi
 fi
 
 # ---------------------------------------------------------------------------
-section "7/7 Récapitulatif final"
+section "7/7 Final summary"
 # ---------------------------------------------------------------------------
-echo "Services :"
-echo "  - ComfyUI : ${COMFY_STATUS:-inconnu}"
-echo "  - Ollama  : ${OLLAMA_STATUS:-inconnu}"
-echo "  - Web     : ${WEB_STATUS:-inconnu}"
-echo "  - Updater : ${UPDATER_STATUS:-inconnu}"
+echo "Services:"
+echo "  - ComfyUI : ${COMFY_STATUS:-unknown}"
+echo "  - Ollama  : ${OLLAMA_STATUS:-unknown}"
+echo "  - Web     : ${WEB_STATUS:-unknown}"
+echo "  - Updater : ${UPDATER_STATUS:-unknown}"
 echo
-echo "Modèle Ollama gemma4:e4b : $GEMMA_STATUS"
+echo "Locations:"
+echo "  - app     : $REPO_ROOT"
+echo "  - ComfyUI : $COMFY_MODELS_DIR (models)"
+OLLAMA_DATA="$(docker inspect --format '{{ range .Mounts }}{{ if eq .Destination "/root/.ollama" }}{{ .Source }}{{ end }}{{ end }}' "$OLLAMA_CONTAINER" 2>/dev/null || true)"
+echo "  - Ollama  : ${OLLAMA_DATA:-$OLLAMA_DIR}"
 echo
-echo "Modèles ComfyUI (scripts/models.txt) :"
-echo "  - déjà présents (non retéléchargés) : ${#SKIPPED_OK[@]}"
-echo "  - téléchargés cette exécution       : ${#DOWNLOADED_OK[@]}"
+echo "Ollama model gemma4:e4b: $GEMMA_STATUS"
+echo
+echo "ComfyUI models (scripts/models.txt):"
+echo "  - already present (not re-downloaded) : ${#SKIPPED_OK[@]}"
+echo "  - downloaded this run                 : ${#DOWNLOADED_OK[@]}"
 if [ "${#FAILED_DL[@]}" -gt 0 ]; then
-  echo "  - échecs de téléchargement :"
+  echo "  - download failures:"
   printf '      %s\n' "${FAILED_DL[@]}"
-  echo "    (si l'échec concerne un fichier Lightricks/LTX-2.5 : ce dépôt Hugging Face est"
-  echo "    'gated' — acceptez les conditions sur sa page HF avec votre compte, puis relancez"
-  echo "    ce script avec HF_TOKEN=<votre_jeton> ./install.sh)"
+  echo "    (if the failure is a Lightricks/LTX-2.5 file: that Hugging Face repo is 'gated' —"
+  echo "    accept its terms on the HF page with your account, then re-run this script as"
+  echo "    HF_TOKEN=<your_token> ./install.sh)"
 fi
 if [ "${#MISSING_MANUAL[@]}" -gt 0 ]; then
-  echo "  - à télécharger manuellement (URL NON_TROUVE, voir README) :"
+  echo "  - to download manually (URL NON_TROUVE, see README):"
   printf '      %s\n' "${MISSING_MANUAL[@]}"
 fi
 echo
-echo "Health-checks finaux :"
+echo "Final health checks:"
 for p in 8188 11434 8090; do
   code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${p}/" 2>/dev/null || echo "000")"
   echo "  - :$p -> HTTP $code"
 done
-code_update="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8090/update/status" 2>/dev/null || echo "000")"
+code_update="000"
+for _ in 1 2 3 4 5; do
+  code_update="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8090/update/status" 2>/dev/null || echo "000")"
+  [ "$code_update" = "200" ] && break
+  sleep 2
+done
 echo "  - /update/status -> HTTP $code_update"

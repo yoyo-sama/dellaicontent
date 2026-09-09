@@ -42,9 +42,10 @@ import urllib.request
 COMFY_URL = "http://localhost:8188"
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 OBJECT_INFO_PATH = os.path.join(TOOLS_DIR, "object_info.json")
-MODELS_DIR = "/home/sparks/comfyui-spark/basedir/models"
-OUTPUT_DIR = "/home/sparks/comfyui-spark/basedir/output"
-INPUT_DIR = "/home/sparks/comfyui-spark/basedir/input"
+COMFY_BASEDIR = os.environ.get("COMFY_BASEDIR", os.path.expanduser("~/comfyui-spark/basedir"))
+MODELS_DIR = os.path.join(COMFY_BASEDIR, "models")
+OUTPUT_DIR = os.path.join(COMFY_BASEDIR, "output")
+INPUT_DIR = os.path.join(COMFY_BASEDIR, "input")
 
 DEFAULT_PROMPT = "cinematic wide shot, golden hour lighting, subtle camera movement, film grain"
 DEFAULT_NEGATIVE = "blurry, low quality"

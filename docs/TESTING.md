@@ -10,7 +10,7 @@ info = json.load(urllib.request.urlopen("http://localhost:8188/object_info"))
 d = json.load(open("workflows/xxx.json"))
 # format UI : chaque n["type"] dans info (tolérer MarkdownNote/Note/Reroute + uuids de subgraphs),
 # liens [id,src,slot,dst,slot,type] → src/dst existants ; subgraphs : dicts, frontières -10/-20.
-# Tous les .safetensors référencés doivent exister sous /home/sparks/comfyui-spark/basedir/models/
+# Tous les .safetensors référencés doivent exister sous ~/comfyui-spark/basedir/models/ (COMFY_BASEDIR pour surcharger)
 ```
 
 ## 2. Conversion UI→API et soumission
@@ -54,7 +54,7 @@ Syntaxe JS : `node --check` sur le script extrait, après CHAQUE modification d'
 
 ## 4. Inspecter le CONTENU des rendus
 
-**Frames d'une vidéo** (pas de ffmpeg requis — ComfyUI fait tout) : copier le mp4 dans `/home/sparks/comfyui-spark/basedir/input/` puis soumettre :
+**Frames d'une vidéo** (pas de ffmpeg requis — ComfyUI fait tout) : copier le mp4 dans `~/comfyui-spark/basedir/input/` puis soumettre :
 `LoadVideo → GetVideoComponents` → `ImageFromBatch(batch_index=k, length=1)` → `SaveImage` — puis regarder les PNG (première/dernière frame de chaque segment vs images attendues).
 
 **Piste audio** : même chemin, `GetVideoComponents` slot 1 → `SaveAudioMP3(quality:"V0")` — un mp3 > 5 Ko ≈ 1 s confirme une piste réelle (le silence pèse bien moins).
