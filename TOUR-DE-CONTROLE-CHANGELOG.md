@@ -1,5 +1,22 @@
 # Tour de contrôle — changelog
 
+## 2026-09-09 (suite) — v1.0.8 — Service installé mais arrêté : redémarré, pas doublé
+
+`install.sh` ne testait que « le service répond-il ? ». Répondre non ne veut pas dire absent : le conteneur peut exister à l'arrêt, ou Ollama être installé nativement et son service systemd stoppé. Dans les deux cas la version précédente créait une stack — conflit de nom de conteneur dans le premier cas (les noms sont uniques), deux Ollama qui se disputent le port 11434 au prochain boot dans le second.
+
+Ordre de traitement quand un service ne répond pas, pour ComfyUI comme pour Ollama :
+
+1. **Conteneur arrêté** (`exited`/`created`/`paused`) portant l'image du rôle → `docker start`, puis attente de la santé HTTP (`restart_stopped_service`). Un conteneur qui démarre sans répondre est signalé comme tel et **rien d'autre n'est créé** — c'est un problème à regarder dans `docker logs`, pas à contourner par un doublon.
+2. **Ollama natif arrêté** (`command -v ollama`, ou unité `ollama.service` connue de systemd) → `systemctl start ollama` en root, sinon `sudo -n systemctl start ollama`. Le `-n` est essentiel : il échoue immédiatement au lieu d'attendre un mot de passe qui ne viendra jamais dans un script non interactif. En cas d'échec, la commande à lancer est affichée et aucun conteneur n'est créé.
+3. **Port occupé** par autre chose → rien créé, message explicite.
+4. **Rien de tout ça** → création de la stack, comme avant.
+
+Ajouté au passage : `wait_for_http` (attente factorisée) et `resolve_comfy_paths` (les bind-mounts du conteneur font autorité sur les chemins par défaut) — cette dernière est maintenant appelée aussi sur le chemin « conteneur redémarré », sans quoi les modèles auraient pu être téléchargés à côté du dossier réellement lu par ce ComfyUI-là.
+
+### Vérification
+
+Détection des conteneurs arrêtés testée sur le vrai Docker de la machine (conteneur `ollama/ollama` créé puis détecté, le conteneur en marche étant bien ignoré, sonde supprimée). Les trois branches testées bout en bout en simulation (`docker`/`curl`/`sudo`/`systemctl` stubés) : conteneur Ollama arrêté → `restarted (ollama-old)` + modèle tiré ; Ollama natif arrêté sans sudo autorisé → `skipped`, marche à suivre affichée, récapitulatif `Ollama unavailable` ; Ollama natif arrêté avec démarrage réussi → `started (native service)` + modèle tiré. Non-régression : exécution réelle d'`install.sh` sur ce GB10, tout réutilisé, chemins résolus, health-checks 200.
+
 ## 2026-09-09 — v1.0.7 — Une stack Docker par service à la racine du home (déploiement GB10 corrigé)
 
 Déclencheur : installation sur une machine neuve. Génération impossible, `Error: JSON.parse: unexpected character at line 1 column 1` (le `await res.json()` de `submitGraph` sur une page d'erreur HTML de nginx) et `Enhancement failed: NetworkError`. Cause réelle trouvée en remontant depuis un détail signalé par l'utilisateur — un cadenas sur le dossier `comfyui/` du repo :

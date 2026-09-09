@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — Media & Entertainment demo on GB10
 
-**Current version: 1.0.7** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
+**Current version: 1.0.8** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
 
 **Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from a small `updater` backend service that handles in-app updates — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
 
@@ -34,7 +34,11 @@ across two consecutive runs):
    (`~/comfyui-spark`, `~/ollama`) from the `docker/stacks/*.yml` templates, with their folders
    created as the user BEFORE the containers. If a port is held by a service that does not
    answer, nothing is created and the script says what to free — instead of letting Docker
-   fail on "port is already allocated". An install made with the old layout (`comfyui`/`ollama`
+   fail on "port is already allocated". A service that is **installed but stopped** is
+   restarted rather than duplicated: a stopped container is started again (`docker start`),
+   and a native Ollama (systemd) is started via `sudo -n systemctl start ollama` — never
+   blocking on a password prompt: if passwordless sudo is not available, the script prints
+   the command to run and creates nothing. An install made with the old layout (`comfyui`/`ollama`
    services inside the app compose file) is migrated automatically.
 3. Copies `docker/userscripts/*.sh` (including the `comfy_kitchen` install script, see
    below) into the actual `userscripts_dir` folder of the ComfyUI container in use.
