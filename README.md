@@ -17,10 +17,14 @@
 ### Automatic installation (recommended)
 
 ```bash
-git clone <url-du-repo> ai-content-studio
-cd ai-content-studio
+git clone <url-du-repo> ~/ai-content-studio
+cd ~/ai-content-studio
 ./install.sh
 ```
+
+> **Something not working, or a machine where a previous install was attempted?**
+> → **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — symptom → cause table, diagnosis
+> in three commands, step-by-step reinstall on an already-installed machine, and clean reset.
 
 `install.sh` does everything in a single command, **idempotently** (safe to re-run, tested
 across two consecutive runs):

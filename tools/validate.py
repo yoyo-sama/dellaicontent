@@ -1,32 +1,32 @@
 #!/usr/bin/env python3
-"""Valide un graphe API ComfyUI par un rendu réel (pas seulement structurel).
+"""Validates a ComfyUI API graph with an actual render (not just a structural check).
 
-Un job "success" ne prouve pas que le contenu est bon (cf. docs/LESSONS.md) —
-ce script soumet réellement le graphe à ComfyUI, attend le rendu, et peut en
-extraire frames + audio pour inspection humaine.
+A "success" job does not prove the content is right (see docs/LESSONS.md) — this script
+really submits the graph to ComfyUI, waits for the render, and can extract frames + audio
+for human inspection.
 
 Usage:
-    python3 tools/validate.py <graphe_api.json> [--reduce] [--frames 0,12,24]
-        [--audio] [--timeout 600] [--image nom_fichier.png] [--fps 25] [--refresh]
+    python3 tools/validate.py <api_graph.json> [--reduce] [--frames 0,12,24]
+        [--audio] [--timeout 600] [--image filename.png] [--fps 25] [--refresh]
 
 Options:
-    --reduce         Sur une COPIE du graphe : force length des
-                      EmptyLTXVLatentVideo à 25, frames_number des
-                      LTXVEmptyLatentAudio à 25, batch_size des Empty*LatentImage à 1.
-    --frames I,J,K   Pour chaque .mp4 produit, extrait ces indices de frame
-                      (ImageFromBatch + SaveImage) sous output/validate/.
-    --audio          Pour chaque .mp4 produit, extrait la piste audio (SaveAudioMP3).
-    --timeout N      Timeout de poll en secondes pour un rendu (défaut 600).
-    --image NOM      Nom de fichier déjà présent dans input/, requis si le
-                      graphe contient un placeholder {{IMAGE}}.
-    --fps N          FPS utilisé pour calculer FRAMES = fps*duration+1 (défaut 25).
-    --refresh        Force le rafraîchissement de tools/object_info.json.
+    --reduce         On a COPY of the graph: forces length of EmptyLTXVLatentVideo to 25,
+                      frames_number of LTXVEmptyLatentAudio to 25, and batch_size of
+                      Empty*LatentImage to 1.
+    --frames I,J,K   For every .mp4 produced, extracts these frame indices
+                      (ImageFromBatch + SaveImage) under output/validate/.
+    --audio          For every .mp4 produced, extracts the audio track (SaveAudioMP3).
+    --timeout N      Poll timeout in seconds for one render (default 600).
+    --image NAME     Name of a file already present in input/, required when the graph
+                      contains an {{IMAGE}} placeholder.
+    --fps N          FPS used to compute FRAMES = fps*duration+1 (default 25).
+    --refresh        Forces a refresh of tools/object_info.json.
 
-La validation structurelle (class_type connus, liens intègres, modèles
-présents sur disque) se fait AVANT toute soumission ; un échec structurel
-sort en code 1 sans rien soumettre à ComfyUI.
+The structural validation (known class_type, intact links, models present on disk) runs
+BEFORE any submission; a structural failure exits with code 1 without submitting anything
+to ComfyUI.
 
-Exit code 0 seulement si toutes les étapes exécutées réussissent.
+Exit code 0 only if every executed step succeeds.
 """
 import argparse
 import copy
@@ -88,7 +88,7 @@ class Step:
         return all(ok for _, ok, _ in self.results)
 
     def recap(self):
-        print("\n=== Récapitulatif ===")
+        print("\n=== Summary ===")
         for label, ok, detail in self.results:
             mark = "OK  " if ok else "FAIL"
             print(f"  [{mark}] {label}")
@@ -98,7 +98,7 @@ class Step:
 
 def load_object_info(refresh=False):
     if refresh or not os.path.exists(OBJECT_INFO_PATH):
-        print(f"Rafraîchissement de {OBJECT_INFO_PATH} depuis {COMFY_URL}/object_info ...")
+        print(f"Refreshing {OBJECT_INFO_PATH} from {COMFY_URL}/object_info ...")
         with urllib.request.urlopen(f"{COMFY_URL}/object_info", timeout=30) as r:
             data = r.read()
         with open(OBJECT_INFO_PATH, "wb") as f:
@@ -130,13 +130,13 @@ def structural_validate(graph, object_info, models_index):
     node_ids = set(graph.keys())
     for node_id, node in graph.items():
         if not isinstance(node, dict) or "class_type" not in node:
-            errors.append(f"nœud {node_id}: pas de class_type")
+            errors.append(f"node {node_id}: no class_type")
             continue
         ctype = node["class_type"]
         if ctype not in object_info:
             errors.append(
-                f"nœud {node_id}: class_type '{ctype}' introuvable dans object_info "
-                f"(nœud custom ? essayer --refresh)"
+                f"node {node_id}: class_type '{ctype}' not found in object_info "
+                f"(custom node? try --refresh)"
             )
         inputs = node.get("inputs", {})
         if not isinstance(inputs, dict):
@@ -146,12 +146,12 @@ def structural_validate(graph, object_info, models_index):
                 src_id = ival[0]
                 if src_id not in node_ids:
                     errors.append(
-                        f"nœud {node_id} ({ctype}).{iname}: lien vers un nœud inexistant '{src_id}'"
+                        f"node {node_id} ({ctype}).{iname}: link to a non-existent node '{src_id}'"
                     )
             elif isinstance(ival, str) and ival.endswith(".safetensors"):
                 if os.path.basename(ival) not in models_index:
                     errors.append(
-                        f"nœud {node_id} ({ctype}).{iname}: modèle introuvable sous "
+                        f"node {node_id} ({ctype}).{iname}: model not found under "
                         f"{MODELS_DIR}: '{ival}'"
                     )
     return errors
@@ -216,7 +216,7 @@ def print_node_errors(resp):
     if err:
         print(f"  Erreur: {err.get('message')} — {err.get('details', '')}")
     for node_id, info in resp.get("node_errors", {}).items():
-        print(f"  nœud {node_id} ({info.get('class_type', '?')}):")
+        print(f"  node {node_id} ({info.get('class_type', '?')}):")
         for e in info.get("errors", []):
             print(f"    - {e.get('message')}: {e.get('details', '')}")
     if "raw" in resp:
@@ -265,12 +265,12 @@ def run_graph(step, label, graph, timeout):
         return None
     prompt_id = resp.get("prompt_id")
     if not prompt_id:
-        step.fail(f"{label}: soumission /prompt", f"pas de prompt_id dans la réponse: {resp}")
+        step.fail(f"{label}: /prompt submission", f"no prompt_id in the response: {resp}")
         return None
     step.ok(f"{label}: soumis (prompt_id {prompt_id})")
     entry = poll_history(prompt_id, timeout)
     if entry is None:
-        step.fail(f"{label}: rendu", f"timeout après {timeout}s (prompt_id {prompt_id})")
+        step.fail(f"{label}: render", f"timed out after {timeout}s (prompt_id {prompt_id})")
         return None
     status_info = entry.get("status", {})
     if status_info.get("status_str") == "error":
@@ -278,7 +278,7 @@ def run_graph(step, label, graph, timeout):
         for m in status_info.get("messages", []):
             print(f"    {m}")
         return None
-    step.ok(f"{label}: rendu terminé")
+    step.ok(f"{label}: render finished")
     return entry
 
 
@@ -320,7 +320,7 @@ def inspect_videos(step, mp4s, frame_indices, want_audio, timeout):
     for n, (node_id, key, subfolder, filename) in enumerate(mp4s):
         src = os.path.join(OUTPUT_DIR, subfolder, filename)
         if not os.path.exists(src):
-            step.fail(f"inspection {filename}", f"fichier introuvable: {src}")
+            step.fail(f"inspection {filename}", f"file not found: {src}")
             continue
         copy_name = f"_validate_{n}.mp4"
         dst = os.path.join(INPUT_DIR, copy_name)
@@ -340,7 +340,7 @@ def inspect_videos(step, mp4s, frame_indices, want_audio, timeout):
                 if entry is not None:
                     out_files = collect_outputs(entry)
                     if not out_files:
-                        step.fail(f"{filename}: piste audio", "aucun fichier audio produit")
+                        step.fail(f"{filename}: audio track", "no audio file produced")
                     for _nid, key2, subf2, fn2 in out_files:
                         path = os.path.join(OUTPUT_DIR, subf2, fn2)
                         size = os.path.getsize(path) if os.path.exists(path) else 0
@@ -358,17 +358,17 @@ def inspect_videos(step, mp4s, frame_indices, want_audio, timeout):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Valide un graphe API ComfyUI par un rendu réel.",
+        description="Validates a ComfyUI API graph with an actual render.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("graph", help="chemin du graphe API JSON")
-    p.add_argument("--reduce", action="store_true", help="réduit vidéo/latents pour un test rapide")
-    p.add_argument("--frames", default=None, help="indices de frames à extraire, ex: 0,12,24")
-    p.add_argument("--audio", action="store_true", help="extrait aussi la piste audio")
-    p.add_argument("--timeout", type=int, default=600, help="timeout de poll en secondes (défaut 600)")
-    p.add_argument("--image", default=None, help="nom de fichier dans input/ pour {{IMAGE}}")
-    p.add_argument("--fps", type=int, default=25, help="fps pour FRAMES = fps*duration+1 (défaut 25)")
-    p.add_argument("--refresh", action="store_true", help="force le rafraîchissement de object_info.json")
+    p.add_argument("graph", help="path to the JSON API graph")
+    p.add_argument("--reduce", action="store_true", help="shrink video/latents for a quick test")
+    p.add_argument("--frames", default=None, help="frame indices to extract, e.g. 0,12,24")
+    p.add_argument("--audio", action="store_true", help="also extract the audio track")
+    p.add_argument("--timeout", type=int, default=600, help="poll timeout in seconds (default 600)")
+    p.add_argument("--image", default=None, help="file name in input/ for {{IMAGE}}")
+    p.add_argument("--fps", type=int, default=25, help="fps for FRAMES = fps*duration+1 (default 25)")
+    p.add_argument("--refresh", action="store_true", help="force a refresh of object_info.json")
     return p.parse_args()
 
 
@@ -377,7 +377,7 @@ def main():
     step = Step()
 
     if not os.path.exists(args.graph):
-        print(f"Fichier introuvable: {args.graph}", file=sys.stderr)
+        print(f"File not found: {args.graph}", file=sys.stderr)
         return 1
 
     with open(args.graph) as f:
@@ -385,7 +385,7 @@ def main():
     try:
         graph = json.loads(raw_text)
     except json.JSONDecodeError as e:
-        print(f"JSON invalide dans {args.graph}: {e}", file=sys.stderr)
+        print(f"Invalid JSON in {args.graph}: {e}", file=sys.stderr)
         return 1
 
     # 1. structural validation (before any submission)
@@ -393,7 +393,7 @@ def main():
     models_index = build_models_index()
     errors = structural_validate(graph, object_info, models_index)
     if errors:
-        step.fail("validation structurelle", f"{len(errors)} erreur(s)")
+        step.fail("structural validation", f"{len(errors)} error(s)")
         for e in errors:
             print(f"  - {e}")
         step.recap()
@@ -403,7 +403,7 @@ def main():
     # 2. placeholder substitution
     needs_image = '"{{IMAGE}}"' in raw_text
     if needs_image and not args.image:
-        step.fail("substitution placeholders", "graphe contient {{IMAGE}} mais --image n'a pas été fourni")
+        step.fail("placeholder substitution", "the graph contains {{IMAGE}} but --image was not given")
         step.recap()
         return 1
 
@@ -423,7 +423,7 @@ def main():
     substituted_text = substitute(raw_text, values)
     leftover = leftover_placeholders(substituted_text)
     if leftover:
-        step.fail("substitution placeholders", f"placeholders non substitués: {', '.join(leftover)}")
+        step.fail("placeholder substitution", f"unsubstituted placeholders: {', '.join(leftover)}")
         step.recap()
         return 1
     step.ok("substitution placeholders")
@@ -431,13 +431,13 @@ def main():
     try:
         final_graph = json.loads(substituted_text)
     except json.JSONDecodeError as e:
-        step.fail("substitution placeholders", f"JSON invalide après substitution: {e}")
+        step.fail("placeholder substitution", f"invalid JSON after substitution: {e}")
         step.recap()
         return 1
 
     if args.reduce:
         final_graph = apply_reduce(final_graph)
-        step.ok(f"--reduce appliqué (length/frames_number={REDUCE_FRAMES}, batch_size=1)")
+        step.ok(f"--reduce applied (length/frames_number={REDUCE_FRAMES}, batch_size=1)")
 
     # 3. submit + poll
     entry = run_graph(step, "rendu principal", final_graph, args.timeout)
@@ -447,18 +447,18 @@ def main():
 
     out_files = collect_outputs(entry)
     if not out_files:
-        step.fail("sorties du rendu principal", "aucun fichier de sortie trouvé dans l'historique")
+        step.fail("main render outputs", "no output file found in the history")
     else:
         print("  Fichiers produits:")
         for _nid, key, subfolder, filename in out_files:
             print(f"    {key}: {subfolder}/{filename}")
-        step.ok(f"{len(out_files)} fichier(s) de sortie")
+        step.ok(f"{len(out_files)} output file(s)")
 
     # 4. frame/audio inspection
     if args.frames or args.audio:
         mp4s = [f for f in out_files if f[3].lower().endswith(".mp4")]
         if not mp4s:
-            print("  Aucune vidéo .mp4 produite — inspection frames/audio ignorée.")
+            print("  No .mp4 video produced — frame/audio inspection skipped.")
         else:
             frame_indices = [int(x) for x in args.frames.split(",")] if args.frames else []
             inspect_videos(step, mp4s, frame_indices, args.audio, args.timeout)

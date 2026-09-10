@@ -17,10 +17,14 @@ Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit) e
 ### Installation automatique (recommandée)
 
 ```bash
-git clone <url-du-repo> ai-content-studio
-cd ai-content-studio
+git clone <url-du-repo> ~/ai-content-studio
+cd ~/ai-content-studio
 ./install.sh
 ```
+
+> **Quelque chose ne marche pas, ou poste sur lequel une installation a déjà été tentée ?**
+> → **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — table symptôme → cause, diagnostic
+> en trois commandes, procédure de réinstallation pas à pas, et remise à zéro.
 
 `install.sh` fait tout en une commande, de façon **idempotente** (relançable sans risque,
 testé sur deux exécutions consécutives) :

@@ -1,5 +1,20 @@
 # Tour de contrôle — changelog
 
+## 2026-09-10 (suite 4) — Plus aucun français dans les scripts + dépannage mis en avant sur la page d'accueil
+
+Deux manques signalés par l'utilisateur, tous deux exacts.
+
+**1. Le guide de dépannage était invisible.** Il n'était référencé que dans l'arborescence en bas des README — pas sur la page d'accueil du dépôt. Un encadré le pointe désormais juste sous la commande d'installation, dans les deux README : « Quelque chose ne marche pas, ou poste sur lequel une installation a déjà été tentée ? → docs/TROUBLESHOOTING.md ».
+
+**2. Il restait du français dans les scripts.** Le passage précédent n'avait traité que les commentaires des fichiers de déploiement. Restaient :
+
+- `install.sh` : les variables de la boucle de téléchargement (`$dossier`, `$fichier`, `$taille`) — du français dans le code lui-même, pas dans un commentaire ;
+- `tools/validate.py` et `tools/onboard.py` : ~95 lignes de docstrings, d'aide argparse et de messages d'erreur, entièrement en français. Ce sont les outils d'onboarding et de qualification des workflows, exécutés à la main : leur sortie compte autant que celle de l'installeur.
+
+Tout est traduit. Vérification : `bash -n`, `python3 -m py_compile`, `--help` des deux outils relu en anglais, et exécution réelle d'`install.sh` (20 modèles reconnus — la boucle de téléchargement fonctionne toujours après le renommage des variables, health-checks 200).
+
+Un balayage systématique sur tous les fichiers `*.sh`, `*.py`, `*.ps1`, `*.yml`, `*.conf` et `Dockerfile` suivis par git ne remonte plus que trois faux positifs : l'opérateur `-le` (« inférieur ou égal ») de test shell.
+
 ## 2026-09-10 (suite 3) — `docs/TROUBLESHOOTING.md` : procédure de réinstallation détaillée
 
 La section « réparer une installation existante » se contentait de trois puces et d'un renvoi vers `install.sh` — insuffisant pour le cas le plus fréquent, un poste où une version antérieure du script a déjà tourné. Elle devient une procédure numérotée en 7 étapes : récupération de la bonne version du script (≥ 1.0.8, sinon on relance la version fautive), état des lieux en une commande (ancien dossier de modèles, nouveau, contenu du volume `ollama-data`, espace libre), décision sur l'ancien dossier, lancement avec `tee` vers un journal (la commande dure des heures), **tableau des durées attendues par étape**, les lignes de sortie exactes qui prouvent que la migration a eu lieu, relecture du journal, vérification, et quoi faire à chaque endroit où le script peut s'interrompre.

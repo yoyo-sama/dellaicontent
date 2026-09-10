@@ -1,34 +1,33 @@
 #!/usr/bin/env python3
-"""Intègre un workflow UI ComfyUI (export drag-drop) en template API du studio.
+"""Onboards a ComfyUI UI workflow (drag-drop export) as a studio API template.
 
-Convertit le workflow, injecte les placeholders {{PROMPT}}, {{NEGATIVE_PROMPT}},
-{{SEED}}, {{WIDTH}}, {{HEIGHT}}, {{BATCH}}, {{FRAMES}}, {{IMAGE}} aux bons endroits,
-vérifie que les modèles référencés existent, écrit workflows/api/<id>.json et
-ajoute l'entrée correspondante à workflows/manifest.json.
+Converts the workflow, injects the {{PROMPT}}, {{NEGATIVE_PROMPT}}, {{SEED}}, {{WIDTH}},
+{{HEIGHT}}, {{BATCH}}, {{FRAMES}} and {{IMAGE}} placeholders in the right places, checks
+that the referenced models exist, writes workflows/api/<id>.json and adds the matching
+entry to workflows/manifest.json.
 
 Usage:
     python3 tools/onboard.py <workflow_ui.json> --id <id> --label "<label>" \\
-        --pipeline <pipeline> --model "<nom modèle>" \\
+        --pipeline <pipeline> --model "<model name>" \\
         [--fps N] [--enrich builtin] [--dry-run] [--no-test] [--yes] \\
-        [--image nom_fichier_dans_input]
+        [--image file_name_in_input]
 
 Options:
-    --fps N       Ajouté tel quel à l'entrée manifest si fourni.
-    --enrich builtin  Ajouté tel quel à l'entrée manifest si fourni.
-    --dry-run     N'écrit rien (ni workflows/api/, ni manifest.json) ; affiche
-                  tout ce qui aurait été fait.
-    --no-test     N'appelle pas tools/validate.py après écriture.
-    --yes         Ne pose pas de question interactive en cas de candidats
-                  positifs ambigus (garde tous les candidats détectés).
-    --image NOM   Fichier déjà présent dans input/ à utiliser si --no-test
-                  n'est pas passé et que le graphe contient {{IMAGE}}.
+    --fps N       Added as is to the manifest entry when given.
+    --enrich builtin  Added as is to the manifest entry when given.
+    --dry-run     Writes nothing (neither workflows/api/ nor manifest.json); prints
+                  everything it would have done.
+    --no-test     Does not call tools/validate.py after writing.
+    --yes         Asks no interactive question when positive-prompt candidates are
+                  ambiguous (keeps every detected candidate).
+    --image NAME  File already present in input/, used when --no-test is not passed and
+                  the graph contains {{IMAGE}}.
 
-Étapes : (1) rafraîchit tools/object_info.json ; (2) convertit le workflow
-UI en graphe API via tools/convert.py ; (3) injecte les placeholders ;
-(4) vérifie les .safetensors référencés (exit 1 si un manque) ; (5) écrit
-workflows/api/<id>.json ; (6) met à jour workflows/manifest.json (refuse si
-l'id existe déjà) ; (7) sauf --no-test, lance tools/validate.py --reduce sur
-le fichier écrit et relaie son code retour.
+Steps: (1) refresh tools/object_info.json; (2) convert the UI workflow into an API graph
+through tools/convert.py; (3) inject the placeholders; (4) check the referenced
+.safetensors (exit 1 if one is missing); (5) write workflows/api/<id>.json; (6) update
+workflows/manifest.json (refuses if the id already exists); (7) unless --no-test, run
+tools/validate.py --reduce on the written file and relay its exit code.
 """
 import argparse
 import json
@@ -57,7 +56,7 @@ TEXTGEN_TYPES = ("TextGenerateLTX2Prompt", "TextGenerate")
 # ── object_info ───────────────────────────────────────────────────────
 
 def refresh_object_info():
-    print(f"Rafraîchissement de {OBJECT_INFO_PATH} depuis {COMFY_URL}/object_info ...")
+    print(f"Refreshing {OBJECT_INFO_PATH} from {COMFY_URL}/object_info ...")
     try:
         with urllib.request.urlopen(f"{COMFY_URL}/object_info", timeout=30) as r:
             data = r.read()
@@ -65,9 +64,9 @@ def refresh_object_info():
             f.write(data)
     except (urllib.error.URLError, OSError) as e:
         if os.path.exists(OBJECT_INFO_PATH):
-            print(f"  WARN: rafraîchissement échoué ({e}) — utilisation du fichier existant")
+            print(f"  WARN: refresh failed ({e}) — using the existing file")
         else:
-            print(f"ERREUR: rafraîchissement échoué ({e}) et {OBJECT_INFO_PATH} n'existe pas", file=sys.stderr)
+            print(f"ERROR: refresh failed ({e}) and {OBJECT_INFO_PATH} does not exist", file=sys.stderr)
             sys.exit(1)
 
 
@@ -164,16 +163,16 @@ def excerpt_of(api, leaf_id, field):
 def inject_prompts(api, yes, log):
     pos_leaves, neg_leaves = collect_prompt_candidates(api)
     if not pos_leaves:
-        log.append("WARN: aucun nœud de texte positif détecté -- {{PROMPT}} non injecté")
+        log.append("WARN: no positive text node detected -- {{PROMPT}} not injected")
     chosen = pos_leaves
     if len(pos_leaves) > 1:
         items = list(pos_leaves.items())
-        print(f"Plusieurs candidats positifs détectés ({len(items)}) :")
+        print(f"Several positive candidates detected ({len(items)}):")
         for i, (leaf_id, (_id, ctype, field)) in enumerate(items):
-            print(f"  [{i}] nœud {leaf_id} ({ctype}).{field}: {excerpt_of(api, leaf_id, field)!r}")
+            print(f"  [{i}] node {leaf_id} ({ctype}).{field}: {excerpt_of(api, leaf_id, field)!r}")
         if not yes:
             try:
-                sel = input("Indices à garder, séparés par des virgules (Entrée = tous) : ").strip()
+                sel = input("Indices to keep, comma-separated (Enter = all): ").strip()
             except EOFError:
                 sel = ""
             if sel:
@@ -185,7 +184,7 @@ def inject_prompts(api, yes, log):
         target_id, target_field = find_injection_target(api, leaf_id, field)
         api[target_id]["inputs"][target_field] = "{{PROMPT}}"
         injected_leaf_ids.add(leaf_id)
-        log.append(f"PROMPT -> nœud {target_id} ({api[target_id]['class_type']}).{target_field} "
+        log.append(f"PROMPT -> node {target_id} ({api[target_id]['class_type']}).{target_field} "
                     f"(source: {leaf_id}/{ctype}.{field})")
 
     for leaf_id, ctype, field in neg_leaves.values():
@@ -195,7 +194,7 @@ def inject_prompts(api, yes, log):
             continue
         target_id, target_field = find_injection_target(api, leaf_id, field)
         api[target_id]["inputs"][target_field] = "{{NEGATIVE_PROMPT}}"
-        log.append(f"NEGATIVE_PROMPT -> nœud {target_id} ({api[target_id]['class_type']}).{target_field} "
+        log.append(f"NEGATIVE_PROMPT -> node {target_id} ({api[target_id]['class_type']}).{target_field} "
                     f"(source: {leaf_id}/{ctype}.{field})")
 
 
@@ -205,7 +204,7 @@ def inject_seeds(api, log):
         for k in list(inputs.keys()):
             if k == "seed" or k == "noise_seed" or k.endswith(".seed"):
                 inputs[k] = "{{SEED}}"
-                log.append(f"SEED -> nœud {node_id} ({node['class_type']}).{k}")
+                log.append(f"SEED -> node {node_id} ({node['class_type']}).{k}")
 
 
 def inject_dimensions(api, log):
@@ -220,10 +219,10 @@ def inject_dimensions(api, log):
             for field, ph in fields:
                 if field in inputs:
                     inputs[field] = ph
-                    log.append(f"{ph} -> nœud {node_id} ({ctype}).{field}")
+                    log.append(f"{ph} -> node {node_id} ({ctype}).{field}")
         if ctype == "LTXVEmptyLatentAudio" and "frames_number" in inputs:
             inputs["frames_number"] = "{{FRAMES}}"
-            log.append(f"{{{{FRAMES}}}} -> nœud {node_id} ({ctype}).frames_number")
+            log.append(f"{{{{FRAMES}}}} -> node {node_id} ({ctype}).frames_number")
 
 
 def inject_images(api, pipeline, log):
@@ -231,15 +230,15 @@ def inject_images(api, pipeline, log):
         return
     nodes = [n for n in api.items() if n[1].get("class_type") == "LoadImage" and "image" in n[1].get("inputs", {})]
     if not nodes:
-        log.append("WARN: pipeline image2*/outpaint mais aucun nœud LoadImage trouvé")
+        log.append("WARN: image2*/outpaint pipeline but no LoadImage node found")
         return
     if len(nodes) > 1:
-        log.append(f"WARN: {len(nodes)} nœuds LoadImage trouvés -- {{{{IMAGE}}}} injecté dans tous "
+        log.append(f"WARN: {len(nodes)} LoadImage nodes found -- {{{{IMAGE}}}} injected in all of them "
                     f"(ids: {', '.join(n[0] for n in nodes)})")
     for node_id, node in nodes:
         old = node["inputs"]["image"]
         node["inputs"]["image"] = "{{IMAGE}}"
-        log.append(f"IMAGE -> nœud {node_id} (LoadImage).image (était: {old!r})")
+        log.append(f"IMAGE -> node {node_id} (LoadImage).image (was: {old!r})")
 
 
 # ── model existence check ────────────────────────────────────────────
@@ -277,10 +276,10 @@ def manifest_has_id(manifest, wf_id):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Intègre un workflow UI ComfyUI en template API du studio.",
+        description="Onboards a ComfyUI UI workflow as a studio API template.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("workflow", help="chemin du workflow UI ComfyUI (export drag-drop)")
+    p.add_argument("workflow", help="path to the ComfyUI UI workflow (drag-drop export)")
     p.add_argument("--id", required=True)
     p.add_argument("--label", required=True)
     p.add_argument("--pipeline", required=True)
@@ -289,8 +288,8 @@ def parse_args():
     p.add_argument("--enrich", default=None, choices=["builtin"])
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--no-test", action="store_true")
-    p.add_argument("--yes", action="store_true", help="pas de question interactive en cas d'ambiguïté")
-    p.add_argument("--image", default=None, help="fichier dans input/ pour l'auto-test si {{IMAGE}} est présent")
+    p.add_argument("--yes", action="store_true", help="no interactive question when ambiguous")
+    p.add_argument("--image", default=None, help="file in input/ for the self-test when {{IMAGE}} is present")
     return p.parse_args()
 
 
@@ -298,16 +297,16 @@ def main():
     args = parse_args()
 
     if not os.path.exists(args.workflow):
-        print(f"Fichier introuvable: {args.workflow}", file=sys.stderr)
+        print(f"File not found: {args.workflow}", file=sys.stderr)
         return 1
 
     if os.path.exists(MANIFEST_PATH):
         manifest = load_manifest()
         if manifest_has_id(manifest, args.id):
-            print(f"ERREUR: l'id '{args.id}' existe déjà dans {MANIFEST_PATH}", file=sys.stderr)
+            print(f"ERROR: id '{args.id}' already exists in {MANIFEST_PATH}", file=sys.stderr)
             return 1
     else:
-        print(f"ERREUR: manifest introuvable: {MANIFEST_PATH}", file=sys.stderr)
+        print(f"ERROR: manifest not found: {MANIFEST_PATH}", file=sys.stderr)
         return 1
 
     # (1) refresh object_info.json
@@ -320,9 +319,9 @@ def main():
     try:
         api, warnings = convert.convert_file(args.workflow)
     except Exception as e:
-        print(f"ERREUR: conversion UI->API échouée: {e}", file=sys.stderr)
+        print(f"ERROR: UI->API conversion failed: {e}", file=sys.stderr)
         return 1
-    print(f"Conversion: {len(api)} nœuds, {len(warnings)} avertissement(s) du convertisseur.")
+    print(f"Conversion: {len(api)} nodes, {len(warnings)} converter warning(s).")
 
     # (3) inject placeholders
     log = []
@@ -331,7 +330,7 @@ def main():
     inject_dimensions(api, log)
     inject_images(api, args.pipeline, log)
 
-    print("\nPlaceholders injectés:")
+    print("\nInjected placeholders:")
     for line in log:
         print(f"  {line}")
 
@@ -339,11 +338,11 @@ def main():
     models_index = build_models_index()
     missing = check_safetensors(api, models_index)
     if missing:
-        print(f"\nERREUR: {len(missing)} modèle(s) introuvable(s) sous {MODELS_DIR}:", file=sys.stderr)
+        print(f"\nERROR: {len(missing)} model(s) not found under {MODELS_DIR}:", file=sys.stderr)
         for node_id, ctype, iname, val in missing:
-            print(f"  nœud {node_id} ({ctype}).{iname}: {val}", file=sys.stderr)
+            print(f"  node {node_id} ({ctype}).{iname}: {val}", file=sys.stderr)
         return 1
-    print(f"\n{len(models_index)} fichiers indexés sous {MODELS_DIR} -- tous les .safetensors référencés existent.")
+    print(f"\n{len(models_index)} files indexed under {MODELS_DIR} -- every referenced .safetensors exists.")
 
     out_path = os.path.join(API_DIR, f"{args.id}.json")
     manifest_entry = {
@@ -359,7 +358,7 @@ def main():
         manifest_entry["fps"] = args.fps
 
     if args.dry_run:
-        print(f"\n--dry-run: rien n'a été écrit. Aurait écrit {out_path} et ajouté à {MANIFEST_PATH}:")
+        print(f"\n--dry-run: nothing was written. Would have written {out_path} and added to {MANIFEST_PATH}:")
         print(json.dumps(manifest_entry, indent=2, ensure_ascii=False))
         return 0
 
@@ -374,7 +373,7 @@ def main():
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
         f.write("\n")
-    print(f"Manifest mis à jour: {MANIFEST_PATH} (+{args.id})")
+    print(f"Manifest updated: {MANIFEST_PATH} (+{args.id})")
 
     # (7) test
     if args.no_test:
@@ -389,8 +388,8 @@ def main():
                     image_name = fn
                     break
         if not image_name:
-            print("ERREUR: le graphe contient {{IMAGE}} mais aucune image de test disponible "
-                  "(--image ou fichier dans input/)", file=sys.stderr)
+            print("ERROR: the graph contains {{IMAGE}} but no test image is available "
+                  "(--image, or a file in input/)", file=sys.stderr)
             return 1
         cmd += ["--image", image_name]
     print(f"\nLancement: {' '.join(cmd)}")

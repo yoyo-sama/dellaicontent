@@ -393,22 +393,22 @@ if [ ! -w "$COMFY_MODELS_DIR" ]; then
   echo "  Usual cause: folder created by Docker as root (padlock in the file manager)."
   echo "  Fix: sudo chown -R $(id -u):$(id -g) \"$COMFY_DIR\" then run this script again."
 elif [ -f "$MODELS_FILE" ]; then
-  while IFS='|' read -r dossier fichier taille url || [ -n "${dossier:-}" ]; do
-    [ -z "${dossier:-}" ] && continue
-    case "$dossier" in \#*) continue ;; esac
+  while IFS='|' read -r folder file size url || [ -n "${folder:-}" ]; do
+    [ -z "${folder:-}" ] && continue
+    case "$folder" in \#*) continue ;; esac
     url="${url%$'\r'}"
-    target_dir="$COMFY_MODELS_DIR/$dossier"
-    target_path="$target_dir/$fichier"
+    target_dir="$COMFY_MODELS_DIR/$folder"
+    target_path="$target_dir/$file"
 
     if [ -z "$url" ] || [ "$url" = "NON_TROUVE" ]; then
       MISSING_MANUAL+=("$target_path")
       continue
     fi
 
-    if [ -f "$target_path" ] && is_uint "$taille" && [ "$taille" -gt 0 ]; then
+    if [ -f "$target_path" ] && is_uint "$size" && [ "$size" -gt 0 ]; then
       actual_size="$(stat -c '%s' "$target_path" 2>/dev/null || echo 0)"
-      if [ "$actual_size" -gt "$taille" ]; then diff=$((actual_size - taille)); else diff=$((taille - actual_size)); fi
-      tolerance=$((taille / 100))
+      if [ "$actual_size" -gt "$size" ]; then diff=$((actual_size - size)); else diff=$((size - actual_size)); fi
+      tolerance=$((size / 100))
       [ "$tolerance" -lt 1 ] && tolerance=1
       if [ "$diff" -le "$tolerance" ]; then
         echo "SKIP (already present, size matches): $target_path"
@@ -418,7 +418,7 @@ elif [ -f "$MODELS_FILE" ]; then
     fi
 
     mkdir -p "$target_dir"
-    echo "Downloading: $fichier -> $target_path"
+    echo "Downloading: $file -> $target_path"
     # Some Hugging Face repositories (e.g. Lightricks/LTX-2.5) are "gated": an anonymous
     # download fails with 401 until the terms have been accepted on huggingface.co with an
     # account and an access token is provided. HF_TOKEN is used when set in the environment;
@@ -431,7 +431,7 @@ elif [ -f "$MODELS_FILE" ]; then
     if curl -sfL -C - "${HF_AUTH_ARGS[@]}" -o "$target_path" "$url"; then
       DOWNLOADED_OK+=("$target_path")
     else
-      warn "download failed for '$fichier' from $url"
+      warn "download failed for '$file' from $url"
       FAILED_DL+=("$target_path ($url)")
     fi
   done < "$MODELS_FILE"
