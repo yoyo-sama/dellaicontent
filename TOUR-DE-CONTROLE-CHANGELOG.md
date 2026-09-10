@@ -1,5 +1,13 @@
 # Tour de contrôle — changelog
 
+## 2026-09-10 (suite 3) — `docs/TROUBLESHOOTING.md` : procédure de réinstallation détaillée
+
+La section « réparer une installation existante » se contentait de trois puces et d'un renvoi vers `install.sh` — insuffisant pour le cas le plus fréquent, un poste où une version antérieure du script a déjà tourné. Elle devient une procédure numérotée en 7 étapes : récupération de la bonne version du script (≥ 1.0.8, sinon on relance la version fautive), état des lieux en une commande (ancien dossier de modèles, nouveau, contenu du volume `ollama-data`, espace libre), décision sur l'ancien dossier, lancement avec `tee` vers un journal (la commande dure des heures), **tableau des durées attendues par étape**, les lignes de sortie exactes qui prouvent que la migration a eu lieu, relecture du journal, vérification, et quoi faire à chaque endroit où le script peut s'interrompre.
+
+Explicité aussi : ce que le script fait tout seul (suppression des conteneurs hérités, recréation des stacks, recopie des poids Ollama) et ce qu'il ne fait pas (déplacer les modèles de l'ancien dossier — il ne supprime rien d'autre que les deux conteneurs). Et le cas où aucune ligne de migration n'apparaît : le conteneur ne porte pas le label compose du dépôt, il a été créé à la main, le script n'y touchera jamais.
+
+Vérification : les 21 blocs passent `bash -n`, les étapes non destructives ont été exécutées sur cette machine, et un contrôle d'ancres confirme que les renvois internes pointent tous sur une section existante.
+
 ## 2026-09-10 (suite 2) — Attente d'Ollama après création de sa stack
 
 Défaut trouvé en relisant le chemin Ollama : `docker compose up -d` rend la main dès que le conteneur est **démarré**, pas quand le serveur **écoute**. Sur une installation où tous les modèles ComfyUI sont déjà présents (relance, ou modèles pré-copiés), l'étape « modèle Ollama requis » pouvait donc s'exécuter deux ou trois secondes après la création du conteneur et conclure `Ollama unavailable` sur un service qui finissait simplement de démarrer — sans que rien ne soit cassé.

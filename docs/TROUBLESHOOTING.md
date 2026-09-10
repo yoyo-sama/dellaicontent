@@ -16,6 +16,7 @@ Aucune n'installe ni ne supprime quoi que ce soit sans que ce soit dit explicite
 | Un cadenas sur `comfyui/` dans le gestionnaire de fichiers | Dossier créé par dockerd en `root:root` (bind-mount dont la source n'existait pas) — tous les téléchargements de modèles échouent ensuite en « permission denied » | [2](#2-comfyui-ne-voit-pas-les-modèles) |
 | `skipped (native Ollama installed but not started)` | Ollama est installé hors Docker et son service est arrêté | [3](#3-ollama) |
 | `skipped (port 11434 busy)` / `port is already allocated` | Un autre processus tient le port | [3](#3-ollama) |
+| Vous réinstallez sur un poste où une version précédente du script a déjà tourné | Migration de l'ancienne mise en page vers les stacks voisines | [4](#4-réinstaller-sur-un-poste-où-une-version-précédente-du-script-a-déjà-tourné) |
 
 **La langue du prompt n'est jamais en cause.** Un `JSON.parse` qui échoue « line 1 column 1 »
 signifie que le premier caractère reçu n'est pas du JSON (typiquement le `<` de `<html>`) :
@@ -107,38 +108,142 @@ sudo systemctl enable --now ollama
 Puis relancez `install.sh`. Si le port est tenu par autre chose, `sudo ss -ltnp 'sport = :11434'`
 dit par qui.
 
-## 4. Réparer une installation faite avec l'ancienne mise en page
+## 4. Réinstaller sur un poste où une version précédente du script a déjà tourné
 
-Avant la v1.0.7, `docker-compose.yml` déclarait aussi `comfyui` et `ollama`, avec leurs volumes
-sous `~/ai-content-studio/comfyui/`. Ce ComfyUI-là n'avait pas `BASE_DIRECTORY` et ne lisait
-donc pas le dossier où le script téléchargeait les modèles. `install.sh` migre ces
-installations automatiquement, mais l'ancien dossier n'est jamais déplacé pour vous.
+C'est le cas le plus fréquent : une première installation a été tentée avant la v1.0.7, quand
+`docker-compose.yml` déclarait aussi `comfyui` et `ollama` avec leurs volumes sous
+`~/ai-content-studio/comfyui/`. Ce ComfyUI-là n'avait pas `BASE_DIRECTORY` et ne lisait donc
+pas le dossier où le script téléchargeait les modèles.
+
+**Ce que le script fait tout seul** : il reconnaît les conteneurs créés par le
+`docker-compose.yml` du dépôt (label compose), les supprime, recrée ComfyUI dans
+`~/comfyui-spark` et Ollama dans `~/ollama`, et **recopie** les poids du volume `ollama-data`
+vers `~/ollama/data` pour éviter de retélécharger le modèle.
+
+**Ce qu'il ne fait pas** : déplacer les modèles ComfyUI de l'ancien dossier. Il ne supprime
+rien d'autre que les deux conteneurs hérités — l'ancien dossier reste sur le disque.
+
+### Étape 1 — Récupérer la version courante du script
 
 ```bash
-cd ~/ai-content-studio && git pull && du -sh comfyui/basedir/models/* 2>/dev/null; ls -ld comfyui 2>/dev/null; df -h /home | tail -1
+cd ~/ai-content-studio && git pull && cat VERSION
 ```
 
-- Si l'ancien dossier ne contient rien d'utile (cas le plus fréquent : seul `loras` existe,
-  créé par un bind-mount, les téléchargements ayant échoué en « permission denied ») :
+La version doit être **≥ 1.0.8**. En dessous, vous relanceriez la version qui a produit le
+problème. Si `git pull` refuse à cause de modifications locales, `git stash` : il n'y a
+normalement rien à conserver dans ce dépôt sur un poste de déploiement.
+
+### Étape 2 — État des lieux
+
+```bash
+du -sh ~/ai-content-studio/comfyui/basedir/models 2>/dev/null; du -sh ~/comfyui-spark/basedir/models 2>/dev/null; docker run --rm -v ollama-data:/v alpine sh -c 'du -sh /v; ls /v/models/manifests/registry.ollama.ai/library' 2>/dev/null; df -h /home | tail -1
+```
+
+Quatre informations : ce que contient l'ancien dossier, ce que contient déjà le nouveau, si le
+volume Ollama hérité contient bien `gemma4`, et l'espace libre. Il faut **~150 Go** pour la
+totalité des modèles ComfyUI.
+
+### Étape 3 — Décider du sort de l'ancien dossier de modèles
+
+- Ancien dossier vide, ou ne contenant que `loras` (cas le plus fréquent : ce sous-dossier a
+  été créé par un bind-mount, les téléchargements ayant tous échoué en « permission denied ») :
 
   ```bash
   sudo rm -rf ~/ai-content-studio/comfyui
   ```
 
-- S'il contient de vrais modèles, déplacez-les vers la nouvelle stack **avant** de relancer le
-  script, ils seront reconnus et non retéléchargés :
+- Ancien dossier contenant de vrais modèles : déplacez-les **avant** de lancer le script, ils
+  seront reconnus par leur taille et non retéléchargés :
 
   ```bash
   mkdir -p ~/comfyui-spark/basedir/models && sudo mv ~/ai-content-studio/comfyui/basedir/models/* ~/comfyui-spark/basedir/models/ && sudo chown -R "$(id -u):$(id -g)" ~/comfyui-spark
   ```
 
-Puis l'installation elle-même. `HF_TOKEN` n'est pas facultatif en pratique : les 4 fichiers
-LTX 2.5 viennent d'un dépôt Hugging Face *gated* et échouent proprement sans jeton (les autres
-se téléchargent normalement).
+  Puis contrôlez leur intégrité avec la commande de la
+  [section 2](#contrôler-lintégrité-des-modèles-téléchargés) : un téléchargement interrompu
+  par la panne initiale se reprendra tout seul à l'étape suivante.
+
+### Étape 4 — Lancer l'installation
 
 ```bash
-cd ~/ai-content-studio && HF_TOKEN=<votre_jeton_hf> ./install.sh
+cd ~/ai-content-studio && HF_TOKEN=<votre_jeton_hf> ./install.sh 2>&1 | tee ~/install-$(date +%F-%H%M).log
 ```
+
+`HF_TOKEN` n'est pas facultatif en pratique : les 4 fichiers LTX 2.5 viennent d'un dépôt
+Hugging Face *gated* et échouent proprement sans jeton (les 16 autres se téléchargent
+normalement). Le `tee` garde une trace : la commande dure plusieurs heures, et l'essentiel des
+erreurs éventuelles défile pendant les téléchargements.
+
+Ordre des opérations, avec les durées à attendre :
+
+| Étape du script | Ce qui se passe | Durée |
+|---|---|---|
+| 2/7 | Suppression des conteneurs hérités, création des deux stacks, dépôt des userscripts | < 1 min |
+| 2/7 | Recopie des poids Ollama depuis le volume `ollama-data` | quelques minutes (9,6 Go) |
+| 5/7 | Téléchargement des modèles ComfyUI manquants | plusieurs heures |
+| 6/7 | Tirage de `gemma4:e4b` si absent | quelques minutes |
+| 6/7 | Attente du premier démarrage de ComfyUI (installation de `comfy_kitchen`) | jusqu'à 15 min |
+
+### Étape 5 — Ce que vous devez voir passer
+
+Les lignes qui prouvent que la migration a bien eu lieu :
+
+```
+WARNING: ComfyUI inherited from the old layout — migrating to /home/<vous>/comfyui-spark.
+Creating the ComfyUI stack in /home/<vous>/comfyui-spark.
+Userscripts deployed before first start: 2 file(s)
+WARNING: Ollama inherited from the old layout — migrating to /home/<vous>/ollama.
+Copying weights from the 'ollama-data' volume into /home/<vous>/ollama/data…
+Creating the Ollama stack in /home/<vous>/ollama.
+Waiting for ComfyUI on :8188 (first start, userscripts installation)…
+```
+
+Si vous voyez à la place `reused (comfyui-nvidia)` sans ligne de migration, c'est que le
+conteneur ne porte pas le label compose du dépôt : il a été créé à la main (`docker run`) ou
+par une autre stack. Le script ne touche jamais à un conteneur qu'il ne possède pas — dans ce
+cas, supprimez-le vous-même après avoir vérifié son origine avec l'inventaire de la
+[section 5](#inventaire-dabord--qui-possède-quoi), puis relancez.
+
+### Étape 6 — Relire le journal
+
+```bash
+grep -nE "WARNING|failed|skipped|ERROR" ~/install-*.log
+```
+
+Sur une installation saine, il ne reste que d'éventuels avertissements sur les fichiers LTX 2.5
+si `HF_TOKEN` manquait.
+
+### Étape 7 — Vérifier
+
+Relancez le script : il est idempotent, et c'est le meilleur test.
+
+```bash
+cd ~/ai-content-studio && ./install.sh 2>&1 | tail -25
+```
+
+Attendu : `reused` sur les trois services, `already present (not re-downloaded) : 20`,
+`Ollama model gemma4:e4b: present`, quatre `HTTP 200`. Puis le contrôle qui compte vraiment —
+ComfyUI voit-il ses modèles :
+
+```bash
+docker inspect comfyui-nvidia --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' && curl -s http://localhost:8188/object_info/UNETLoader | grep -o 'minimax_h3[^"]*' | head -3
+```
+
+Enfin, dans l'application (`http://<ip>:8090`) : **✨ Enrichir (LLM)** sur un champ de prompt,
+puis une génération d'image simple (Krea 2) avant d'essayer la vidéo.
+
+### Si le script s'interrompt en cours de route
+
+Relancez-le, simplement. Il est idempotent à chaque étape : les téléchargements reprennent où
+ils s'étaient arrêtés (`curl -C -`), les stacks déjà créées sont réutilisées, les conteneurs
+arrêtés sont redémarrés au lieu d'être doublés. Trois cas particuliers :
+
+- **Coupure pendant la recopie des poids Ollama** : `~/ollama/data` est incomplet, le modèle
+  sera simplement retiré par l'API au prochain passage.
+- **ComfyUI toujours muet après les 15 minutes d'attente** : `docker logs comfyui-nvidia`. Le
+  premier démarrage compile/installe `comfy_kitchen`, une erreur y est visible en clair.
+- **Disque plein en cours de téléchargement** : les fichiers partiels sont conservés ; faites
+  de la place et relancez, la reprise évite de tout refaire.
 
 ## 5. Repartir de zéro
 
