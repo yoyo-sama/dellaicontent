@@ -1,5 +1,23 @@
 # Tour de contrôle — changelog
 
+## 2026-09-10 (suite 5) — Les modèles de l'ancienne mise en page sont déplacés automatiquement
+
+Question de l'utilisateur : que fait le script des modèles déjà téléchargés mais rangés dans l'ancien dossier (`~/ai-content-studio/comfyui/basedir/models`) ? Réponse d'alors : **rien**. Il affichait deux lignes invitant à faire le `mv` à la main — et seulement dans la branche de migration, donc uniquement si le conteneur hérité était encore présent avec le label compose du dépôt. Conteneur déjà supprimé, ou migration faite lors d'un passage précédent : plus aucun message, et ~150 Go retéléchargés à côté de modèles parfaitement valides.
+
+Nouvelle fonction `migrate_legacy_models`, appelée juste avant l'étape de téléchargement, quand le dossier de destination est définitivement résolu (il peut être celui d'une stack voisine, pas forcément celui qu'on vient de créer) :
+
+- déplacement **fichier par fichier** — `mv dossier/*` échouerait sur un sous-dossier présent des deux côtés, `loras/` typiquement ;
+- `mv -n` : jamais d'écrasement d'un fichier déjà à destination ;
+- déplacement, pas copie : même système de fichiers, donc instantané, et l'ancien dossier ne reste pas à occuper 150 Go ;
+- détection indépendante de l'état du conteneur : le dossier hérité est cherché à chaque exécution ;
+- si le dossier hérité appartient à root (le cadenas), le `mv` échoue proprement, le nombre de fichiers laissés est affiché et la commande `chown` exacte est donnée — le script ne fait jamais de `sudo` à votre place.
+
+### Vérification
+
+Simulation d'installation complète avec un faux dossier hérité peuplé de fichiers creux (`truncate`) aux tailles exactes de `scripts/models.txt` : `moved: 3   left behind: 0`, puis `SKIP (already present, size matches)` sur les modèles déplacés et téléchargement du seul fichier dont la taille ne correspondait pas. Récapitulatif final : 3 présents / 17 téléchargés. Test identique sur le fork x86 (1 fichier). Les fichiers hors `.safetensors` et les sous-dossiers imbriqués (`loras/H3/`) sont déplacés correctement.
+
+`docs/TROUBLESHOOTING.md` : l'étape 3 de la procédure de réinstallation ne demande plus de déplacer quoi que ce soit — elle montre la sortie attendue et ne garde d'action manuelle que pour le cas `left behind` non nul.
+
 ## 2026-09-10 (suite 4) — Plus aucun français dans les scripts + dépannage mis en avant sur la page d'accueil
 
 Deux manques signalés par l'utilisateur, tous deux exacts.

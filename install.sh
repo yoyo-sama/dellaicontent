@@ -141,6 +141,35 @@ resolve_comfy_paths() {   # $1=container
   fi
 }
 
+# Models downloaded by the OLD layout live inside the repo ($REPO_ROOT/comfyui/basedir),
+# where the current ComfyUI does not read them. Moving them is instant (same filesystem) and
+# saves re-downloading ~150 GB. Merged file by file: the destination may already hold some of
+# them, and 'mv dir/*' would choke on a sub-folder that exists on both sides. 'mv -n' never
+# overwrites. The legacy folder is often owned by root (created by dockerd): in that case the
+# move fails and we print the command to run rather than calling sudo ourselves.
+migrate_legacy_models() {
+  local legacy="$REPO_ROOT/comfyui/basedir/models" f rel moved=0 failed=0
+  local files=()
+  [ -d "$legacy" ] || return 0
+  [ "$legacy" = "$COMFY_MODELS_DIR" ] && return 0
+  while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$legacy" -type f -print0 2>/dev/null)
+  [ "${#files[@]}" -gt 0 ] || return 0
+  echo "${#files[@]} file(s) found in the legacy model folder ($legacy)."
+  echo "Moving them to $COMFY_MODELS_DIR — same filesystem, instant, and avoids downloading them again."
+  for f in "${files[@]}"; do
+    rel="${f#"$legacy"/}"
+    mkdir -p "$COMFY_MODELS_DIR/$(dirname "$rel")" 2>/dev/null
+    if mv -n "$f" "$COMFY_MODELS_DIR/$rel" 2>/dev/null; then moved=$((moved + 1)); else failed=$((failed + 1)); fi
+  done
+  echo "  moved: $moved   left behind: $failed"
+  if [ "$failed" -gt 0 ]; then
+    warn "$failed file(s) could not be moved — the legacy folder is probably owned by root."
+    echo "  Take ownership, then run this script again (it will finish the move):"
+    echo "    sudo chown -R $(id -u):$(id -g) \"$REPO_ROOT/comfyui\""
+    echo "  Without this, those models will be downloaded a second time."
+  fi
+}
+
 # Deploys the ComfyUI userscripts (including the comfy_kitchen installer) into the folder
 # given as argument and returns how many files were copied. These scripts only run when the
 # container STARTS: on a stack we create, call this before 'up -d'.
@@ -249,8 +278,8 @@ if curl -sf http://localhost:8188/system_stats >/dev/null 2>&1; then
         warn "ComfyUI inherited from the old layout — migrating to $COMFY_DIR."
         docker rm -f "$COMFY_CONTAINER" >/dev/null 2>&1 || true
         if [ -d "$REPO_ROOT/comfyui/basedir/models" ]; then
-          echo "  Old model folder left untouched: $REPO_ROOT/comfyui/basedir/models"
-          echo "  Move its content to $COMFY_DIR/basedir/models to avoid downloading again."
+          echo "  Legacy model folder detected: $REPO_ROOT/comfyui/basedir/models"
+          echo "  Its files are moved to the new stack at step 5/7, not downloaded again."
         fi
         create_comfy_stack
         COMFY_STATUS="migrated to $COMFY_DIR ($COMFY_CONTAINER)"
@@ -388,6 +417,7 @@ FAILED_DL=()
 MISSING_MANUAL=()
 
 mkdir -p "$COMFY_MODELS_DIR" 2>/dev/null || true
+migrate_legacy_models
 if [ ! -w "$COMFY_MODELS_DIR" ]; then
   warn "model folder is not writable — downloads skipped: $COMFY_MODELS_DIR"
   echo "  Usual cause: folder created by Docker as root (padlock in the file manager)."
