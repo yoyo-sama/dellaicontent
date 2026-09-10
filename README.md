@@ -52,7 +52,7 @@ across two consecutive runs):
    several minutes to install the userscripts), then displays a final summary (service
    status, actual locations, models, health checks).
 
-The script's output is in English; its code comments stay in French.
+The script's output and code comments are in English.
 
 **`HF_TOKEN` (Hugging Face token, optional but required for LTX 2.5)**: the 4 LTX 2.5 model
 files come from a **"gated"** (access-restricted) Hugging Face repository — an anonymous

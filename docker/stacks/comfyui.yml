@@ -1,10 +1,10 @@
-# Stack ComfyUI — déployée par install.sh dans ~/comfyui-spark/compose.yaml.
-# Décalque de la stack GB10 de référence : ces variables ne sont PAS cosmétiques.
-#  - sans BASE_DIRECTORY, ComfyUI ignore /basedir et cherche ses modèles dans
-#    /comfy/mnt/ComfyUI/models — les modèles téléchargés par install.sh sont alors invisibles ;
-#  - sans --disable-pinned-memory / --reserve-vram 8, ComfyUI se fait sortir sur la
-#    mémoire unifiée du GB10 en cours de job ;
-#  - WANTED_UID/GID donnent les fichiers générés à l'utilisateur (sinon dossiers root).
+# ComfyUI stack — deployed by install.sh into ~/comfyui-spark/compose.yaml.
+# Traced from the reference GB10 stack: these variables are NOT cosmetic.
+#  - without BASE_DIRECTORY, ComfyUI ignores /basedir and looks for its models in
+#    /comfy/mnt/ComfyUI/models — the models install.sh downloads are then invisible;
+#  - without --disable-pinned-memory / --reserve-vram 8, ComfyUI gets killed on the GB10
+#    unified memory in the middle of a job;
+#  - WANTED_UID/GID give the generated files to the user (otherwise root-owned folders).
 services:
   comfyui-nvidia:
     image: mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest
@@ -17,7 +17,7 @@ services:
       - ./basedir:/basedir
       - /etc/localtime:/etc/localtime:ro
     environment:
-      WANTED_UID: "${WANTED_UID:-1000}"   # valeurs réelles écrites par install.sh dans le .env de la stack
+      WANTED_UID: "${WANTED_UID:-1000}"   # real values written by install.sh into the stack .env
       WANTED_GID: "${WANTED_GID:-1000}"
       BASE_DIRECTORY: /basedir
       USE_NEW_MANAGER: "true"
@@ -28,9 +28,9 @@ services:
       USE_UV: "true"
       FORCE_REINSTALL: "false"
       CUDA_HOME: /usr/local/cuda
-      CUDA_CACHE_MAXSIZE: "4294967296"   # 4 Go de cache noyau = ~3x sur les reruns
-      NCCL_P2P_DISABLE: "1"              # GPU unique, NCCL inutile
-      HF_TOKEN: ${HF_TOKEN:-}            # jeton Hugging Face : jamais en dur ici
+      CUDA_CACHE_MAXSIZE: "4294967296"   # 4 GB kernel cache = ~3x speedup on reruns
+      NCCL_P2P_DISABLE: "1"              # single GPU, NCCL not needed
+      HF_TOKEN: ${HF_TOKEN:-}            # Hugging Face token: never hardcoded here
       HF_HUB_DISABLE_TELEMETRY: "true"
     ulimits:
       memlock: -1

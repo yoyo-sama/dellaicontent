@@ -51,7 +51,7 @@ testé sur deux exécutions consécutives) :
    plusieurs minutes d'installation des userscripts), puis affiche un récapitulatif final
    (statut des services, emplacements réels, modèles, health-checks).
 
-La sortie du script est en anglais ; ses commentaires restent en français.
+La sortie du script et ses commentaires de code sont en anglais.
 
 **`HF_TOKEN` (jeton Hugging Face, optionnel mais nécessaire pour LTX 2.5)** : les 4 fichiers
 de modèle LTX 2.5 proviennent d'un dépôt Hugging Face **"gated"** (accès restreint) — un

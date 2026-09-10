@@ -1,5 +1,15 @@
 # Tour de contrôle — changelog
 
+## 2026-09-10 (suite) — Commentaires des scripts de déploiement en anglais
+
+Suite du passage de la sortie terminal en anglais (v1.0.7) : les commentaires du code de déploiement le sont aussi désormais, la machine cible pouvant être administrée par quelqu'un qui ne lit pas le français. Traduits : `install.sh` (81 lignes de commentaire), `docker/stacks/comfyui.yml`, `docker/stacks/ollama.yml`, `docker-compose.yml`, `nginx.conf`, et le bloc `CXXFLAGS=-std=c++20` de `docker/userscripts/15-comfy_kitchen-DGX_Spark.sh` (le seul commentaire francophone de ce userscript, celui qui explique pourquoi le standard C++ doit être forcé).
+
+Le fond est conservé mot pour mot : ces commentaires portent les raisons des choix (pourquoi `BASE_DIRECTORY` n'est pas cosmétique, pourquoi les dossiers sont créés avant les conteneurs, pourquoi `sudo -n` et jamais `sudo` tout court, pourquoi `/api/pull` est revérifié). Aucune ligne de code touchée.
+
+Le reste du dépôt — `AGENTS.md`, `docs/`, README, changelog, commentaires de `index.html`/`canvas.html`/`js/` — reste en français : c'est de la documentation de projet, pas de l'outillage de déploiement. Les mentions « commentaires en français » des README sont corrigées en conséquence.
+
+Vérification : `bash -n` sur les scripts, `docker compose config -q` sur les trois fichiers compose, `nginx -t` dans le conteneur en service (le fichier y est monté en lecture seule, c'est donc la config réellement servie qui est validée), et exécution réelle d'`install.sh` — tout réutilisé, health-checks 200.
+
 ## 2026-09-10 — documentation — `docs/TROUBLESHOOTING.md`
 
 Guide de dépannage installation/déploiement, issu du diagnostic de la machine neuve : table symptôme → cause (les deux erreurs navigateur `JSON.parse` / `NetworkError` et ce qu'elles signifient réellement, modèles invisibles, dossier cadenassé, Ollama natif, port occupé), diagnostic en trois commandes **à travers le proxy nginx** (c'est ce que fait le navigateur, tester `:8188` en direct masque le vrai problème), réparation d'une installation en ancienne mise en page, et remise à zéro à deux niveaux.

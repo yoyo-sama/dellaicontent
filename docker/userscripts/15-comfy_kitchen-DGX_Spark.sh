@@ -142,12 +142,11 @@ fi
 
 echo "${PIP3_CMD} nanobind" > $tdd/build.cmd
 
-# CXXFLAGS/CFLAGS=-std=c++20 : torch 2.14 utilise des clauses `requires` (C++20,
-# ex. at::symint::sizes<T> dans ATen/ExpandUtils.h) dans ses headers publics ;
-# sans forcer ce standard, la compilation échoue avec
-# "error: 'sizes' is not a member of 'at::symint'" (comfy_kitchen ne fixe pas
-# lui-même son standard C++, il hérite du défaut du compilateur). Diagnostiqué
-# et corrigé le 2026-09-02.
+# CXXFLAGS/CFLAGS=-std=c++20: torch 2.14 uses `requires` clauses (C++20, e.g.
+# at::symint::sizes<T> in ATen/ExpandUtils.h) in its public headers; without forcing that
+# standard the build fails with "error: 'sizes' is not a member of 'at::symint'"
+# (comfy_kitchen does not set its own C++ standard, it inherits the compiler default).
+# Diagnosed and fixed on 2026-09-02.
 CMD="EXT_PARALLEL=$ext_parallel NVCC_APPEND_FLAGS=\"--threads $num_threads\" MAX_JOBS=$numproc CXXFLAGS=\"-std=c++20\" CFLAGS=\"-std=c++20\" ${PIP3_CMD} comfy_kitchen --no-build-isolation git+https://github.com/Comfy-Org/comfy-kitchen.git@main#egg=comfy_kitchen"
 echo "CMD: \"${CMD}\""
 echo $CMD >> $tdd/build.cmd; chmod +x $tdd/build.cmd

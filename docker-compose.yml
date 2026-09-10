@@ -1,13 +1,13 @@
-# Stack applicative uniquement (web + updater). ComfyUI et Ollama vivent dans leurs
-# propres stacks, à la racine du home : ~/comfyui-spark et ~/ollama (déployées par
-# install.sh depuis docker/stacks/). Un service ne se déploie jamais deux fois : ici
-# nginx les atteint en 127.0.0.1 puisqu'il tourne en network_mode host.
+# Application stack only (web + updater). ComfyUI and Ollama live in their own stacks at
+# the root of the home directory: ~/comfyui-spark and ~/ollama (deployed by install.sh from
+# docker/stacks/). A service is never deployed twice: nginx reaches both on 127.0.0.1 since
+# it runs in host network mode.
 services:
   ai-content-studio:
     image: nginx:alpine
     container_name: ai-content-studio-web
-    # network_mode: host — nginx écoute sur :8090 (interface publique de l'hôte)
-    # et atteint ComfyUI (127.0.0.1:8188) + Ollama (127.0.0.1:11434) en local.
+    # network_mode: host — nginx listens on :8090 (the host's public interface) and
+    # reaches ComfyUI (127.0.0.1:8188) + Ollama (127.0.0.1:11434) locally.
     network_mode: host
     volumes:
       - ./:/usr/share/nginx/html:ro
@@ -23,7 +23,7 @@ services:
       - LORAS_DIR=/loras
     volumes:
       - ./:/repo:rw
-      # Chemin réel écrit dans .env par install.sh ; le défaut suppose la stack
-      # ComfyUI voisine (~/comfyui-spark) du repo (~/ai-content-studio).
+      # Real path written into .env by install.sh; the default assumes the ComfyUI stack
+      # (~/comfyui-spark) sits next to the repo (~/ai-content-studio).
       - ${COMFY_LORAS_DIR:-../comfyui-spark/basedir/models/loras}:/loras:rw
     restart: unless-stopped
