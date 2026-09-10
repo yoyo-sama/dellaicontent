@@ -1,5 +1,16 @@
 # Tour de contrôle — changelog
 
+## 2026-09-10 — documentation — `docs/TROUBLESHOOTING.md`
+
+Guide de dépannage installation/déploiement, issu du diagnostic de la machine neuve : table symptôme → cause (les deux erreurs navigateur `JSON.parse` / `NetworkError` et ce qu'elles signifient réellement, modèles invisibles, dossier cadenassé, Ollama natif, port occupé), diagnostic en trois commandes **à travers le proxy nginx** (c'est ce que fait le navigateur, tester `:8188` en direct masque le vrai problème), réparation d'une installation en ancienne mise en page, et remise à zéro à deux niveaux.
+
+Toutes les commandes non destructives du guide ont été exécutées telles quelles sur ce GB10 avant d'être écrites, et les 17 blocs passent `bash -n`. Deux corrections issues de ces essais :
+
+- Le contrôle d'intégrité des modèles utilise la **même tolérance de 1 %** qu'`install.sh`, et non l'égalité stricte : sur cette machine, deux fichiers en service depuis des semaines (`gemma4-12b-with-proj-ltx-2.5`, `minimax_h3_fl2va_pruned`) diffèrent de quelques kilo-octets des tailles de `scripts/models.txt` — révisions Hugging Face republiées. En strict, le guide aurait fait retélécharger 28 Go de modèles parfaitement valides. La limite est écrite noir sur blanc dans le guide : un fichier tronqué à moins de 1 % reste indétectable par la taille, seul un rendu réel inspecté fait foi.
+- La remise à zéro ciblée ne supprime plus une liste de noms de conteneurs en dur mais **filtre sur le label compose** du dépôt : sur une machine où ComfyUI appartient à une stack voisine (cas de la machine de référence, `comfyui-nvidia` géré par `~/comfyui-spark/compose.yaml`), la version en dur aurait détruit un service qui n'a rien à voir avec l'installation ratée.
+
+Guide référencé depuis les deux README et `AGENTS.md`.
+
 ## 2026-09-09 (suite) — v1.0.8 — Service installé mais arrêté : redémarré, pas doublé
 
 `install.sh` ne testait que « le service répond-il ? ». Répondre non ne veut pas dire absent : le conteneur peut exister à l'arrêt, ou Ollama être installé nativement et son service systemd stoppé. Dans les deux cas la version précédente créait une stack — conflit de nom de conteneur dans le premier cas (les noms sont uniques), deux Ollama qui se disputent le port 11434 au prochain boot dans le second.

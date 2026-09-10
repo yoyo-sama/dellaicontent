@@ -54,4 +54,4 @@ La validation structurelle (nœuds dans `/object_info`, modèles sur disque, lie
 
 ## Historique du projet
 
-`TOUR-DE-CONTROLE-CHANGELOG.md` (racine) journalise les orchestrations passées (lots, décisions, fichiers touchés) ; `docs/NOUVEAUX-MODELES-LOT1.md` détaille la qualification des modèles Krea 2/LTX 2.5/Minimax H3. Ce sont des comptes-rendus historiques (à lire pour le contexte), pas une doc d'état courant — `docs/ARCHITECTURE.md`, `docs/LESSONS.md`, `docs/TESTING.md`, ce fichier et les README sont les sources à jour.
+`TOUR-DE-CONTROLE-CHANGELOG.md` (racine) journalise les orchestrations passées (lots, décisions, fichiers touchés) ; `docs/NOUVEAUX-MODELES-LOT1.md` détaille la qualification des modèles Krea 2/LTX 2.5/Minimax H3. Ce sont des comptes-rendus historiques (à lire pour le contexte), pas une doc d'état courant — `docs/ARCHITECTURE.md`, `docs/LESSONS.md`, `docs/TESTING.md`, `docs/TROUBLESHOOTING.md` (dépannage installation/déploiement : erreurs `JSON.parse`/`NetworkError`, modèles invisibles, Ollama natif, remise à zéro), ce fichier et les README sont les sources à jour.

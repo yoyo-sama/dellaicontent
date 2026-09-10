@@ -278,6 +278,7 @@ workflows/
   README.md                 ← détail des workflows
 tools/convert.py            ← convertisseur UI→API (voir docs/TESTING.md)
 docs/
+  TROUBLESHOOTING.md        ← dépannage installation/déploiement : symptômes, diagnostic, réparation, remise à zéro
   ARCHITECTURE.md           ← anatomie de l'app et des formats
   LESSONS.md                ← pièges & patterns validés (LIRE AVANT DE MODIFIER)
   TESTING.md                ← méthode de validation (rendus réels, extraction frames/audio)
