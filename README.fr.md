@@ -23,7 +23,7 @@ cd ~/ai-content-studio
 ```
 
 > **Quelque chose ne marche pas, ou poste sur lequel une installation a déjà été tentée ?**
-> → **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — table symptôme → cause, diagnostic
+> → **[docs/TROUBLESHOOTING.fr.md](docs/TROUBLESHOOTING.fr.md)** — table symptôme → cause, diagnostic
 > en trois commandes, procédure de réinstallation pas à pas, et remise à zéro.
 
 `install.sh` fait tout en une commande, de façon **idempotente** (relançable sans risque,
@@ -282,7 +282,8 @@ workflows/
   README.md                 ← détail des workflows
 tools/convert.py            ← convertisseur UI→API (voir docs/TESTING.md)
 docs/
-  TROUBLESHOOTING.md        ← dépannage installation/déploiement : symptômes, diagnostic, réparation, remise à zéro
+  TROUBLESHOOTING.md        ← dépannage installation/déploiement (EN) : symptômes, diagnostic, réparation, remise à zéro
+  TROUBLESHOOTING.fr.md     ← même guide en français
   ARCHITECTURE.md           ← anatomie de l'app et des formats
   LESSONS.md                ← pièges & patterns validés (LIRE AVANT DE MODIFIER)
   TESTING.md                ← méthode de validation (rendus réels, extraction frames/audio)

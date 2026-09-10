@@ -1,5 +1,19 @@
 # Tour de contrôle — changelog
 
+## 2026-09-10 (suite 6) — Guide de dépannage en anglais + réponse sur l'ordre de création du dossier de destination
+
+**Version anglaise.** `docs/TROUBLESHOOTING.md` est désormais en anglais (la langue par défaut du dépôt pour tout ce qui est opérationnel, comme les scripts et `README.md`), et la version française devient `docs/TROUBLESHOOTING.fr.md` — même convention que `README.md` / `README.fr.md`. Les liens sont ajustés partout : `README.md` pointe sur la version anglaise, `README.fr.md` sur la française, chaque arborescence liste les deux, et `AGENTS.md` mentionne les deux. Contrôle d'ancres sur les quatre fichiers : aucun renvoi cassé ; les 21 (GB10) et 23 (x86) blocs de commandes passent `bash -n`.
+
+**Question posée : que se passe-t-il si le dossier de destination n'existe pas encore, ComfyUI n'ayant pas été créé par le script ?** Vérifié par simulation, avec un dossier de modèles hérité et le port 8188 rendu occupé pour que ComfyUI soit `skipped` — donc jamais créé. Le déplacement a lieu quand même et correctement, parce que la destination est garantie par trois niveaux :
+
+1. `create_comfy_stack` fait `mkdir -p "$COMFY_DIR/basedir/models"` quand elle s'exécute ;
+2. sinon, `mkdir -p "$COMFY_MODELS_DIR"` est fait juste avant l'appel à `migrate_legacy_models` ;
+3. et pour chaque fichier déplacé, `mkdir -p` recrée son sous-dossier de destination.
+
+Sortie du test : `moved: 1   left behind: 0`, puis `SKIP (already present, size matches)` sur le modèle déplacé et `- ComfyUI : skipped (port 8188 busy)` au récapitulatif. Les modèles atterrissent dans `~/comfyui-spark/basedir/models`, c'est-à-dire exactement là où la stack ComfyUI ira les lire quand elle sera créée au passage suivant. Rien n'est perdu, rien n'est retéléchargé.
+
+Corrigé au passage : l'intro de la section « réinstaller » disait encore « **ce qu'il ne fait pas** : déplacer les modèles » — faux depuis le correctif précédent.
+
 ## 2026-09-10 (suite 5) — Les modèles de l'ancienne mise en page sont déplacés automatiquement
 
 Question de l'utilisateur : que fait le script des modèles déjà téléchargés mais rangés dans l'ancien dossier (`~/ai-content-studio/comfyui/basedir/models`) ? Réponse d'alors : **rien**. Il affichait deux lignes invitant à faire le `mv` à la main — et seulement dans la branche de migration, donc uniquement si le conteneur hérité était encore présent avec le label compose du dépôt. Conteneur déjà supprimé, ou migration faite lors d'un passage précédent : plus aucun message, et ~150 Go retéléchargés à côté de modèles parfaitement valides.

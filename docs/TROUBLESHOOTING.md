@@ -1,328 +1,328 @@
-# Dépannage — installation et déploiement (GB10)
+# Troubleshooting — install and deployment (GB10)
 
-Ce guide couvre l'installation et l'exécution de la stack, pas la qualité des rendus
-(voir `docs/TESTING.md`) ni les pièges de pipeline (voir `docs/LESSONS.md`).
+*Version française : [TROUBLESHOOTING.fr.md](TROUBLESHOOTING.fr.md).*
 
-Toutes les commandes ci-dessous ont été exécutées telles quelles sur un GB10 en service.
-Aucune n'installe ni ne supprime quoi que ce soit sans que ce soit dit explicitement.
+This guide covers installing and running the stack, not render quality (see `docs/TESTING.md`)
+nor pipeline pitfalls (see `docs/LESSONS.md`).
 
-## Symptômes fréquents et leur cause réelle
+Every command below was run as is on a GB10 in service. None installs or deletes anything
+unless explicitly stated.
 
-| Ce que vous voyez | Cause | Section |
+## Common symptoms and their real cause
+
+| What you see | Cause | Section |
 |---|---|---|
-| `Error: JSON.parse: unexpected character at line 1 column 1` | Le corps de la réponse n'est pas du JSON mais la page d'erreur **HTML** de nginx (502/504) : ComfyUI ou Ollama ne répond pas derrière le reverse-proxy | [1](#1-diagnostic-en-trois-commandes) |
-| `Enhancement failed: NetworkError when attempting to fetch resource` | La requête vers `/ollama/api/chat` n'a pas abouti (connexion refusée ou coupée) | [1](#1-diagnostic-en-trois-commandes) |
-| ComfyUI tourne mais ne voit aucun modèle | Les modèles ont été téléchargés dans un dossier que ce ComfyUI-là ne lit pas | [2](#2-comfyui-ne-voit-pas-les-modèles) |
-| Un cadenas sur `comfyui/` dans le gestionnaire de fichiers | Dossier créé par dockerd en `root:root` (bind-mount dont la source n'existait pas) — tous les téléchargements de modèles échouent ensuite en « permission denied » | [2](#2-comfyui-ne-voit-pas-les-modèles) |
-| `skipped (native Ollama installed but not started)` | Ollama est installé hors Docker et son service est arrêté | [3](#3-ollama) |
-| `skipped (port 11434 busy)` / `port is already allocated` | Un autre processus tient le port | [3](#3-ollama) |
-| Vous réinstallez sur un poste où une version précédente du script a déjà tourné | Migration de l'ancienne mise en page vers les stacks voisines | [4](#4-réinstaller-sur-un-poste-où-une-version-précédente-du-script-a-déjà-tourné) |
+| `Error: JSON.parse: unexpected character at line 1 column 1` | The response body is not JSON but nginx's **HTML** error page (502/504): ComfyUI or Ollama is not answering behind the reverse proxy | [1](#1-diagnosis-in-three-commands) |
+| `Enhancement failed: NetworkError when attempting to fetch resource` | The request to `/ollama/api/chat` never completed (connection refused or dropped) | [1](#1-diagnosis-in-three-commands) |
+| ComfyUI runs but sees no model | The models were downloaded into a folder this particular ComfyUI does not read | [2](#2-comfyui-does-not-see-the-models) |
+| A padlock on `comfyui/` in the file manager | Folder created by dockerd as `root:root` (bind-mount whose source did not exist) — every model download then fails with "permission denied" | [2](#2-comfyui-does-not-see-the-models) |
+| `skipped (native Ollama installed but not started)` | Ollama is installed outside Docker and its service is stopped | [3](#3-ollama) |
+| `skipped (port 11434 busy)` / `port is already allocated` | Another process holds the port | [3](#3-ollama) |
+| You are reinstalling on a machine where a previous version of the script already ran | Migration from the old layout to the sibling stacks | [4](#4-reinstalling-on-a-machine-where-a-previous-version-of-the-script-already-ran) |
 
-**La langue du prompt n'est jamais en cause.** Un `JSON.parse` qui échoue « line 1 column 1 »
-signifie que le premier caractère reçu n'est pas du JSON (typiquement le `<` de `<html>`) :
-l'erreur précède toute lecture du texte saisi.
+**The prompt language is never the cause.** A `JSON.parse` failing at "line 1 column 1" means
+the very first character received is not JSON (typically the `<` of `<html>`): the error
+happens before any of the text you typed is even read.
 
-## 1. Diagnostic en trois commandes
+## 1. Diagnosis in three commands
 
-L'application n'expose qu'un port (8090) et atteint ComfyUI et Ollama par le reverse-proxy
-nginx. C'est donc à travers ce proxy qu'il faut tester, exactement comme le navigateur :
+The application exposes a single port (8090) and reaches ComfyUI and Ollama through the nginx
+reverse proxy. So test through that proxy, exactly like the browser does:
 
 ```bash
 for u in /comfy/system_stats /ollama/api/version /update/status; do printf '%s -> ' "$u"; curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:8090$u"; done
 ```
 
-Trois `200` = les services répondent. Un `502` ou `504` sur `/comfy/` ou `/ollama/` est
-exactement ce qui produit l'erreur `JSON.parse` côté navigateur. Ensuite :
+Three `200` means the services answer. A `502` or `504` on `/comfy/` or `/ollama/` is exactly
+what produces the `JSON.parse` error in the browser. Then:
 
 ```bash
 docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' | grep -iE 'comfy|ollama|content-studio'
 ```
 
-Un conteneur `Exited` explique tout : `install.sh` le redémarre (il ne crée jamais de
-doublon), il suffit de le relancer. Enfin, les logs du service muet :
+An `Exited` container explains everything: `install.sh` restarts it (it never creates a
+duplicate), just run it again. Finally, the logs of whichever service is silent:
 
 ```bash
 docker logs --tail 50 comfyui-nvidia
 ```
 
-Le tout premier démarrage de ComfyUI installe `comfy_kitchen` et prend plusieurs minutes —
-un `502` pendant ce temps est normal, `install.sh` attend jusqu'à 15 minutes.
+ComfyUI's very first start installs `comfy_kitchen` and takes several minutes — a `502` during
+that window is normal, and `install.sh` waits up to 15 minutes for it.
 
-## 2. ComfyUI ne voit pas les modèles
+## 2. ComfyUI does not see the models
 
-Le piège classique : les modèles sont sur le disque, mais pas là où ce ComfyUI-là les lit.
-Les montages du conteneur font foi, pas le chemin qu'on croit avoir configuré :
+The classic trap: the models are on disk, but not where this particular ComfyUI reads them.
+The container's mounts are the source of truth, not the path you think you configured:
 
 ```bash
 docker inspect comfyui-nvidia --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
 ```
 
-Attendu : `<home>/comfyui-spark/basedir -> /basedir`. Puis la vérité côté ComfyUI — ce qu'il
-propose réellement dans ses menus :
+Expected: `<home>/comfyui-spark/basedir -> /basedir`. Then the truth on the ComfyUI side —
+what it actually offers in its menus:
 
 ```bash
 curl -s http://localhost:8188/object_info/UNETLoader | grep -o 'minimax_h3[^"]*' | head -3
 ```
 
-Une réponse vide alors que les fichiers existent signifie presque toujours que
-`BASE_DIRECTORY: /basedir` manque dans la stack ComfyUI : sans cette variable, l'image
-`mmartial` ignore `/basedir` et cherche ses modèles dans `/comfy/mnt/ComfyUI/models`.
-La stack de référence est `docker/stacks/comfyui.yml` — comparez-la à
-`~/comfyui-spark/compose.yaml`.
+An empty answer while the files do exist almost always means `BASE_DIRECTORY: /basedir` is
+missing from the ComfyUI stack: without that variable, the `mmartial` image ignores `/basedir`
+and looks for its models in `/comfy/mnt/ComfyUI/models`. The reference stack is
+`docker/stacks/comfyui.yml` — compare it with `~/comfyui-spark/compose.yaml`.
 
-### Contrôler l'intégrité des modèles téléchargés
+### Checking the integrity of downloaded models
 
 ```bash
-M=~/comfyui-spark/basedir/models; while IFS='|' read -r d f s u; do case "$d" in ''|\#*) continue;; esac; case "$s" in ''|*[!0-9]*) continue;; esac; a=$(stat -c%s "$M/$d/$f" 2>/dev/null || echo 0); t=$((s/100)); [ "$t" -lt 1 ] && t=1; if [ "$a" -eq 0 ]; then r=ABSENT; elif [ "$a" -ge $((s-t)) ] && [ "$a" -le $((s+t)) ]; then r=OK; else r=INCOMPLET; fi; printf '%-10s %s\n' "$r" "$d/$f"; done < ~/ai-content-studio/scripts/models.txt
+M=~/comfyui-spark/basedir/models; while IFS='|' read -r d f s u; do case "$d" in ''|\#*) continue;; esac; case "$s" in ''|*[!0-9]*) continue;; esac; a=$(stat -c%s "$M/$d/$f" 2>/dev/null || echo 0); t=$((s/100)); [ "$t" -lt 1 ] && t=1; if [ "$a" -eq 0 ]; then r=MISSING; elif [ "$a" -ge $((s-t)) ] && [ "$a" -le $((s+t)) ]; then r=OK; else r=INCOMPLETE; fi; printf '%-11s %s\n' "$r" "$d/$f"; done < ~/ai-content-studio/scripts/models.txt
 ```
 
-`ABSENT` et `INCOMPLET` se corrigent en relançant `install.sh` (`curl -C -` reprend un
-téléchargement interrompu).
+`MISSING` and `INCOMPLETE` are fixed by running `install.sh` again (`curl -C -` resumes an
+interrupted download).
 
-**Limite assumée de ce contrôle** : la tolérance est de 1 %, la même que celle d'`install.sh`,
-et elle est nécessaire — sur la machine de référence, deux fichiers en service depuis des
-semaines diffèrent de quelques kilo-octets des tailles de `scripts/models.txt` (révisions
-Hugging Face republiées). Un fichier tronqué à moins de 1 % passerait donc pour bon. La seule
-preuve qui vaut reste un rendu réel inspecté (`docs/TESTING.md`) — un job ComfyUI « success »
-ne prouve rien.
+**Known limit of this check**: the tolerance is 1%, the same as `install.sh` uses, and it is
+necessary — on the reference machine two files that have been in service for weeks differ by a
+few kilobytes from the sizes in `scripts/models.txt` (republished Hugging Face revisions). A
+file truncated by less than 1% would therefore pass as good. The only proof that counts
+remains an actual render, inspected (`docs/TESTING.md`) — a ComfyUI job reporting "success"
+proves nothing.
 
 ## 3. Ollama
 
-`install.sh` détecte Ollama **par son service** (`:11434`), pas par un conteneur : une
-installation native (systemd) est réutilisée telle quelle, et le modèle `gemma4:e4b` est tiré
-par l'API HTTP. Vérification et tirage manuel, valables dans les deux cas :
+`install.sh` detects Ollama **by its service** (`:11434`), not by a container: a native
+(systemd) install is reused as is, and the `gemma4:e4b` model is pulled through the HTTP API.
+Check and manual pull, valid in both cases:
 
 ```bash
 curl -s http://localhost:11434/api/tags | grep -o '"gemma4:e4b"' || curl -X POST http://localhost:11434/api/pull -d '{"model":"gemma4:e4b"}'
 ```
 
-Si le récapitulatif affiche `skipped (native Ollama installed but not started)`, c'est qu'un
-Ollama natif existe mais ne répond pas et que le script n'a pas pu le démarrer (pas de sudo
-sans mot de passe). Aucun conteneur n'est créé dans ce cas — délibérément, pour ne pas faire
-cohabiter deux Ollama sur le port 11434 :
+If the summary shows `skipped (native Ollama installed but not started)`, a native Ollama
+exists but does not answer and the script could not start it (no passwordless sudo). No
+container is created in that case — deliberately, so that two Ollama instances never fight
+over port 11434:
 
 ```bash
 sudo systemctl enable --now ollama
 ```
 
-Puis relancez `install.sh`. Si le port est tenu par autre chose, `sudo ss -ltnp 'sport = :11434'`
-dit par qui.
+Then run `install.sh` again. If the port is held by something else,
+`sudo ss -ltnp 'sport = :11434'` tells you by what.
 
-## 4. Réinstaller sur un poste où une version précédente du script a déjà tourné
+## 4. Reinstalling on a machine where a previous version of the script already ran
 
-C'est le cas le plus fréquent : une première installation a été tentée avant la v1.0.7, quand
-`docker-compose.yml` déclarait aussi `comfyui` et `ollama` avec leurs volumes sous
-`~/ai-content-studio/comfyui/`. Ce ComfyUI-là n'avait pas `BASE_DIRECTORY` et ne lisait donc
-pas le dossier où le script téléchargeait les modèles.
+This is the most frequent case: a first install was attempted before v1.0.7, when
+`docker-compose.yml` also declared `comfyui` and `ollama` with their volumes under
+`~/ai-content-studio/comfyui/`. That ComfyUI had no `BASE_DIRECTORY` and therefore did not read
+the folder the script downloaded models into.
 
-**Ce que le script fait tout seul** : il reconnaît les conteneurs créés par le
-`docker-compose.yml` du dépôt (label compose), les supprime, recrée ComfyUI dans
-`~/comfyui-spark` et Ollama dans `~/ollama`, et **recopie** les poids du volume `ollama-data`
-vers `~/ollama/data` pour éviter de retélécharger le modèle.
+**What the script does on its own**: it recognises the containers created by the repository's
+`docker-compose.yml` (compose label), removes them, recreates ComfyUI in `~/comfyui-spark` and
+Ollama in `~/ollama`, and **copies** the weights from the `ollama-data` volume into
+`~/ollama/data` so the model is not downloaded again.
 
-**Ce qu'il ne fait pas** : déplacer les modèles ComfyUI de l'ancien dossier. Il ne supprime
-rien d'autre que les deux conteneurs hérités — l'ancien dossier reste sur le disque.
+It also moves the ComfyUI models from the old folder into the new one, before any download
+(see step 3). It deletes nothing besides the two inherited containers: the old folder, once
+emptied of its files, stays on disk.
 
-### Étape 1 — Récupérer la version courante du script
+### Step 1 — Get the current version of the script
 
 ```bash
 cd ~/ai-content-studio && git pull && cat VERSION
 ```
 
-La version doit être **≥ 1.0.8**. En dessous, vous relanceriez la version qui a produit le
-problème. Si `git pull` refuse à cause de modifications locales, `git stash` : il n'y a
-normalement rien à conserver dans ce dépôt sur un poste de déploiement.
+The version must be **≥ 1.0.8**. Below that you would be running the very version that caused
+the problem. If `git pull` refuses because of local changes, `git stash` them: there is
+normally nothing worth keeping in this repository on a deployment machine.
 
-### Étape 2 — État des lieux
+### Step 2 — Take stock
 
 ```bash
 du -sh ~/ai-content-studio/comfyui/basedir/models 2>/dev/null; du -sh ~/comfyui-spark/basedir/models 2>/dev/null; docker run --rm -v ollama-data:/v alpine sh -c 'du -sh /v; ls /v/models/manifests/registry.ollama.ai/library' 2>/dev/null; df -h /home | tail -1
 ```
 
-Quatre informations : ce que contient l'ancien dossier, ce que contient déjà le nouveau, si le
-volume Ollama hérité contient bien `gemma4`, et l'espace libre. Il faut **~150 Go** pour la
-totalité des modèles ComfyUI.
+Four pieces of information: what the old folder holds, what the new one already holds, whether
+the inherited Ollama volume really contains `gemma4`, and the free space. You need **~150 GB**
+for the full set of ComfyUI models.
 
-### Étape 3 — L'ancien dossier de modèles : rien à faire (sauf cadenas)
+### Step 3 — The old model folder: nothing to do (unless padlocked)
 
-**Le script s'en charge.** À l'étape 5/7, avant tout téléchargement, il déplace le contenu de
-`~/ai-content-studio/comfyui/basedir/models` vers le dossier réellement lu par le ComfyUI en
-service. Le déplacement est fichier par fichier (un sous-dossier présent des deux côtés ne
-bloque pas) et n'écrase jamais un fichier déjà à destination. Les modèles déplacés dont la
-taille correspond sont ensuite reconnus et **non retéléchargés** :
+**The script handles it.** At step 5/7, before any download, it moves the content of
+`~/ai-content-studio/comfyui/basedir/models` into the folder the running ComfyUI actually
+reads. The move is done file by file (a sub-folder present on both sides does not block it) and
+never overwrites a file already at the destination. Moved models whose size matches are then
+recognised and **not downloaded again**:
 
 ```
-3 file(s) found in the legacy model folder (/home/<vous>/ai-content-studio/comfyui/basedir/models).
-Moving them to /home/<vous>/comfyui-spark/basedir/models — same filesystem, instant, and avoids downloading them again.
+3 file(s) found in the legacy model folder (/home/<you>/ai-content-studio/comfyui/basedir/models).
+Moving them to /home/<you>/comfyui-spark/basedir/models — same filesystem, instant, and avoids downloading them again.
   moved: 3   left behind: 0
-SKIP (already present, size matches): /home/<vous>/comfyui-spark/basedir/models/vae/qwen_image_vae.safetensors
+SKIP (already present, size matches): /home/<you>/comfyui-spark/basedir/models/vae/qwen_image_vae.safetensors
 ```
 
-**Le seul cas où vous devez intervenir** : `left behind` non nul. L'ancien dossier a été créé
-par Docker en root (le cadenas), vous n'avez pas le droit d'y déplacer quoi que ce soit. Le
-script affiche la commande exacte ; reprenez la propriété puis relancez-le, il finira le
-déplacement :
+**The only case where you must step in**: `left behind` is not zero. The old folder was created
+by Docker as root (the padlock), so you have no right to move anything out of it. The script
+prints the exact command; take ownership then run it again and it will finish the move:
 
 ```bash
 sudo chown -R "$(id -u):$(id -g)" ~/ai-content-studio/comfyui
 ```
 
-Une fois `left behind: 0`, l'ancien dossier ne contient plus que des répertoires vides :
+Once `left behind: 0`, the old folder only holds empty directories:
 
 ```bash
 rm -rf ~/ai-content-studio/comfyui
 ```
 
-### Étape 4 — Lancer l'installation
+### Step 4 — Run the install
 
 ```bash
-cd ~/ai-content-studio && HF_TOKEN=<votre_jeton_hf> ./install.sh 2>&1 | tee ~/install-$(date +%F-%H%M).log
+cd ~/ai-content-studio && HF_TOKEN=<your_hf_token> ./install.sh 2>&1 | tee ~/install-$(date +%F-%H%M).log
 ```
 
-`HF_TOKEN` n'est pas facultatif en pratique : les 4 fichiers LTX 2.5 viennent d'un dépôt
-Hugging Face *gated* et échouent proprement sans jeton (les 16 autres se téléchargent
-normalement). Le `tee` garde une trace : la commande dure plusieurs heures, et l'essentiel des
-erreurs éventuelles défile pendant les téléchargements.
+`HF_TOKEN` is not optional in practice: the 4 LTX 2.5 files come from a *gated* Hugging Face
+repository and fail cleanly without a token (the other 16 download normally). The `tee` keeps a
+trace: the command runs for hours, and most of the errors scroll by during the downloads.
 
-Ordre des opérations, avec les durées à attendre :
+Order of operations, with the durations to expect:
 
-| Étape du script | Ce qui se passe | Durée |
+| Script step | What happens | Duration |
 |---|---|---|
-| 2/7 | Suppression des conteneurs hérités, création des deux stacks, dépôt des userscripts | < 1 min |
-| 2/7 | Recopie des poids Ollama depuis le volume `ollama-data` | quelques minutes (9,6 Go) |
-| 5/7 | Téléchargement des modèles ComfyUI manquants | plusieurs heures |
-| 6/7 | Tirage de `gemma4:e4b` si absent | quelques minutes |
-| 6/7 | Attente du premier démarrage de ComfyUI (installation de `comfy_kitchen`) | jusqu'à 15 min |
+| 2/7 | Inherited containers removed, both stacks created, userscripts deployed | < 1 min |
+| 2/7 | Ollama weights copied from the `ollama-data` volume | a few minutes (9.6 GB) |
+| 5/7 | Missing ComfyUI models downloaded | several hours |
+| 6/7 | `gemma4:e4b` pulled if missing | a few minutes |
+| 6/7 | Waiting for ComfyUI's first start (`comfy_kitchen` install) | up to 15 min |
 
-### Étape 5 — Ce que vous devez voir passer
+### Step 5 — What you should see scroll by
 
-Les lignes qui prouvent que la migration a bien eu lieu :
+The lines that prove the migration actually happened:
 
 ```
-WARNING: ComfyUI inherited from the old layout — migrating to /home/<vous>/comfyui-spark.
-Creating the ComfyUI stack in /home/<vous>/comfyui-spark.
+WARNING: ComfyUI inherited from the old layout — migrating to /home/<you>/comfyui-spark.
+Creating the ComfyUI stack in /home/<you>/comfyui-spark.
 Userscripts deployed before first start: 2 file(s)
-WARNING: Ollama inherited from the old layout — migrating to /home/<vous>/ollama.
-Copying weights from the 'ollama-data' volume into /home/<vous>/ollama/data…
-Creating the Ollama stack in /home/<vous>/ollama.
+WARNING: Ollama inherited from the old layout — migrating to /home/<you>/ollama.
+Copying weights from the 'ollama-data' volume into /home/<you>/ollama/data…
+Creating the Ollama stack in /home/<you>/ollama.
 Waiting for ComfyUI on :8188 (first start, userscripts installation)…
 ```
 
-Si vous voyez à la place `reused (comfyui-nvidia)` sans ligne de migration, c'est que le
-conteneur ne porte pas le label compose du dépôt : il a été créé à la main (`docker run`) ou
-par une autre stack. Le script ne touche jamais à un conteneur qu'il ne possède pas — dans ce
-cas, supprimez-le vous-même après avoir vérifié son origine avec l'inventaire de la
-[section 5](#inventaire-dabord--qui-possède-quoi), puis relancez.
+If instead you see `reused (comfyui-nvidia)` with no migration line, the container does not
+carry the repository's compose label: it was created by hand (`docker run`) or by another
+stack. The script never touches a container it does not own — in that case delete it yourself
+after checking where it came from with the inventory in
+[section 5](#inventory-first--who-owns-what), then run the script again.
 
-### Étape 6 — Relire le journal
+### Step 6 — Read the log back
 
 ```bash
 grep -nE "WARNING|failed|skipped|ERROR" ~/install-*.log
 ```
 
-Sur une installation saine, il ne reste que d'éventuels avertissements sur les fichiers LTX 2.5
-si `HF_TOKEN` manquait.
+On a healthy install, all that remains are possible warnings about the LTX 2.5 files if
+`HF_TOKEN` was missing.
 
-### Étape 7 — Vérifier
+### Step 7 — Verify
 
-Relancez le script : il est idempotent, et c'est le meilleur test.
+Run the script again: it is idempotent, and that is the best test.
 
 ```bash
 cd ~/ai-content-studio && ./install.sh 2>&1 | tail -25
 ```
 
-Attendu : `reused` sur les trois services, `already present (not re-downloaded) : 20`,
-`Ollama model gemma4:e4b: present`, quatre `HTTP 200`. Puis le contrôle qui compte vraiment —
-ComfyUI voit-il ses modèles :
+Expected: `reused` on all three services, `already present (not re-downloaded) : 20`,
+`Ollama model gemma4:e4b: present`, four `HTTP 200`. Then the check that really matters — does
+ComfyUI see its models:
 
 ```bash
 docker inspect comfyui-nvidia --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' && curl -s http://localhost:8188/object_info/UNETLoader | grep -o 'minimax_h3[^"]*' | head -3
 ```
 
-Enfin, dans l'application (`http://<ip>:8090`) : **✨ Enrichir (LLM)** sur un champ de prompt,
-puis une génération d'image simple (Krea 2) avant d'essayer la vidéo.
+Finally, in the application (`http://<ip>:8090`): **✨ Enhance (LLM)** on a prompt field, then a
+simple image generation (Krea 2) before trying video.
 
-### Si le script s'interrompt en cours de route
+### If the script stops midway
 
-Relancez-le, simplement. Il est idempotent à chaque étape : les téléchargements reprennent où
-ils s'étaient arrêtés (`curl -C -`), les stacks déjà créées sont réutilisées, les conteneurs
-arrêtés sont redémarrés au lieu d'être doublés. Trois cas particuliers :
+Just run it again. It is idempotent at every step: downloads resume where they stopped
+(`curl -C -`), stacks already created are reused, stopped containers are restarted instead of
+being duplicated. Three special cases:
 
-- **Coupure pendant la recopie des poids Ollama** : `~/ollama/data` est incomplet, le modèle
-  sera simplement retiré par l'API au prochain passage.
-- **ComfyUI toujours muet après les 15 minutes d'attente** : `docker logs comfyui-nvidia`. Le
-  premier démarrage compile/installe `comfy_kitchen`, une erreur y est visible en clair.
-- **Disque plein en cours de téléchargement** : les fichiers partiels sont conservés ; faites
-  de la place et relancez, la reprise évite de tout refaire.
+- **Interrupted while copying the Ollama weights**: `~/ollama/data` is incomplete, the model
+  will simply be pulled through the API on the next run.
+- **ComfyUI still silent after the 15-minute wait**: `docker logs comfyui-nvidia`. The first
+  start builds/installs `comfy_kitchen`, and any error shows there in plain text.
+- **Disk full during downloads**: partial files are kept; free some space and run again, the
+  resume avoids starting over.
 
-## 5. Repartir de zéro
+## 5. Starting from scratch
 
-### Inventaire d'abord — qui possède quoi
+### Inventory first — who owns what
 
 ```bash
 for c in $(docker ps -a --format '{{.Names}}'); do printf '%-30s %-48s %s\n' "$c" "$(docker inspect -f '{{.Config.Image}}' "$c")" "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$c")"; done
 ```
 
-La troisième colonne tranche : les conteneurs pointant sur
-`<home>/ai-content-studio/docker-compose.yml` viennent de l'installation à refaire. Une
-colonne vide = conteneur créé hors compose (`docker run`), il n'appartient à personne d'autre
-que vous. Un autre fichier = une autre stack, n'y touchez pas.
+The third column decides: containers pointing at `<home>/ai-content-studio/docker-compose.yml`
+come from the install you are redoing. An empty column means a container created outside
+compose (`docker run`), which belongs to nobody but you. A different file means another stack —
+leave it alone.
 
-### Remise à zéro ciblée (recommandée)
+### Targeted reset (recommended)
 
-Détruit l'installation, **garde les images Docker et les modèles déjà téléchargés**. Cette
-commande ne supprime que les conteneurs créés par le `docker-compose.yml` de ce dépôt — donc
-exactement ceux d'une installation ratée, y compris les `comfyui`/`ollama` de l'ancienne mise
-en page — et ne peut pas toucher une stack voisine :
+Destroys the install, **keeps the Docker images and the models already downloaded**. This
+command only removes containers created by this repository's `docker-compose.yml` — exactly
+those of a failed install, including the `comfyui`/`ollama` ones from the old layout — and
+cannot touch a neighbouring stack:
 
 ```bash
 docker ps -a --format '{{.Names}}' | while read -r c; do [ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$c" 2>/dev/null)" = "$HOME/ai-content-studio/docker-compose.yml" ] && docker rm -f "$c"; done; sudo rm -rf ~/ai-content-studio/comfyui ~/ai-content-studio/.env
 ```
 
-Si l'inventaire a montré un ComfyUI ou un Ollama **sans label** (créé hors compose, par
-`docker run`), il ne sera pas supprimé par la commande ci-dessus : supprimez-le nommément,
-après avoir vérifié qu'il vient bien de votre tentative d'installation.
+If the inventory showed a ComfyUI or an Ollama **without a label** (created outside compose,
+with `docker run`), the command above will not remove it: delete it by name, after checking it
+really comes from your install attempt.
 
-Le volume `ollama-data` est conservé : `install.sh` en recopie les poids vers `~/ollama/data`,
-ce qui évite 9,6 Go de retéléchargement.
+The `ollama-data` volume is kept: `install.sh` copies its weights into `~/ollama/data`, which
+saves 9.6 GB of downloading.
 
-### Remise à zéro totale
+### Full reset
 
-Tout part, y compris les images (~30 Go) et **les modèles (~150 Go, plusieurs heures de
-téléchargement)** :
+Everything goes, including the images (~30 GB) and **the models (~150 GB, several hours of
+downloading)**:
 
 ```bash
 docker rm -f ai-content-studio-web ai-content-studio-updater comfyui-nvidia ollama-api 2>/dev/null; docker volume rm ollama-data 2>/dev/null; docker rmi mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest ollama/ollama:latest ai-content-studio-updater 2>/dev/null; sudo rm -rf ~/comfyui-spark ~/ollama ~/ai-content-studio
 ```
 
-Relisez l'inventaire avant de la lancer : `~/comfyui-spark` peut **préexister** à
-l'installation de l'app (c'est le cas sur la machine de référence, où cette stack ComfyUI est
-antérieure et gérée par son propre `compose.yaml`) — la détruire vous ferait retélécharger
-150 Go pour rien. À réserver aux modèles corrompus ou à une image ComfyUI cassée. Dans le doute, gardez
-`~/comfyui-spark/basedir/models` : les fichiers déjà présents ne sont pas retéléchargés.
+Read the inventory again before running it: `~/comfyui-spark` may **predate** the app install
+(that is the case on the reference machine, where this ComfyUI stack is older and managed by its
+own `compose.yaml`) — destroying it would make you download 150 GB for nothing. Keep this for
+corrupted models or a broken ComfyUI image. When in doubt, keep
+`~/comfyui-spark/basedir/models`: files already present are never downloaded again.
 
-### Réinstaller
+### Reinstall
 
 ```bash
-git clone https://github.com/yoyo-sama/dellaicontent.git ~/ai-content-studio && cd ~/ai-content-studio && HF_TOKEN=<votre_jeton_hf> ./install.sh
+git clone https://github.com/yoyo-sama/dellaicontent.git ~/ai-content-studio && cd ~/ai-content-studio && HF_TOKEN=<your_hf_token> ./install.sh
 ```
 
-### Ce qu'il ne faut pas supprimer
+### What you must not delete
 
-Docker, le driver NVIDIA et `nvidia-container-toolkit` ne sont jamais en cause dans un échec
-d'installation de cette stack, et `install.sh` ne les installe pas — il vérifie leur présence
-et affiche la marche à suivre si l'un manque. `docker system prune -a` récupérerait de la place
-mais forcerait le re-pull de toutes les images : à réserver à un disque saturé.
+Docker, the NVIDIA driver and `nvidia-container-toolkit` are never the cause of a failed
+install of this stack, and `install.sh` does not install them — it checks they are there and
+prints what to run if one is missing. `docker system prune -a` would reclaim space but force a
+re-pull of every image: keep it for a saturated disk.
 
-## 6. Vérifier qu'une installation tient
+## 6. Checking that an install holds
 
-Le meilleur test est de relancer le script : il est idempotent.
+The best test is to run the script again: it is idempotent.
 
 ```bash
 cd ~/ai-content-studio && ./install.sh 2>&1 | tail -25
 ```
 
-Attendu : `reused` sur les trois services, `already present (not re-downloaded) : 20`,
-`Ollama model gemma4:e4b: present`, et quatre `HTTP 200` en health-checks. Ensuite seulement,
-ouvrez `http://<ip>:8090`, testez **✨ Enrichir (LLM)** sur un champ de prompt, puis une
-génération d'image simple (Krea 2) avant d'essayer la vidéo.
+Expected: `reused` on all three services, `already present (not re-downloaded) : 20`,
+`Ollama model gemma4:e4b: present`, and four `HTTP 200` health checks. Only then open
+`http://<ip>:8090`, test **✨ Enhance (LLM)** on a prompt field, then a simple image generation
+(Krea 2) before trying video.

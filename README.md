@@ -279,6 +279,7 @@ workflows/
 tools/convert.py            ← UI→API converter (see docs/TESTING.md)
 docs/
   TROUBLESHOOTING.md        ← install/deploy troubleshooting: symptoms, diagnosis, repair, clean reinstall
+  TROUBLESHOOTING.fr.md     ← same guide in French
   ARCHITECTURE.md           ← anatomy of the app and its formats
   LESSONS.md                ← pitfalls & validated patterns (READ BEFORE MODIFYING)
   TESTING.md                ← validation method (real renders, frame/audio extraction)
