@@ -179,6 +179,11 @@ create_ollama_stack() {
   [ -f "$OLLAMA_DIR/compose.yaml" ] || cp "$REPO_ROOT/docker/stacks/ollama.yml" "$OLLAMA_DIR/compose.yaml"
   ( cd "$OLLAMA_DIR" && $COMPOSE up -d )
   OLLAMA_CONTAINER="$(find_container_by_port 11434 || echo "ollama-api")"
+  # 'up -d' returns as soon as the container is started, not when the server is listening.
+  # Without this wait, the model step below could conclude "Ollama unavailable" on a service
+  # that simply had not finished booting.
+  wait_for_http "http://localhost:11434/api/version" 15 2 \
+    || warn "Ollama does not answer yet after 30 s — see 'docker logs $OLLAMA_CONTAINER'."
 }
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,13 @@
 # Tour de contrôle — changelog
 
+## 2026-09-10 (suite 2) — Attente d'Ollama après création de sa stack
+
+Défaut trouvé en relisant le chemin Ollama : `docker compose up -d` rend la main dès que le conteneur est **démarré**, pas quand le serveur **écoute**. Sur une installation où tous les modèles ComfyUI sont déjà présents (relance, ou modèles pré-copiés), l'étape « modèle Ollama requis » pouvait donc s'exécuter deux ou trois secondes après la création du conteneur et conclure `Ollama unavailable` sur un service qui finissait simplement de démarrer — sans que rien ne soit cassé.
+
+Correctif : `create_ollama_stack` attend désormais `/api/version` (15 essais, 2 s) avant de rendre la main, et avertit si le service reste muet au bout de 30 s. Une ligne, sur le même modèle que l'attente déjà en place pour ComfyUI.
+
+Vérifié au passage sur cette machine : `systemctl cat ollama.service` renvoie bien 1 quand aucune unité n'existe (et 0 sur une unité présente, contrôlé avec `docker.service`) — la détection d'un Ollama natif ne produit donc pas de faux positif sur un poste où Ollama tourne uniquement en conteneur.
+
 ## 2026-09-10 (suite) — Commentaires des scripts de déploiement en anglais
 
 Suite du passage de la sortie terminal en anglais (v1.0.7) : les commentaires du code de déploiement le sont aussi désormais, la machine cible pouvant être administrée par quelqu'un qui ne lit pas le français. Traduits : `install.sh` (81 lignes de commentaire), `docker/stacks/comfyui.yml`, `docker/stacks/ollama.yml`, `docker-compose.yml`, `nginx.conf`, et le bloc `CXXFLAGS=-std=c++20` de `docker/userscripts/15-comfy_kitchen-DGX_Spark.sh` (le seul commentaire francophone de ce userscript, celui qui explique pourquoi le standard C++ doit être forcé).
