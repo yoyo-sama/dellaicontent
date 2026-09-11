@@ -1,5 +1,51 @@
 # Tour de contrôle — changelog
 
+## 2026-09-11 — install.sh v1.1.0 : promotion d'install2.sh, 13 défauts corrigés en seconde revue, harnais 42/212
+
+Cadrage validé avec l'utilisateur (/architect), puis orchestration tour-de-controle sur `install2.sh` : plan par Opus (Fable indisponible, limite de dépense), lots séquentiels — `install2.sh` est un fichier unique, deux agents en parallèle dessus se seraient détruits.
+
+### Ce que fait install.sh (anciennement install2.sh)
+
+- **Trois modes détectés puis confirmés** : installation fraîche, réparation, désinstallation. Le script inspecte la machine, affiche un diagnostic et le plan qu'il va exécuter, puis demande confirmation. `--mode` force le choix.
+- **Empreinte d'état au lieu du numéro de version.** `VERSION` n'est lu nulle part : la réparation commence par `git pull`, qui le fausse. Le classement se fait sur l'état réel (labels compose, présence et CONTENU de `~/comfyui-spark/compose.yaml`, ancien dossier de modèles, montages, ce que ComfyUI liste).
+- **Plan et exécution lisent la même source de vérité** : `build_plan()` lève un drapeau d'intention sur la ligne qui imprime l'étape, `run_plan()` n'exécute que ce qui porte un drapeau.
+- **Reprise en main d'un ComfyUI tiers cassé** (répond, a les modèles sur disque, ne les liste pas) par `compose.override.yaml` ne contenant que l'environnement : image, ports, volumes et réseau externe du tiers préservés, aucun octet de modèle déplacé, annulation par un `rm`.
+- **Désinstallation** composant par composant, ne supprime que des conteneurs que le script possède, ne supprime JAMAIS de données ; récapitulatif « Kept » des données avec tailles (modèles sommés depuis `models.txt`, `timeout 20 du` ailleurs).
+- **Jeton Hugging Face** demandé seulement si un fichier gated manque réellement, saisie masquée, jamais journalisé, jamais en argv (`printf … | curl -K -`), validé par `whoami-v2`, enregistrement opt-in en 600.
+- **Preuve** : 3 endpoints à travers nginx + modèles listés par ComfyUI + `gemma4:e4b` ; `--smoke` ajoute un rendu réel réduit via `tools/validate.py --reduce`.
+
+### Défauts trouvés par la première vérification (avant mise en dépôt)
+
+1. Le plan affiché mentait par endroits (annonçait « reuse the updater », le pipeline reconstruisait ; écritures non annoncées) — corrigé structurellement.
+2. Un exécutant sans la spec (scratchpad vidé pendant une interruption) avait livré un récapitulatif de désinstallation listant des conteneurs au lieu des données, et un `du -sh` non borné sur 631 Go — corrigé.
+3. **Le plus grave** : sans terminal mais avec un stdin ouvert (ssh sans `-t`, CI, service), le script se figeait pour toujours sur l'invite du jeton — le harnais passait parce que son stdin était vide. Corrigé à la racine dans `confirm()` (répond « non » sans lire sans terminal) + garde sur l'invite ; prouvé en rejouant le harnais avec un stdin ouvert et muet.
+4. Erreur de spécification corrigée par un exécutant : `open-webui` n'utilise pas le volume `ollama-data`, il consomme le SERVICE Ollama en HTTP — libellés corrigés au contrôle.
+5. Toute désinstallation réussie sortait en code 2, parce que `main()` enchaînait la vérification de santé sur des services qu'on venait de retirer — trouvé par l'agent de tests, corrigé en une ligne (pas de sondage de santé en désinstallation).
+
+### 13 défauts supplémentaires trouvés par la seconde revue
+
+1. Le conteneur web n'était plus confondu avec ComfyUI/Ollama ni supprimé par erreur : `container_on_port` distingue désormais nginx (host network, sans port publié) par son montage propre plutôt que par élimination.
+2. L'état `UP TO DATE` redevient atteignable : `comfy_broken` était sauté pour la propre stack de l'installeur, `FP_COMFY_LISTED` restait à 0 et le diagnostic affichait « 0 sur 0 ».
+3. Un plan refusé sort désormais comme `--check` : `MODE=check` après un « Nothing was changed. », la même preuve en lecture seule décide du code de sortie.
+4. La reprise en main d'un ComfyUI tiers affiche un résumé de champs (fingerprint) au lieu d'un `docker inspect` brut — évite de journaliser un secret logé ailleurs dans l'environnement du conteneur tiers — et agit désormais dans le dossier réel du compose file du conteneur, jamais supposé `~/comfyui-spark`.
+5. Le jeton Hugging Face n'est plus jamais hérité par les conteneurs ni leurs enfants (`HF_TOK_ENV`/`HF_TOK` non exportés, `HF_TOKEN` `unset` dès la première ligne), et un jeton refusé par `whoami-v2` n'est plus jamais envoyé aux téléchargements.
+6. Les candidats de jeton vides (fichier cache illisible ou vide) sont ignorés au profit du suivant dans l'ordre ; le jeton sauvegardé passe en `chmod 600` explicite, même sur un fichier réutilisé.
+7. Les doublons de l'ancien dossier de modèles sont signalés (« duplicate, à supprimer vous-même »), plus jamais comptés comme travail restant ni bloquants pour sortir de l'état `OLD LAYOUT`.
+8. La désinstallation n'affiche plus de plan d'installation : `build_plan`/`print_plan` sont sautés en `--mode uninstall`, la section `Uninstall` est tout l'affichage.
+9. web et updater ne sont « à nous » que par label compose (`config_files` == notre propre `docker-compose.yml`) — plus par nom ou par port, qui peuvent appartenir à une autre appli.
+10. La vérification finale contrôle aussi la présence de `gemma4:e4b` via `/ollama/api/tags` à travers le proxy, pas seulement les 3 endpoints HTTP.
+11. La taille d'un volume Docker (`ollama-data`) se lit dans `docker system df -v`, sans jamais démarrer de conteneur jetable pour la mesurer (aurait pu tirer une image même en `--dry-run`).
+12. `--components` est validé juste après le parsing des options, dans tous les modes : un nom inconnu sort en erreur au lieu de réduire silencieusement une désinstallation à rien.
+13. Un compose file tiers (`~/comfyui-spark/compose.yaml` non écrit par l'installeur) est démarré sur confirmation sans rien écrire dans son dossier — ni `.env`, ni userscript, ni modification du fichier lui-même.
+
+### Promotion et renommage
+
+`install2.sh` → `install.sh` (v1 conservé dans l'historique : `git show 1322acb:install.sh`). `tests/selftest-install2.sh` → `tests/selftest-install.sh`. Documentation mise à jour en conséquence : `README.md`/`README.fr.md` (section installation + procédure de réparation courte, gardée en page d'accueil à la demande du propriétaire), `docs/TROUBLESHOOTING.md`/`.fr.md` (les runbooks manuels devenus inutiles cèdent la place à `--check`/`--dry-run`/l'exécution réelle/`--mode uninstall`), `AGENTS.md`, `docs/ARCHITECTURE.md` et les commentaires de `docker-compose.yml`/`docker/stacks/*.yml`. `docs/INSTALL.md` (anglais, guide complet du script) suit son propre chantier. Version : `VERSION` et les deux README passent à **1.1.0**.
+
+### Validation
+
+Harnais `tests/selftest-install.sh` : **42 scénarios, 212 assertions**, verts dans les deux conditions qui comptent (stdin vide et stdin ouvert mais muet) — parti de 24 scénarios / 91 assertions à la première revue, étendu à chaque lot de correction ci-dessus. **Non vérifié** : le chemin « poste vierge réel » (premier boot de ComfyUI, ~150 Go de téléchargement, rendu `--smoke` réel) — couvert par les stubs, pas par du matériel neuf ; la validation réelle sur le poste à réparer reste à faire.
+
 ## 2026-09-10 (suite 6) — Guide de dépannage en anglais + réponse sur l'ordre de création du dossier de destination
 
 **Version anglaise.** `docs/TROUBLESHOOTING.md` est désormais en anglais (la langue par défaut du dépôt pour tout ce qui est opérationnel, comme les scripts et `README.md`), et la version française devient `docs/TROUBLESHOOTING.fr.md` — même convention que `README.md` / `README.fr.md`. Les liens sont ajustés partout : `README.md` pointe sur la version anglaise, `README.fr.md` sur la française, chaque arborescence liste les deux, et `AGENTS.md` mentionne les deux. Contrôle d'ancres sur les quatre fichiers : aucun renvoi cassé ; les 21 (GB10) et 23 (x86) blocs de commandes passent `bash -n`.

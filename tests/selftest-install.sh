@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# selftest-install2.sh — exercises install2.sh end to end against stubbed docker/curl/ss/
+# selftest-install.sh — exercises install.sh end to end against stubbed docker/curl/ss/
 # systemctl/sudo, in a throwaway $HOME and a throwaway copy of the repo. Nothing on the real
 # machine is touched: no container, no download, no write outside the temp directory.
 #
@@ -8,7 +8,7 @@
 # summary claiming success while nothing worked) is only reproducible on a machine in a
 # specific state. Stubs let us put the script in that state in a second, before shipping.
 #
-# Usage: tests/selftest-install2.sh [scenario ...]     (no argument = all)
+# Usage: tests/selftest-install.sh [scenario ...]     (no argument = all)
 
 set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -99,7 +99,7 @@ case "$1" in
     [[ "$*" == *root/.ollama* ]] && { echo "$HOME/ollama/data"; exit 0; }
     [[ "$*" == *'{{json .Mounts}}'* ]] && { echo "[{\"Source\":\"$REPO_UNDER_TEST\",\"Destination\":\"/usr/share/nginx/html\"}]"; exit 0; }
     # The third-party ComfyUI's environment, secrets included, as `-f '{{range .Config.Env}}..'`
-    # or as a bare `docker inspect`: install2.sh may pick the keys it needs out of it and must
+    # or as a bare `docker inspect`: install.sh may pick the keys it needs out of it and must
     # never print or log the rest (scn_takeover_never_dumps_secrets).
     if [ "${SCN_FOREIGN_COMFY:-0}" = 1 ] && [[ "${@: -1}" == *comfy* ]]; then
       env_lines="OPENAI_API_KEY=sk-test123 WANTED_UID=1000 WANTED_GID=1000 PATH=/usr/bin"
@@ -135,7 +135,7 @@ echo "curl $url" >> "$TRACE"
 # (an argv secret sits in `ps aux` for as long as the request takes).
 [ -n "${STATE:-}" ] && printf '%s\n' "$*" >> "$STATE/curl_argv"
 # The config read on stdin (-K -), where the Authorization header travels. Read ONLY then: any
-# other curl shares install2.sh's stdin, which carries the scenario's scripted answers.
+# other curl shares install.sh's stdin, which carries the scenario's scripted answers.
 kcfg=""; case " $* " in *" -K - "*) kcfg="$(cat)" ;; esac
 # -w '%{http_code}' : le vrai curl imprime le code même sur erreur HTTP. Sans ça, la phase
 # de vérification lisait une chaîne vide et concluait à un échec.
@@ -206,16 +206,16 @@ run_case() {   # name, then env assignments in SCN_*, exported by the caller
   export STATE TRACE REPO_UNDER_TEST
   if [ "${SCN_NATIVE_OLLAMA:-0}" = 1 ]; then printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP/bin/ollama"; chmod +x "$TMP/bin/ollama"; else rm -f "$TMP/bin/ollama"; fi
   # Optional extra fixture setup (third-party compose.yaml, pre-placed models, ...), run once
-  # CASE_HOME/STATE/REPO_UNDER_TEST exist but before install2.sh starts. Opt-in, unset by
+  # CASE_HOME/STATE/REPO_UNDER_TEST exist but before install.sh starts. Opt-in, unset by
   # default: the eight original scenarios never set it and behave exactly as before.
   [ -n "${SETUP_FN:-}" ] && "$SETUP_FN"
   shift
-  # A bounded here-string, never the ambient stdin: a scenario that sets INSTALL2_ASSUME_TTY
+  # A bounded here-string, never the ambient stdin: a scenario that sets INSTALL_ASSUME_TTY
   # scripts its answers through SCN_STDIN, and every other scenario gets a harmless, already-
   # closed stdin — regardless of what the harness's OWN stdin looks like (this file is run both
-  # with `</dev/null` and with a silent, open pipe; install2.sh must never block on either).
+  # with `</dev/null` and with a silent, open pipe; install.sh must never block on either).
   # SCN_PATH replaces the host PATH behind the stubs (a machine missing a command, e.g. python3).
-  OUT="$(HOME="$CASE_HOME" PATH="$TMP/bin:${SCN_PATH:-$PATH}" bash "$REPO_UNDER_TEST/install2.sh" "$@" 2>&1 <<<"${SCN_STDIN:-}")"
+  OUT="$(HOME="$CASE_HOME" PATH="$TMP/bin:${SCN_PATH:-$PATH}" bash "$REPO_UNDER_TEST/install.sh" "$@" 2>&1 <<<"${SCN_STDIN:-}")"
   RC=$?
 }
 
@@ -226,7 +226,7 @@ assert_file(){ if [ -e "$1" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); pri
 assert_no_file(){ if [ -e "$1" ]; then FAIL=$((FAIL+1)); printf '  FAIL: unexpected %s\n' "$1"; else PASS=$((PASS+1)); fi; }
 assert_owner(){ if [ "$(stat -c%U "$1" 2>/dev/null)" = "$(id -un)" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf '  FAIL: %s not owned by the user\n' "$1"; fi; }
 # File-content counterparts of assert/assert_not, for what lands in a log file or a written
-# artifact rather than on $OUT (install2.sh's own stdout).
+# artifact rather than on $OUT (install.sh's own stdout).
 assert_grep()     { if grep -qF -- "$2" "$1" 2>/dev/null; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf '  FAIL: %s missing from %s\n' "$(printf '%q' "$2")" "$1"; fi; }
 assert_not_grep() { if grep -qF -- "$2" "$1" 2>/dev/null; then FAIL=$((FAIL+1)); printf '  FAIL: unexpected %s in %s\n' "$(printf '%q' "$2")" "$1"; else PASS=$((PASS+1)); fi; }
 # An uninstall never shows the install/repair plan (its header and steps) nor its closing line.
@@ -277,7 +277,7 @@ scn_legacy_models() {
   mkdir -p "$REPO_UNDER_TEST/comfyui/basedir/models/vae"
   truncate -s 253806246 "$REPO_UNDER_TEST/comfyui/basedir/models/vae/qwen_image_vae.safetensors"
   export STATE TRACE REPO_UNDER_TEST
-  OUT="$(HOME="$TMP/legmod/home" PATH="$TMP/bin:$PATH" bash "$REPO_UNDER_TEST/install2.sh" 2>&1)"; RC=$?
+  OUT="$(HOME="$TMP/legmod/home" PATH="$TMP/bin:$PATH" bash "$REPO_UNDER_TEST/install.sh" 2>&1)"; RC=$?
   assert "1 file(s) found in the legacy model folder"
   assert "moved: 1   left behind: 0"
   assert_file "$TMP/legmod/home/comfyui-spark/basedir/models/vae/qwen_image_vae.safetensors"
@@ -341,7 +341,7 @@ reset_scn() {
          SCN_NATIVE_OLLAMA_UP=0 SCN_SUDO_OK=0 SCN_FOREIGN_COMFY=0 SCN_FOREIGN_HF_TOKEN= \
          SCN_FOREIGN_WEB=0 SCN_FOREIGN_UPDATER=0 SCN_VOL_OLLAMA=0
   # unset, not emptied: an EMPTY SCN_FOREIGN_CFG means "no compose label"; set them with export
-  unset SETUP_FN SCN_STDIN SCN_PRESTATE INSTALL2_ASSUME_TTY HF_TOKEN \
+  unset SETUP_FN SCN_STDIN SCN_PRESTATE INSTALL_ASSUME_TTY HF_TOKEN \
         SCN_FOREIGN_CFG SCN_FOREIGN_BASEDIR SCN_HF_VALID SCN_PATH
 }
 
@@ -381,7 +381,7 @@ fixture_all_models_present() {   # every models.txt entry, correctly sized, alre
 scn_plan_confirmed() {
   echo "· virgin machine, interactive plan confirmation: y -> installs"
   reset_scn
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'y\n'
   run_case plan_confirmed
   assert "creating the comfyui stack in $TMP/plan_confirmed/home/comfyui-spark"
@@ -393,7 +393,7 @@ scn_plan_confirmed() {
 scn_plan_refused() {
   echo "· virgin machine, interactive plan confirmation: n -> nothing changes"
   reset_scn
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'n\n'
   run_case plan_refused
   assert "Nothing was changed."
@@ -420,13 +420,13 @@ scn_takeover_accepted() {
   SCN_FOREIGN_COMFY=1
   SCN_PRESTATE=comfy_up
   SETUP_FN=fixture_foreign_broken_comfy
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'y\ny\n'
   run_case takeover_accepted --skip-models
   local ovr="$TMP/takeover_accepted/home/comfyui-spark/compose.override.yaml"
   assert_file "$ovr"
-  if head -n1 "$ovr" 2>/dev/null | grep -qF "written by install2.sh"; then PASS=$((PASS+1))
-  else FAIL=$((FAIL+1)); printf '  FAIL: %s has no "written by install2.sh" marker on its first line\n' "$ovr"; fi
+  if head -n1 "$ovr" 2>/dev/null | grep -qF "written by install.sh"; then PASS=$((PASS+1))
+  else FAIL=$((FAIL+1)); printf '  FAIL: %s has no "written by install.sh" marker on its first line\n' "$ovr"; fi
   assert_grep "$ovr" "BASE_DIRECTORY: /basedir"
   assert "ComfyUI now offers:"
   local before after
@@ -442,7 +442,7 @@ scn_takeover_refused() {
   SCN_FOREIGN_COMFY=1
   SCN_PRESTATE=comfy_up
   SETUP_FN=fixture_foreign_broken_comfy
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'y\nn\n'
   run_case takeover_refused --skip-models
   assert "ComfyUI left exactly as it is"
@@ -469,10 +469,10 @@ scn_takeover_never_dumps_secrets() {
   SCN_FOREIGN_HF_TOKEN=hf_FAUXJETONTIERS123456   # the docker stub also carries OPENAI_API_KEY=sk-test123
   SCN_PRESTATE=comfy_up
   SETUP_FN=fixture_foreign_broken_comfy
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'y\ny\n'
   run_case takeover_never_dumps_secrets --skip-models
-  local log; log="$(ls "$TMP/takeover_never_dumps_secrets/home"/install2-*.log 2>/dev/null | head -n1)"
+  local log; log="$(ls "$TMP/takeover_never_dumps_secrets/home"/install-*.log 2>/dev/null | head -n1)"
   assert "WANTED_UID/GID  : 1000/1000"
   assert_grep "$log" "WANTED_UID/GID  : 1000/1000"
   assert_not "hf_FAUXJETONTIERS123456"
@@ -519,7 +519,7 @@ scn_uninstall_interactive_mixed() {
   echo "· --mode uninstall, interactive: web accepted (y), updater refused (n), in that order"
   reset_scn
   SCN_PRESTATE=web_up
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'y\nn\n'
   run_case uninstall_interactive_mixed --mode uninstall
   assert_grep "$TMP/uninstall_interactive_mixed/trace" "docker rm -f web-nginx"
@@ -556,7 +556,7 @@ scn_hf_prompt_not_needed_when_complete() {
 scn_hf_prompt_shown_when_gated_missing() {
   echo "· gated files missing, interactive, empty answer: continues without a token"
   reset_scn
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'y\n\n'
   run_case hf_prompt_shown_when_gated_missing
   assert "Continuing without a token"
@@ -568,7 +568,7 @@ scn_hf_token_never_logged_nor_in_argv() {
   export HF_TOKEN=FAUX-JETON-TEST-12345
   run_case hf_token_never_logged_nor_in_argv
   unset HF_TOKEN
-  local log; log="$(ls "$TMP/hf_token_never_logged_nor_in_argv/home"/install2-*.log 2>/dev/null | head -n1)"
+  local log; log="$(ls "$TMP/hf_token_never_logged_nor_in_argv/home"/install-*.log 2>/dev/null | head -n1)"
   assert_not_grep "$log" "FAUX-JETON-TEST-12345"
   assert_not_grep "$TMP/hf_token_never_logged_nor_in_argv/state/curl_argv" "FAUX-JETON-TEST-12345"
   assert "Hugging Face token rejected by huggingface.co"
@@ -578,7 +578,7 @@ scn_hf_token_never_logged_nor_in_argv() {
 }
 
 scn_no_tty_silent_stdin() {
-  echo "· virgin machine, no INSTALL2_ASSUME_TTY, stdin open but silent: must not hang"
+  echo "· virgin machine, no INSTALL_ASSUME_TTY, stdin open but silent: must not hang"
   local home state trace repo
   rm -rf "$TMP/no_tty_silent_stdin"
   mkdir -p "$TMP/no_tty_silent_stdin/home" "$TMP/no_tty_silent_stdin/state"
@@ -589,11 +589,11 @@ scn_no_tty_silent_stdin() {
   rm -f "$TMP/bin/ollama"
   STATE="$state" TRACE="$trace" REPO_UNDER_TEST="$repo" \
     HOME="$home" PATH="$TMP/bin:$PATH" \
-    timeout 90 bash "$repo/install2.sh" < <(sleep 120) > "$TMP/no_tty_silent_stdin/out" 2>&1
+    timeout 90 bash "$repo/install.sh" < <(sleep 120) > "$TMP/no_tty_silent_stdin/out" 2>&1
   RC=$?
   OUT="$(cat "$TMP/no_tty_silent_stdin/out" 2>/dev/null)"
   if [ "$RC" = 124 ]; then
-    FAIL=$((FAIL+1)); echo "  FAIL: install2.sh hung — timeout 90 killed it while reading a silent, open stdin without INSTALL2_ASSUME_TTY"
+    FAIL=$((FAIL+1)); echo "  FAIL: install.sh hung — timeout 90 killed it while reading a silent, open stdin without INSTALL_ASSUME_TTY"
   else
     PASS=$((PASS+1))
   fi
@@ -643,7 +643,7 @@ scn_up_to_date() {   # F2
   assert "Everything the app needs is in place."
   assert_rc 0
   # F13d: the updater's build output lands in the log, not on screen, never discarded
-  local log; log="$(ls "$TMP/up_to_date/home"/install2-*.log 2>/dev/null | head -n1)"
+  local log; log="$(ls "$TMP/up_to_date/home"/install-*.log 2>/dev/null | head -n1)"
   assert_grep "$log" "(stub build output)"
   assert_not "(stub build output)"
 }
@@ -663,7 +663,7 @@ scn_refused_up_to_date() {   # F3
   reset_scn
   SCN_PRESTATE="comfy_up ollama_up web_up pulled"
   SETUP_FN=fixture_own_complete
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'n\n'
   run_case refused_up_to_date
   assert "Nothing was changed."
@@ -681,7 +681,7 @@ scn_refused_foreign_ok() {   # F3
   SETUP_FN=fixture_foreign_healthy
   run_case refused_foreign_ok_check --check
   local check_rc="$RC"
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'n\n'
   run_case refused_foreign_ok
   assert "FOREIGN COMFYUI"
@@ -769,7 +769,7 @@ fixture_empty_saved_token_644() {   # an existing, EMPTY, world-readable token f
 scn_hf_token_prompt_saved_600() {   # F7
   echo "· token typed at the prompt and saved (y) over an existing 644 file: mode 600, never echoed"
   reset_scn
-  export INSTALL2_ASSUME_TTY=1 SCN_HF_VALID=hf_TYPEDTOKEN99
+  export INSTALL_ASSUME_TTY=1 SCN_HF_VALID=hf_TYPEDTOKEN99
   SCN_STDIN=$'y\nhf_TYPEDTOKEN99\ny\n'
   SETUP_FN=fixture_empty_saved_token_644
   run_case hf_token_prompt_saved_600
@@ -841,7 +841,7 @@ scn_foreign_dir_only_accepted() {   # F13c
   echo "· third-party compose.yaml only, start accepted (y y): started as announced, nothing of ours written there"
   reset_scn
   SETUP_FN=fixture_foreign_dir_only
-  export INSTALL2_ASSUME_TTY=1
+  export INSTALL_ASSUME_TTY=1
   SCN_STDIN=$'y\ny\n'
   run_case foreign_dir_only_accepted --skip-models
   local d="$TMP/foreign_dir_only_accepted/home/comfyui-spark"

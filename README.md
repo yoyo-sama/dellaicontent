@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — Media & Entertainment demo on GB10
 
-**Current version: 1.0.8** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
+**Current version: 1.1.0** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
 
 **Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from a small `updater` backend service that handles in-app updates — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
 
@@ -22,58 +22,61 @@ cd ~/ai-content-studio
 ./install.sh
 ```
 
-> **Something not working, or a machine where a previous install was attempted?**
-> → **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — symptom → cause table, diagnosis
-> in three commands, step-by-step reinstall on an already-installed machine, and clean reset.
+`install.sh` diagnoses the machine's real state first — containers, mounts, compose labels;
+never the `VERSION` file — prints the plan it is about to run, asks for confirmation, then
+executes it: whichever of the 3 services (web app `:8090`, ComfyUI `:8188`, Ollama `:11434`)
+already answers is reused as is (including a native systemd Ollama, or a third-party ComfyUI),
+whatever is missing is created in its own stack at the root of the home directory
+(`~/comfyui-spark`, `~/ollama`), missing models are downloaded, and `gemma4:e4b` is pulled into
+Ollama. It never recreates or destroys a service it doesn't own, and it is fully
+**idempotent** — re-running it is always safe, and it is also the best way to check an install.
+The script's output and code comments are in English. Full guide, in English:
+**[docs/INSTALL.md](docs/INSTALL.md)**.
 
-`install.sh` does everything in a single command, **idempotently** (safe to re-run, tested
-across two consecutive runs):
+**Repairing a machine, or updating one an older version already ran on?**
 
-1. Checks the environment (architecture, `docker`/`docker compose`, NVIDIA runtime).
-2. Detects the 3 services (web app `:8090`, ComfyUI `:8188`, Ollama `:11434`) **by actual
-   role** (HTTP health check), not by container name — reuses anything already running,
-   **including an Ollama installed natively (systemd), which is not a container**, and never
-   recreates/destroys a service it doesn't own (checked via docker-compose labels). Whatever
-   is missing is created in its own stack at the root of the home directory
-   (`~/comfyui-spark`, `~/ollama`) from the `docker/stacks/*.yml` templates, with their folders
-   created as the user BEFORE the containers. If a port is held by a service that does not
-   answer, nothing is created and the script says what to free — instead of letting Docker
-   fail on "port is already allocated". A service that is **installed but stopped** is
-   restarted rather than duplicated: a stopped container is started again (`docker start`),
-   and a native Ollama (systemd) is started via `sudo -n systemctl start ollama` — never
-   blocking on a password prompt: if passwordless sudo is not available, the script prints
-   the command to run and creates nothing. An install made with the old layout (`comfyui`/`ollama`
-   services inside the app compose file) is migrated automatically.
-3. Copies `docker/userscripts/*.sh` (including the `comfy_kitchen` install script, see
-   below) into the actual `userscripts_dir` folder of the ComfyUI container in use.
-4. Downloads the models listed in `scripts/models.txt` that are missing, into
-   `~/comfyui-spark/basedir/models/<folder>/` (automatically skipped if the file is already present
-   with the correct size — no unnecessary re-downloading).
-5. Pulls the `gemma4:e4b` Ollama model if it's missing, **through the HTTP API**
-   (`POST /api/pull`) rather than `docker exec`: same behaviour whether Ollama runs in a
-   container or natively.
-6. Waits for ComfyUI to answer on `:8188` when it has just been created (first start takes
-   several minutes to install the userscripts), then displays a final summary (service
-   status, actual locations, models, health checks).
+```bash
+cd ~/ai-content-studio && git pull
+./install.sh --check      # read-only diagnosis, changes nothing
+./install.sh --dry-run    # also walks every step and prints "would …", changes nothing
+./install.sh              # applies the plan (asks for confirmation first)
+```
 
-The script's output and code comments are in English.
+An old layout (ComfyUI/Ollama containers created by this repository's own
+`docker-compose.yml`, from before 1.0.7) is detected and migrated automatically. Models are
+always kept and never re-downloaded once present on disk, whichever layout they came from.
+→ **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** for symptom-by-symptom diagnosis
+(`JSON.parse`/`NetworkError` errors in the browser, ComfyUI not seeing its models, a native
+Ollama not starting, …).
 
-**`HF_TOKEN` (Hugging Face token, optional but required for LTX 2.5)**: the 4 LTX 2.5 model
-files come from a **"gated"** (access-restricted) Hugging Face repository — an anonymous
-download fails with a 401 until you've accepted the model's terms. To get them:
+**Uninstall:**
+
+```bash
+./install.sh --mode uninstall
+```
+
+Asks, one component at a time (web app, updater, ComfyUI, Ollama), before removing
+anything — and only ever removes a container this installer itself created. Models, Ollama
+weights, workflows and the stack files are always kept; the script prints exactly what stays
+and where.
+
+**`HF_TOKEN` (Hugging Face token, optional but required for LTX 2.5)**: 5 model files come
+from a **"gated"** (access-restricted) Hugging Face repository — an anonymous download fails
+with a 401 until you've accepted the model's terms. To get them:
 
 1. Create an account on [huggingface.co](https://huggingface.co/) if you don't have one.
 2. Accept the access terms on the model page:
    [huggingface.co/Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5).
 3. Generate an access token in your HF account settings (Settings → Access Tokens).
-4. Re-run the installation with the token as an environment variable:
+4. Either let `install.sh` prompt for it (hidden input) the moment a gated file is actually
+   missing, or supply it up front as an environment variable:
 
 ```bash
-HF_TOKEN=<votre_jeton> ./install.sh
+HF_TOKEN=hf_xxx ./install.sh
 ```
 
-Without `HF_TOKEN`, the other models (Krea 2, Qwen-Edit, Minimax H3) download normally — only
-the 4 LTX 2.5 files fail cleanly and are reported in the final summary, without blocking the
+Without a token, the other models (Krea 2, Qwen-Edit, Minimax H3) download normally — only
+the 5 LTX 2.5 files fail cleanly and are reported in the final summary, without blocking the
 rest of the installation.
 
 ### Manual installation / troubleshooting
@@ -132,13 +135,13 @@ curl http://localhost:11434/api/version          # Ollama alive
 ### Models to download
 
 Each file goes into `~/comfyui-spark/basedir/models/<folder>/` (ComfyUI stack path; adjust
-if your models live elsewhere). `install.sh` automatically downloads the 19 files below from
+if your models live elsewhere). `install.sh` automatically downloads the 19 distinct files below from
 `scripts/models.txt` (source of truth — same URLs, same order); the manual list that follows
 is equivalent for anyone who prefers `curl`/a browser.
 
 #### Current pipelines (Krea 2, Qwen-Edit, LTX 2.5, Minimax H3)
 
-19 files, URLs verified via an actual HTTP request against Hugging Face (`resolve/main/...`,
+19 distinct files in 20 rows (the Qwen VAE serves both Qwen-Edit and Krea 2), URLs verified via an actual HTTP request against Hugging Face (`resolve/main/...`,
 exact sizes in bytes in `scripts/models.txt`).
 
 | Model / pipeline | File | Target folder | Size | URL |
@@ -156,8 +159,8 @@ exact sizes in bytes in `scripts/models.txt`).
 | LTX 2.5 (main encoder) ⚠️ gated | `gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors` | `text_encoders/` | 15 GB | [resolve/main](https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors) |
 | LTX 2.5 (prompt-enhancer encoder) | `gemma4_e2b_it_bf16.safetensors` | `text_encoders/` | 9.6 GB | [resolve/main](https://huggingface.co/Comfy-Org/gemma-4/resolve/main/text_encoders/gemma4_e2b_it_bf16.safetensors) |
 | LTX 2.5 (x2 latent upscaler, t2v/i2v only) ⚠️ gated | `ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors` | `latent_upscale_models/` | 950 MB | [resolve/main](https://huggingface.co/Lightricks/LTX-2.5/resolve/main/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors) |
-| Minimax H3 t2v/i2v (transformer) ⚠️ community reupload | `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors` | `diffusion_models/` | 12 GB | [resolve/main](https://huggingface.co/AX1Y2JP/MiniMax-H3-W4A8-ConvRot/resolve/main/minimax_h3_fl2va_pruned_w4a8_mixed.safetensors) |
-| Minimax H3 r2v (transformer, different checkpoint) ⚠️ community reupload | `minimax_h3_ref2va_pruned_w4a8_mixed.safetensors` | `diffusion_models/` | 11 GB | [resolve/main](https://huggingface.co/AX1Y2JP/MiniMax-H3-W4A8-ConvRot/resolve/main/minimax_h3_ref2va_pruned_w4a8_mixed.safetensors) |
+| Minimax H3 t2v/i2v (transformer) ⚠️ community reupload | `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors` | `diffusion_models/` | 11.7 GB | [resolve/main](https://huggingface.co/AX1Y2JP/MiniMax-H3-W4A8-ConvRot/resolve/main/minimax_h3_fl2va_pruned_w4a8_mixed.safetensors) |
+| Minimax H3 r2v (transformer, different checkpoint) ⚠️ community reupload | `minimax_h3_ref2va_pruned_w4a8_mixed.safetensors` | `diffusion_models/` | 11.7 GB | [resolve/main](https://huggingface.co/AX1Y2JP/MiniMax-H3-W4A8-ConvRot/resolve/main/minimax_h3_ref2va_pruned_w4a8_mixed.safetensors) |
 | Minimax H3 (encoder) | `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | `text_encoders/` | 15 GB | [resolve/main](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors) |
 | Minimax H3 (video VAE) | `minimax_h3_video_vae_fp16.safetensors` | `vae/` | 4.9 GB | [resolve/main](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors) |
 | Minimax H3 (audio VAE) | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` | 578 MB | [resolve/main](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors) |
@@ -270,7 +273,7 @@ install.sh                  ← one-command idempotent install/update (recommend
 docker-compose.yml          ← app only: nginx (8090) + updater (8093)
 docker/stacks/*.yml         ← templates for the sibling stacks: ~/comfyui-spark and ~/ollama
 docker/userscripts/         ← scripts deployed into the ComfyUI container by install.sh (including comfy_kitchen)
-scripts/models.txt          ← 19 required models: folder|file|size|URL (source of truth for install.sh and the README)
+scripts/models.txt          ← 20 lines, 19 distinct required models: folder|file|size|URL (source of truth for install.sh and the README)
 workflows/
   manifest.json             ← feeds the app's Pipeline/Model menus
   api/*.json                ← single-branch API templates with {{PROMPT}}… placeholders
@@ -278,6 +281,7 @@ workflows/
   README.md                 ← workflow details
 tools/convert.py            ← UI→API converter (see docs/TESTING.md)
 docs/
+  INSTALL.md                ← install.sh user guide: modes, options, Hugging Face token, uninstall
   TROUBLESHOOTING.md        ← install/deploy troubleshooting: symptoms, diagnosis, repair, clean reinstall
   TROUBLESHOOTING.fr.md     ← same guide in French
   ARCHITECTURE.md           ← anatomy of the app and its formats

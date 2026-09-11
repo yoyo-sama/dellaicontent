@@ -1,12 +1,13 @@
-# install2.sh — installer v2 user guide
+# install.sh — installer user guide
 
-`install2.sh` installs, repairs, updates or uninstalls AI Content Studio on a Dell GB10 /
-NVIDIA DGX Spark (ARM64). It does the same job as `install.sh` (v1), but every run starts
+`install.sh` installs, repairs, updates or uninstalls AI Content Studio on a Dell GB10 /
+NVIDIA DGX Spark (ARM64). This has been the installer since version 1.1.0, replacing the
+previous one (v1, retrievable with `git show 1322acb:install.sh`). Every run starts
 with a read-only diagnosis, prints the plan it derives from that diagnosis, and acts only
 after that. It is idempotent: running it again is always safe, and it is also
 the best way to check an install.
 
-This guide describes the script as it is written. `./install2.sh --help` gives the short
+This guide describes the script as it is written. `./install.sh --help` gives the short
 version.
 
 ## 1. What it manages
@@ -42,7 +43,7 @@ The rules the script follows:
 
 Run the script from a clone of this repository. It reads `docker-compose.yml`,
 `docker/stacks/`, `docker/userscripts/`, `scripts/models.txt` and `tools/validate.py` from its
-own directory. It `cd`s into that directory first, so `~/ai-content-studio/install2.sh` works
+own directory. It `cd`s into that directory first, so `~/ai-content-studio/install.sh` works
 from anywhere. Do not copy the script elsewhere on its own.
 
 ```bash
@@ -77,9 +78,9 @@ The script never installs Docker, the NVIDIA driver or `nvidia-container-toolkit
 ## 3. First run: check, dry-run, then install
 
 ```bash
-./install2.sh --check      # diagnosis + plan + verification, changes nothing
-./install2.sh --dry-run    # also walks every step and prints "would …", changes nothing
-./install2.sh              # real run: plan, then "Proceed with this plan? [y/N]"
+./install.sh --check      # diagnosis + plan + verification, changes nothing
+./install.sh --dry-run    # also walks every step and prints "would …", changes nothing
+./install.sh              # real run: plan, then "Proceed with this plan? [y/N]"
 ```
 
 - `--check` and `--dry-run` never ask anything. The only file they write is their log.
@@ -235,7 +236,7 @@ whole output, and `--dry-run` turns every `docker rm -f` there into `would docke
 | `--yes` | Skips the plan confirmation. Also accepts the ComfyUI takeover, and during an uninstall removes every owned component in scope without asking. It does not answer the token prompt, the token-save question, or the question about starting a third-party compose file. |
 | `--components L` | Uninstall only, ignored otherwise. A comma-separated subset of `web,updater,comfyui,ollama`, without spaces. Validated right after the options are parsed, in every mode: an unknown name prints `Unknown component in --components 'L': valid names are web, updater, comfyui, ollama (comma-separated)` and exits 1. |
 | `--smoke` | After verification, runs a reduced real render (§13). With `--check` or `--dry-run`, the render is only announced. |
-| `--log FILE` | Log file path. Default: `~/install2-YYYY-MM-DD-HHMM.log`. The script appends to it. |
+| `--log FILE` | Log file path. Default: `~/install-YYYY-MM-DD-HHMM.log`. The script appends to it. |
 | `-h`, `--help` | Prints the usage block and exits 0. |
 
 Any other argument prints `Unknown option: X (try --help)` and exits 1. Options can be given
@@ -396,7 +397,7 @@ blocked when:
   more inputs would drop files and change the container)
 - it mounts nothing on `/basedir` (an environment override has nowhere to point the models)
 - an override already sits next to its compose file and was not written by this installer
-  (the installer's own override has `written by install2.sh` on its first line)
+  (the installer's own override has `written by install.sh` on its first line)
 
 When blocked, the plan prints one line naming the reason, for example:
 
@@ -437,7 +438,7 @@ The steps:
    byte-for-byte unchanged:
 
    ```yaml
-   # written by install2.sh — remove this file to restore the original definition
+   # written by install.sh — remove this file to restore the original definition
    services:
      <service>:
        environment:
@@ -522,10 +523,10 @@ copied from, never removed.
 ## 11. Uninstall
 
 ```bash
-./install2.sh --mode uninstall --dry-run                          # preview, removes nothing
-./install2.sh --mode uninstall                                    # asks for each component
-./install2.sh --mode uninstall --components web,updater           # only these two, still asks
-./install2.sh --mode uninstall --yes --components web,updater     # unattended, no questions
+./install.sh --mode uninstall --dry-run                          # preview, removes nothing
+./install.sh --mode uninstall                                    # asks for each component
+./install.sh --mode uninstall --components web,updater           # only these two, still asks
+./install.sh --mode uninstall --yes --components web,updater     # unattended, no questions
 ```
 
 Unlike `fresh`/`repair`, no install-style plan is printed first (§5): this section is the
@@ -595,19 +596,19 @@ The `Models: before -> after` table (§8) still prints after the `Uninstall` sec
 though nothing here touches a model file — each entry just reads its current state (`KEPT`
 if the file is complete, `FAILED (missing)` otherwise), unchanged by the uninstall itself.
 
-To reinstall, run `./install2.sh` again. It reuses the stack files that were kept.
+To reinstall, run `./install.sh` again. It reuses the stack files that were kept.
 
 ## 12. Running without a terminal
 
 The script is interactive only when its **standard input** is a terminal. Redirecting
 output (`| tee …`) changes nothing. These run it without a terminal:
 
-- `ssh host 'cd ~/ai-content-studio && ./install2.sh'` (add `-t` to get one)
+- `ssh host 'cd ~/ai-content-studio && ./install.sh'` (add `-t` to get one)
 - cron, CI runners, systemd units
-- standard input redirected, for example `./install2.sh </dev/null`
+- standard input redirected, for example `./install.sh </dev/null`
 - piping into it
 
-Answers cannot be piped in: `yes | ./install2.sh` makes stdin a pipe, so every question gets
+Answers cannot be piped in: `yes | ./install.sh` makes stdin a pipe, so every question gets
 its default answer.
 
 | Question | In a terminal | Without a terminal |
@@ -664,8 +665,8 @@ Uninstall never runs it.
 
 ## 14. Logs
 
-- **Location**: `~/install2-YYYY-MM-DD-HHMM.log` (for example
-  `~/install2-2026-09-11-0942.log`), or the file given with `--log`. The script appends to
+- **Location**: `~/install-YYYY-MM-DD-HHMM.log` (for example
+  `~/install-2026-09-11-0942.log`), or the file given with `--log`. The script appends to
   it, so two runs started in the same minute share one file. Every mode writes a log,
   `--check` and `--dry-run` included. `--help` and invalid arguments do not.
 - **Content**: everything shown on screen (stdout and stderr): diagnosis, plan, questions,
@@ -684,7 +685,7 @@ Uninstall never runs it.
 To find the lines that matter:
 
 ```bash
-grep -nE 'WARNING|ERROR|FAILED|SKIPPED' ~/install2-*.log
+grep -nE 'WARNING|ERROR|FAILED|SKIPPED' ~/install-*.log
 ```
 
 ## 15. Exit codes
@@ -712,23 +713,22 @@ just corners it deliberately cuts:
   `--dry-run`), even though uninstall never touches a model file — see §11.
 - **`--check --mode uninstall` prints only the diagnosis, no uninstall preview.** `--check`
   short-circuits before the mode-specific pipeline runs, so it never lists what an uninstall
-  would remove or keep. Use `./install2.sh --mode uninstall --dry-run` to preview one.
+  would remove or keep. Use `./install.sh --mode uninstall --dry-run` to preview one.
 
 ## 17. Troubleshooting and self-test
 
 For symptoms (`JSON.parse` / `NetworkError` in the browser, ComfyUI not seeing its models,
 a padlocked folder, Ollama issues, reinstalling or resetting), see
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md). It was written for `install.sh` v1, so the
-messages it quotes differ, but its diagnosis commands and resets apply unchanged.
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) ([français](TROUBLESHOOTING.fr.md)).
 
-The self-test harness runs `install2.sh` through 42 scenarios against stubbed `docker`,
+The self-test harness runs `install.sh` through 42 scenarios against stubbed `docker`,
 `curl`, `ss`, `systemctl`, `sudo` and `ollama`, with a throwaway `$HOME` and a throwaway
 copy of the repository in a temp directory. It touches no real container, downloads
 nothing, and writes nothing outside that directory:
 
 ```bash
-bash tests/selftest-install2.sh                         # all scenarios, a few minutes
-bash tests/selftest-install2.sh virgin dry_run          # a subset (names: see ALL= at the end of the file)
+bash tests/selftest-install.sh                         # all scenarios, a few minutes
+bash tests/selftest-install.sh virgin dry_run          # a subset (names: see ALL= at the end of the file)
 ```
 
 The harness ends with `N passed, M failed` and exits 0 only when nothing failed.
