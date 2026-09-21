@@ -570,6 +570,7 @@
     .generate-bar .gb-prompt { flex: 4 1 260px; }
     .generate-bar .gb-prompt textarea { min-height: 64px; }
     .generate-bar .gb-field { flex: 0 1 165px; min-width: 130px; }
+    .generate-bar .tpl-field { flex: 1 1 100%; }
     .generate-bar .gb-wide { flex: 0 1 240px; }
     .generate-bar .gb-go { flex: 0 0 auto; padding: 13px 22px; }
 
@@ -793,20 +794,6 @@
 
     .secondary-btn.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
 
-    .mode-toggle { display: flex; gap: 4px; margin: 6px 0; padding: 4px; border: 1px solid var(--border-light); border-radius: var(--pill); background: var(--card-2); }
-    .mode-btn {
-      flex: 1;
-      border: 0;
-      background: transparent;
-      color: var(--text-2);
-      border-radius: var(--pill);
-      padding: 9px 16px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      letter-spacing: 0.01em;
-    }
-    .mode-btn.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
 
     .shot-edit-list { display: grid; gap: 12px; }
     .shot-edit-item {
@@ -1256,7 +1243,7 @@
       cursor: pointer;
     }
     .sheet-status { margin: 8px 0 10px; min-height: 15px; }
-    .variant-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+    .variant-strip { display: flex; flex-wrap: wrap; gap: 10px; padding-bottom: 4px; }
     .variant-thumb {
       flex: 0 0 auto;
       width: 132px;
@@ -1269,7 +1256,21 @@
       text-align: left;
     }
     .variant-thumb img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: var(--bg-mid); }
+    .variant-thumb { position: relative; }
     .variant-thumb.active { border-color: var(--highlight); }
+    .variant-thumb .variant-badge { display: none; }
+    .variant-thumb.active .variant-badge {
+      display: block;
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--highlight);
+      color: var(--on-grad);
+    }
     .variant-thumb .variant-meta {
       display: block;
       padding: 5px 7px;
@@ -1279,6 +1280,65 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* ── Sélecteur visuel de gabarit de planche ── */
+    .tpl-field { display: grid; gap: 6px; }
+    .tpl-field > .tpl-caption {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-2);
+      font-weight: 500;
+    }
+    .tpl-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .tpl-card {
+      flex: 0 0 auto;
+      width: 124px;
+      padding: 6px;
+      border: 2px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      background: var(--card-2);
+      color: var(--text-2);
+      cursor: pointer;
+      text-align: left;
+    }
+    .tpl-card svg { display: block; width: 100%; height: auto; border-radius: 8px; background: var(--bg-mid); }
+    .tpl-card .tpl-name {
+      display: block;
+      margin-top: 5px;
+      font-size: 10px;
+      line-height: 1.25;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--text-2);
+      min-height: 2.5em;   /* libellés sur 1 à 3 lignes : cartes alignées malgré tout */
+    }
+    .tpl-card[aria-pressed="true"] { border-color: var(--highlight); color: var(--highlight); }
+    .tpl-card[aria-pressed="true"] .tpl-name { color: var(--text); }
+
+    /* ── Sujets multiples : onglets du menu Personnage + pastilles de l'éditeur de plans ── */
+    .subject-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .kind-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+    .subject-tab[aria-pressed="true"] { border-color: var(--highlight); color: var(--highlight); }
+    .subject-tab, .subj-chip {
+      flex: 0 0 auto;
+      padding: 6px 12px;
+      border: 1px solid var(--border-light);
+      border-radius: 999px;
+      background: var(--card-2);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .subject-tab.active { border-color: var(--highlight); color: var(--highlight); }
+    .subject-tab.add { border-style: dashed; }
+    .subject-tab.del { color: var(--text-3, var(--text-2)); }
+    .subject-tab:disabled, .subj-chip:disabled { opacity: .45; cursor: not-allowed; }
+    .shot-subjects { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .shot-subjects .shot-subjects-lbl { margin: 0; }
+    .subj-chip.on { border-color: var(--highlight); color: var(--highlight); }
+
     /* ── Montage (menu + timeline) ── */
     .montage-list { display: grid; gap: 12px; margin: 12px 0; }
     .montage-clip {
@@ -1634,6 +1694,11 @@
                 Style fiches perso/décor (LoRA)
                 <select id="sheetLoraSelect"><option value="">Aucun</option></select>
               </label>
+              <div class="gb-field tpl-field" id="sheetTemplateWrap" style="display:none">
+                <span class="tpl-caption">Gabarit de planche</span>
+                <select id="sheetTemplateSelect" hidden></select>
+                <div class="tpl-grid" role="group" aria-label="Gabarit de planche"></div>
+              </div>
               <label class="gb-field" id="variantsWrap">
                 Variantes
                 <input type="number" id="variants" min="1" max="8" value="2" />
@@ -1666,14 +1731,8 @@
             </div>
 
             <div class="generate-row">
-              <div class="gb-field gb-wide" id="modeWrap" style="display:none">
-                <label>Mode de génération</label>
-                <div class="mode-toggle" id="modeToggle">
-                  <button type="button" class="mode-btn active" id="modeAutoBtn" data-mode="auto">Auto</button>
-                  <button type="button" class="mode-btn" id="modeDirectorBtn" data-mode="director">Réalisateur</button>
-                </div>
-                <p class="hint">Auto : chaîne complète en un clic. Réalisateur : validez chaque étape (plans, keyframes, animatic).</p>
-                <button type="button" class="secondary-btn" id="resumeProjectBtn" style="display:none; margin-top:8px">Reprendre le projet</button>
+              <div class="gb-field gb-wide" id="resumeWrap" style="display:none">
+                <button type="button" class="secondary-btn" id="resumeProjectBtn" style="display:none">Reprendre le projet</button>
               </div>
 
               <div class="gb-field gb-wide" id="marketsWrap" style="display:none">
@@ -1799,6 +1858,12 @@
         <section id="studioCharacter" class="studio-section">
           <h3 class="section-title">Planche personnage</h3>
           <p class="hint">Modifiez les champs puis régénérez pour créer une nouvelle variante ; cliquez une vignette pour choisir la planche active.</p>
+          <div class="subject-tabs" id="subjectTabs" hidden></div>
+          <div class="subject-tabs" id="charKindToggle" hidden>
+            <span class="kind-label">Type de sujet</span>
+            <button type="button" class="subject-tab" data-kind="human">Humain</button>
+            <button type="button" class="subject-tab" data-kind="other">Autre (animal, créature, robot, objet…)</button>
+          </div>
           <div class="sheet-layout">
             <div class="form-stack">
               <label>Visage<input type="text" data-field="face" /></label>
@@ -1966,7 +2031,7 @@
     });
 
     // Fallback si le manifest ne fournit pas la section "pipelines" (manifest v2).
-    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora, sheetLora}
+    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora, sheetLora, sheetTemplate}
     const PIPELINES_FALLBACK = [
       { id: "text2image", label: "Text2Image", controls: ["variants", "ratio", "lora", "style"] },
       { id: "image2image", label: "Image2Image / Edit", controls: ["variants", "ratio", "image", "markets"] },
@@ -1974,9 +2039,9 @@
       { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps", "lora"] },
       { id: "sequence2video", label: "Animatic (FLF2V)", scenario: "storyboard", controls: ["seq", "audio"] },
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
-        controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio", "sheetLora"], defaults: { duration: 2 } },
+        controls: ["shots", "duration", "hold", "ratio", "style", "audio", "sheetLora", "sheetTemplate"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["mode", "duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "skipSheets", "style"], defaults: { duration: 2 } },
+        controls: ["duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "sheetTemplate", "skipSheets", "style"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
         controls: ["duration", "variants", "audio", "style"], defaults: { duration: 5 } }
     ];
@@ -2154,16 +2219,11 @@
       "fin": { en: "end", es: "fin", de: "Ende" },
       "Seed": {}, "Pipeline": {}, "Node Monitor": {}, "ComfyUI Console": {}, "100% Local (GB10)": {},
       // ── Mode Réalisateur (storyboard_v2) ──
-      "Mode de génération": { en: "Generation mode", es: "Modo de generación", de: "Generierungsmodus" },
       "Options avancées": { en: "Advanced options", es: "Opciones avanzadas", de: "Erweiterte Optionen" },
       "Identité ancrée": { en: "Identity anchored", es: "Identidad anclada", de: "Identität verankert" },
       "Identité à valider": { en: "Identity to validate", es: "Identidad por validar", de: "Identität zu bestätigen" },
       "Auto": {},
       "Réalisateur": { en: "Director", es: "Director", de: "Regisseur" },
-      "Auto : chaîne complète en un clic. Réalisateur : validez chaque étape (plans, keyframes, animatic).":
-        { en: "Auto: full chain in one click. Director: validate each step (shots, keyframes, animatic).",
-          es: "Auto: cadena completa en un clic. Director: valide cada etapa (planos, keyframes, animatic).",
-          de: "Auto: vollständige Kette mit einem Klick. Regisseur: jeden Schritt bestätigen (Einstellungen, Keyframes, Animatic)." },
       "Mode Réalisateur": { en: "Director mode", es: "Modo Director", de: "Regisseur-Modus" },
       "Étape 1 : ajustez les plans générés, puis lancez les keyframes. Étape 2 : régénérez ou verrouillez chaque case. Étape 3 : lancez l'animatic une fois toutes les cases prêtes.":
         { en: "Step 1: adjust the generated shots, then launch the keyframes. Step 2: regenerate or lock each panel. Step 3: launch the animatic once every panel is ready.",
@@ -2185,6 +2245,15 @@
       "Planche décor": { en: "Location sheet", es: "Lámina de decorado", de: "Schauplatzbogen" },
       "Valider les planches": { en: "Validate the sheets", es: "Validar las láminas", de: "Bögen bestätigen" },
       "Planches validées ✓": { en: "Sheets validated ✓", es: "Láminas validadas ✓", de: "Bögen bestätigt ✓" },
+      // ── Sujets multiples (onglets du menu Personnage, taggage des plans) ──
+      "+ Ajouter un sujet": { en: "+ Add a subject", es: "+ Añadir un sujeto", de: "+ Motiv hinzufügen" },
+      "Retirer ce sujet": { en: "Remove this subject", es: "Quitar este sujeto", de: "Dieses Motiv entfernen" },
+      "Sujets du plan": { en: "Subjects in this shot", es: "Sujetos del plano", de: "Motive dieser Einstellung" },
+      "Type de sujet": { en: "Subject type", es: "Tipo de sujeto", de: "Motivart" },
+      "Humain": { en: "Human", es: "Humano", de: "Mensch" },
+      "Autre (animal, créature, robot, objet…)":
+        { en: "Other (animal, creature, robot, object…)", es: "Otro (animal, criatura, robot, objeto…)",
+          de: "Anderes (Tier, Wesen, Roboter, Objekt…)" },
       // ── Studio plein écran (coquille + menus Personnage/Décor) ──
       "Personnage": { en: "Character", es: "Personaje", de: "Figur" },
       "Décor": { en: "Location", es: "Decorado", de: "Schauplatz" },
@@ -2204,6 +2273,18 @@
       "Cheveux": { en: "Hair", es: "Cabello", de: "Haar" },
       "Tenue": { en: "Outfit", es: "Vestuario", de: "Outfit" },
       "Accessoires": { en: "Accessories", es: "Accesorios", de: "Accessoires" },
+      "Active": { es: "Activa", de: "Aktiv" },
+      "Gabarit de planche": { en: "Sheet template", es: "Plantilla de lámina", de: "Bogenvorlage" },
+      "Auto (selon le sujet)": { en: "Auto (follows the subject)", es: "Auto (según el sujeto)", de: "Auto (je nach Motiv)" },
+      "Turnaround + expressions + costume": { en: "Turnaround + expressions + costume", es: "Vueltas + expresiones + vestuario", de: "Turnaround + Ausdrücke + Kostüm" },
+      "Colonne d'expressions + accessoires": { en: "Expression column + props", es: "Columna de expresiones + accesorios", de: "Ausdrucksspalte + Requisiten" },
+      "Grand portrait + rangée de têtes": { en: "Large portrait + head row", es: "Retrato grande + fila de cabezas", de: "Großes Porträt + Kopfreihe" },
+      "Grand portrait + vêtements à plat": { en: "Large portrait + garment flats", es: "Retrato grande + prendas planas", de: "Großes Porträt + Kleidung flach" },
+      "Poses d'action + équipement": { en: "Action poses + equipment", es: "Poses de acción + equipo", de: "Action-Posen + Ausrüstung" },
+      "Sujet": { en: "Subject", es: "Sujeto", de: "Motiv" },
+      "Forme": { en: "Form", es: "Forma", de: "Form" },
+      "Surface": { es: "Superficie", de: "Oberfläche" },
+      "Détails": { en: "Details", es: "Detalles", de: "Details" },
       "Palette": { es: "Paleta" },
       "Lieu": { en: "Place", es: "Lugar", de: "Ort" },
       "Architecture": { es: "Arquitectura", de: "Architektur" },
@@ -2285,9 +2366,22 @@
         en: (s, t) => `${s} segment(s), ~${t} s — press Generate to run`,
         es: (s, t) => `${s} segmento(s), ~${t} s — pulse Generate para lanzar`,
         de: (s, t) => `${s} Segment(e), ~${t} s — mit Generate starten` },
+      activeSheet: {
+        fr: (i, n) => `planche ${i}/${n} active — c'est elle qui servira d'ancrage`,
+        en: (i, n) => `sheet ${i}/${n} active — this is the one used as the anchor`,
+        es: (i, n) => `lámina ${i}/${n} activa — es la que servirá de anclaje`,
+        de: (i, n) => `Bogen ${i}/${n} aktiv — dieser dient als Anker` },
       shotLabel: {
         fr: (i, n) => `Plan ${i}/${n}`, en: (i, n) => `Shot ${i}/${n}`,
         es: (i, n) => `Plano ${i}/${n}`, de: (i, n) => `Einstellung ${i}/${n}` },
+      subjectN: {
+        fr: i => `Sujet ${i}`, en: i => `Subject ${i}`,
+        es: i => `Sujeto ${i}`, de: i => `Motiv ${i}` },
+      subjectsCap: {
+        fr: n => `Sujets du plan — ${n} au maximum par plan`,
+        en: n => `Subjects in this shot — ${n} per shot at most`,
+        es: n => `Sujetos del plano — ${n} como máximo por plano`,
+        de: n => `Motive dieser Einstellung — höchstens ${n} pro Einstellung` },
       studioJobs: {
         fr: n => `${n} job(s) en cours`, en: n => `${n} job(s) running`,
         es: n => `${n} trabajo(s) en curso`, de: n => `${n} Job(s) aktiv` }
@@ -2324,6 +2418,7 @@
       refreshCloudUI();
       updateStudioJobs(0);
       renderStyleOptions();
+      renderSheetTemplateOptions();
       renderLoraSelect();
       refreshSoulId();
       if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderAllKeyframeCards(); renderMontage(); renderFooterTimeline(); }
@@ -2375,10 +2470,10 @@
     const CONTROL_WRAPS = {
       image: "imageInputWrap", duration: "durationWrap", markets: "marketsWrap",
       seq: "seqWrap", shots: "shotCountWrap", hold: "holdWrap",
-      variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap", mode: "modeWrap",
+      variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap",
       style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap",
       lora: "loraStyleWrap", refs: "refExtrasWrap", sheetLora: "sheetLoraWrap",
-      skipSheets: "skipSheetsWrap"
+      sheetTemplate: "sheetTemplateWrap", skipSheets: "skipSheetsWrap"
     };
     function updateModelOptions() {
       const wfs = manifest.workflows.filter(w => w.pipeline === pipelineSelect.value);
@@ -2393,7 +2488,6 @@
       if (p !== updateModelOptions.lastPipeline) {
         if (def?.defaults?.duration) $("videoDuration").value = def.defaults.duration;
         resetDirectorZone(); // changement de pipeline = fin de la session Réalisateur en cours
-        if (p === "reference2video") setDirectorMode(true); // Réalisateur par défaut pour r2v
       }
       updateModelOptions.lastPipeline = p;
       updateModelLabel();
@@ -2912,18 +3006,17 @@
     // builder = une fonction (seed, width, height) + une entrée ici.
     const BUILDERS = {
       flf2v: (seed) => generateSequence(seed),
-      // Mode Réalisateur : Generate ne lance que l'étape 1 (fiches + planches) et ouvre le
-      // studio plein écran ; la suite se déroule via les menus du studio. Mode Auto : chaîne complète.
-      storyboard_v2: (seed, width, height) => directorMode
-        ? directorStep1(seed, width, height)
-        : generateStoryboardV2(seed, width, height),
+      // Generate ne lance que l'étape 1 (fiches + planches) et ouvre le studio plein écran ;
+      // la suite se déroule via les menus du studio. C'est le SEUL chemin depuis que le
+      // sélecteur Auto/Réalisateur a été retiré (demande utilisateur du 2026-09-21).
+      storyboard_v2: (seed, width, height) => directorStep1(seed, width, height),
       campaign_full: (seed) => generateCampaignFull(seed),
-      // Bypass fiches (#skipSheetsToggle) prime sur le mode : rien à revoir si rien n'est
-      // auto-généré, donc bypass coché ⇒ toujours le chemin Auto (qui gère le bypass en
-      // interne), Réalisateur ou pas. Bypass décoché : Auto ou Réalisateur comme avant.
+      // Bypass fiches (#skipSheetsToggle) : rien à revoir si rien n'est auto-généré, donc la
+      // revue est court-circuitée et le job vidéo part directement (generateReference2Video
+      // gère le bypass en interne). Décoché : revue des planches dans le studio.
       reference2video: (seed, width, height) => $("skipSheetsToggle").checked
         ? generateReference2Video(seed, width, height)
-        : (directorMode ? directorStepR2V1(seed, width, height) : generateReference2Video(seed, width, height))
+        : directorStepR2V1(seed, width, height)
     };
 
     async function uploadInputImage() {
@@ -3953,28 +4046,65 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       director.style = STYLE_PACKS[$("styleSelect").value] ? $("styleSelect").value : director.style;
       saveProject();
     });
+    // Même parade pour le gabarit : sans ça, une régénération de planche en cours de session
+    // repartirait sur le gabarit figé à l'ouverture malgré le nouveau choix affiché.
+    $("sheetTemplateSelect").addEventListener("change", () => {
+      if (!director) return;
+      director.sheetTemplate = $("sheetTemplateSelect").value;
+      saveProject();
+    });
 
-    function compileKeyframePrompt(shot, charDesc) {
+    // `descs` = description(s) du/des sujet(s) du plan, dans l'ordre des entrées image.
+    // La branche À UN SUJET est la formulation qualifiée en rendu réel (LOT 4/7) : elle est
+    // reproduite au caractère près, ne la reformuler sous aucun prétexte. La branche à deux
+    // sujets décale le décor sur la 3e entrée image (cf. submitKeyframeJob). Qwen-Edit tourne
+    // à cfg 1 : tout est formulé POSITIVEMENT, le négatif n'est jamais encodé.
+    function compileKeyframePrompt(shot, descs) {
+      const list = (Array.isArray(descs) ? descs : [descs]).filter(Boolean);
+      const charDesc = list[0] || "";
       const cam = CAMERA_LIB[shot.camera] || CAMERA_LIB.medium;
       const light = LIGHTING_LIB[shot.lighting] || LIGHTING_LIB.golden_hour;
       const styleText = currentStyleText();
       const emotion = (shot.emotion || "").trim();
       const extra = (shot.extra || "").trim();
-      let s = "Use the first reference image only as the appearance guide for one single character, "
-        + charDesc
-        + ", and use the second reference image only as the guide for the environment. "
-        + "Create one brand-new photorealistic cinematic film still that places exactly one single "
-        + "instance of that character inside the environment of the second reference image: "
-        + shot.action + ". Frame it as " + cam.frame + ".";
-      if (emotion) s += " The character's expression and body language convey " + emotion + ".";
-      s += " " + light.text;
-      s += " The character is fully integrated into the scene, standing in that location with correct "
-        + "perspective and scale. Do not place the two references side by side, do not create a "
-        + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
-        + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
-        + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
-        + "continuous scene that extends all the way to all four edges. Keep the character's face, "
-        + "hair, costume and colors identical to the first reference image.";
+      let s;
+      if (list.length > 1) {
+        s = "Use the first reference image only as the appearance guide for one single character, "
+          + list[0]
+          + ", use the second reference image only as the appearance guide for one single other "
+          + "character, " + list[1]
+          + ", and use the third reference image only as the guide for the environment. "
+          + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+          + "instance of each of those two characters together inside the environment of the third "
+          + "reference image: " + shot.action + ". Frame it as " + cam.frame + ".";
+        if (emotion) s += " The characters' expressions and body language convey " + emotion + ".";
+        s += " " + light.text;
+        s += " Both characters are fully integrated into the same scene, present together in that "
+          + "location with correct perspective and scale. Do not place the references side by side, "
+          + "do not create a split screen, diptych or collage, do not show any reference sheet, "
+          + "contact sheet, grid, thumbnails, multiple poses, color swatches, panels, borders, "
+          + "margins, black frame, caption or text anywhere. The whole picture is a single unified "
+          + "live-action movie frame, one continuous scene that extends all the way to all four "
+          + "edges. Keep each character's anatomy, body plan, head, surface, materials, markings, "
+          + "clothing if any and colors identical to its own reference image.";
+      } else {
+        s = "Use the first reference image only as the appearance guide for one single character, "
+          + charDesc
+          + ", and use the second reference image only as the guide for the environment. "
+          + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+          + "instance of that character inside the environment of the second reference image: "
+          + shot.action + ". Frame it as " + cam.frame + ".";
+        if (emotion) s += " The character's expression and body language convey " + emotion + ".";
+        s += " " + light.text;
+        s += " The character is fully integrated into the scene, present in that location with correct "
+          + "perspective and scale. Do not place the two references side by side, do not create a "
+          + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
+          + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
+          + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
+          + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
+          + "body plan, head, surface, materials, markings, clothing if any and colors identical to the "
+          + "first reference image.";
+      }
       if (extra) s += " " + extra;
       if (styleText) s += " " + styleText;
       return s;
@@ -4091,7 +4221,18 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Ordre canonique des champs de fiche (personnage / décor) : la jointure ", " de ces
     // champs par les helpers ci-dessous reproduit EXACTEMENT l'ancienne chaîne charDesc/locDesc.
+    // Deux squelettes : visage/cheveux/tenue ne veulent rien dire hors d'un sujet humain — sur
+    // un lion de documentaire animalier, gemma casait "fur" dans `outfit` et la planche sortait
+    // un lion anthropomorphe habillé. Le second squelette est volontairement générique plutôt
+    // qu'animalier : il doit aussi porter une créature imaginaire, un robot non humanoïde, un
+    // extraterrestre, un véhicule ou un objet, sans multiplier les gabarits. Le chemin humain
+    // reste séparé parce que c'est celui qui est qualifié en rendu réel (LOT 7). `kind`
+    // (renvoyé par gemma, stocké dans l'objet de champs, absent des deux listes donc jamais
+    // compilé dans le prompt) choisit la liste ; un projet restauré sans `kind` reste humain.
     const CHAR_FIELD_KEYS = ["face", "hair", "outfit", "accessories", "palette"];
+    const CHAR_OTHER_FIELD_KEYS = ["subject", "form", "surface", "details", "palette"];
+    const charKindOf = f => (f?.kind && f.kind !== "human" ? "other" : "human");
+    const charFieldKeys = f => (charKindOf(f) === "other" ? CHAR_OTHER_FIELD_KEYS : CHAR_FIELD_KEYS);
     const LOC_FIELD_KEYS = ["place", "architecture", "materials", "lighting", "palette"];
     // Ces deux chaînes alimentent des graphes KREA 2 (buildCharsheetGraph/buildLocsheetGraph)
     // : elles passent donc par le même filtre de remplissage que l'enrichissement, sinon un
@@ -4099,26 +4240,111 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // le prompt Krea 2. Point de passage unique de TOUS les appelants (mode Auto, mode
     // Réalisateur, projet restauré, menus Personnage/Décor du studio).
     function charDescFromFields(f) {
-      return stripPromptPadding(CHAR_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
+      return stripPromptPadding(charFieldKeys(f).map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
     }
     function locDescFromFields(f) {
       return stripPromptPadding(LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
     }
 
-    // Fiche personnage figée : OBJET de champs structurés gemma {face,hair,outfit,accessories,palette}
+    // ── Plusieurs sujets : liste de planches personnage ────────────────────
+    // Le nœud Qwen-Edit du gabarit d'ancrage (TextEncodeQwenImageEditPlus) n'expose que
+    // trois entrées image : une keyframe porte donc AU PLUS 2 sujets, la troisième entrée
+    // étant le décor. La LISTE de planches n'est pas bornée (une série animalière peut
+    // avoir lion, zèbre et gazelle) ; c'est le taggage plan par plan qui l'est, et
+    // l'éditeur de plans refuse le 3e sujet plutôt que de laisser croire qu'il passera.
+    const MAX_SHOT_SUBJECTS = 2;
+    const newCharSlot = (fields, variants, active = 0) => ({ fields, variants, active });
+
+    // `director.chars` est la liste ; charFields/charVariants/charActive restent les noms
+    // utilisés PARTOUT ailleurs (menus, régénération, import, gate) et pointent sur le sujet
+    // en cours d'édition (`charIdx`). Accesseurs partagés par les 3 constructeurs de session
+    // (Auto/Réalisateur/restauration) plutôt que recopiés dans chaque littéral.
+    const SHEET_ACCESSORS = {
+      charFields: { get() { return this.chars[this.charIdx].fields; },
+                    set(v) { this.chars[this.charIdx].fields = v; } },
+      charVariants: { get() { return this.chars[this.charIdx].variants; } },
+      charActive: { get() { return this.chars[this.charIdx].active; },
+                    set(v) { this.chars[this.charIdx].active = v; } },
+      charName: { get() { return this.charVariants[this.charActive]?.inputName || null; } },
+      locName: { get() { return this.locVariants[this.locActive]?.inputName || null; } },
+      charDesc: { get() { return charDescFromFields(this.charFields); } },
+      locDesc: { get() { return locDescFromFields(this.locFields); } }
+    };
+    const attachSheetAccessors = d => Object.defineProperties(d, SHEET_ACCESSORS);
+
+    // Indices de sujets d'un plan : bornés à la liste courante, dédoublonnés, plafonnés, et
+    // jamais vides (un plan sans sujet n'a rien à ancrer). Un plan d'avant la fonctionnalité
+    // n'a pas de `subjects` → sujet 1, soit exactement l'ancien comportement.
+    function shotSubjectIdx(shot) {
+      const n = director?.chars?.length || 1;
+      const out = [];
+      for (const i of (Array.isArray(shot?.subjects) ? shot.subjects : [0]))
+        if (Number.isInteger(i) && i >= 0 && i < n && !out.includes(i)) out.push(i);
+      return out.length ? out.slice(0, MAX_SHOT_SUBJECTS) : [0];
+    }
+    // Sujets d'un plan résolus en {desc, name} (description compilée + ancre ComfyUI active).
+    function shotSubjects(shot) {
+      return shotSubjectIdx(shot).map(i => {
+        const c = director.chars[i];
+        return { desc: charDescFromFields(c.fields), name: c.variants[c.active]?.inputName || null };
+      });
+    }
+    // Identité personnage du prompt de cut (LTX) : les sujets du plan, dans l'ordre.
+    const shotCharDesc = shot => shotSubjects(shot).map(s => s.desc).filter(Boolean).join(". ");
+
+    // Étiquette courte d'un sujet (onglets du menu Personnage, pastilles de l'éditeur de
+    // plans) : numéro attribué par l'app + les premiers mots du 1er champ descriptif rempli.
+    function subjectLabel(i) {
+      const f = director?.chars?.[i]?.fields;
+      // `label` est un nom court demandé à gemma, hors des listes de champs (jamais compilé
+      // dans le prompt). Repli sur le 1er champ descriptif : sur un sujet non humain il donne
+      // l'espèce (« adult male African lion »), sur un humain il donne le visage
+      // (« sharply defined »), ce qui ne distingue pas deux personnes — d'où `label`.
+      const head = (fieldText(f?.label) || charFieldKeys(f).map(k => fieldText(f?.[k])).find(Boolean) || "")
+        .split(/[,;.]/)[0].trim().split(/\s+/).slice(0, 4).join(" ");
+      return head ? `${dyn("subjectN", i + 1)} · ${head}` : dyn("subjectN", i + 1);
+    }
+
+    // Fiche personnage figée : OBJET de champs structurés gemma, {face,hair,outfit,accessories,
+    // palette} pour un sujet humain, {subject,form,surface,details,palette} pour tout le reste
     // (éditable dans le menu Personnage du studio) ; charDescFromFields le compile en une chaîne.
+    // `kind` commande aussi le gabarit de planche (buildCharsheetGraph) et les étiquettes du menu.
     // Fallback sans LLM : brief dans le 1er champ, autres vides.
-    async function characterSheetFromBrief() {
+    // `exclude` = descriptions des sujets DÉJÀ décrits (bouton « + Ajouter un sujet ») : gemma
+    // doit alors prendre le sujet suivant du brief. Le repli « brief tel quel » n'a de sens que
+    // pour le 1er sujet ; pour un sujet supplémentaire on remonte l'erreur plutôt que de
+    // fabriquer un doublon du premier.
+    async function characterSheetFromBrief(exclude = []) {
       const scene = brief.value.trim();
+      const skip = exclude.filter(Boolean);
+      const more = skip.length
+        ? ` The scene contains SEVERAL subjects. These ones are already described and must be IGNORED: ${skip.map(d => `"${d}"`).join("; ")}. Take the most prominent subject that is NOT one of those. That next subject is just as likely to be an animal, a creature, a machine or an object as a human being: decide its "kind" from the scene alone, never default to "human".`
+        : "";
       try {
         const out = await gemmaJSON(
-          `You are a character designer. From the user's scene, take the SINGLE most prominent character and describe them so they stay IDENTICAL across shots. Answer ONLY with JSON with these fields, each a dense ~10-20 word English string, no camera/scene/action wording: {"face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}.`,
+          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. Also set "label": a plain 2-to-4-word name for this subject that tells it apart from other subjects of the same scene, e.g. "weary detective", "young farmhand", "adult male lion", "six-legged mining robot". If kind is "human", answer ONLY with JSON {"kind":"human","label":"...","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","label":"...","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.${more}`,
           scene);
-        const fields = {};
-        for (const k of CHAR_FIELD_KEYS) fields[k] = fieldText(out[k]);
-        if (charDescFromFields(fields)) { addEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
-        throw new Error("format inattendu");
+        // Le squelette se décide sur les champs que gemma a REMPLIS, pas sur l'étiquette
+        // `kind` qu'il annonce : il décrit régulièrement un lion dans {subject, form, surface}
+        // tout en se déclarant "human" (et l'inverse). Se fier à l'étiquette donnait une fiche
+        // vide — les clés lues n'étaient pas celles écrites — donc un prompt réduit à la
+        // palette, et Krea 2 rendait alors un humain quelconque. `palette` est exclu du compte :
+        // c'est la seule clé commune aux deux jeux, elle ne départage rien. `kind` ne sert plus
+        // que d'arbitre quand les deux jeux sont remplis pareil.
+        const filledCount = keys => keys.filter(k => k !== "palette" && fieldText(out[k])).length;
+        const nHuman = filledCount(CHAR_FIELD_KEYS), nOther = filledCount(CHAR_OTHER_FIELD_KEYS);
+        const fields = { kind: nOther > nHuman ? "other" : nHuman > nOther ? "human"
+                               : (out.kind === "human" ? "human" : "other") };
+        fields.label = fieldText(out.label);   // hors listes de champs : onglets seuls, jamais le prompt
+        for (const k of charFieldKeys(fields)) fields[k] = fieldText(out[k]);
+        // Une fiche réduite à la palette n'est pas une fiche : elle décrit des couleurs et
+        // aucun sujet, et Krea 2 invente alors le personnage de toutes pièces. On exige donc
+        // au moins un champ descriptif rempli, sinon repli sur le brief (qui, lui, nomme le
+        // sujet) plutôt qu'un prompt de trois couleurs.
+        if (filledCount(charFieldKeys(fields))) { addEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
+        throw new Error("aucun champ descriptif rempli");
       } catch (e) {
+        if (skip.length) throw new Error(`fiche du sujet supplémentaire indisponible (${e.message})`);
         addEvent("WARN", `Fiche personnage LLM indisponible (${e.message}) — brief utilisé tel quel.`, "warn");
         return { face: scene, hair: "", outfit: "", accessories: "", palette: "" };
       }
@@ -4153,7 +4379,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       let shots;
       try {
         const out = await gemmaJSON(
-          `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character, costume and setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one person in frame) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
+          `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character's appearance and the setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one subject in frame, a person, an animal, a creature, a machine or an object) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
           scene);
         shots = normalizeShotList(out.shots, n, scene);
         addEvent("OK", `${n} plans Scene DNA (caméra/lumière/action) générés par ${OLLAMA_MODEL}.`, "ok");
@@ -4236,12 +4462,133 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Planche personnage multi-vues (ancre d'apparence, image 1 des keyframes duales).
     // Format 16:9 large obligatoire (layout prouvé au Lot 1), indépendant du ratio UI.
-    function buildCharsheetGraph(charDesc, negText, seed, width, height, loraName) {
+    // ── Bibliothèque de gabarits de planche personnage ──
+    // Un gabarit ne décrit QUE la composition de la planche : quelles vues, où, dans quel
+    // ordre. Tout le vocabulaire qui dépend de la nature du sujet (une personne ou une chose,
+    // un visage ou une face avant, un costume ou une matière) sort de `sheetWords(kind)`, et
+    // la clause anti-anthropomorphe est ajoutée hors gabarit. Conséquence voulue : un gabarit
+    // de plus marche d'emblée sur un humain comme sur un lion ou un robot, et une famille de
+    // sujets de plus ne demande pas de réécrire les gabarits. Ne pas fusionner les deux.
+    // `turnaround` + sujet humain reproduit au caractère près la formulation qualifiée au
+    // LOT 7 (test headless dédié) — ne pas la retoucher sans un nouveau rendu réel.
+    const SUBJECT_GUARD = "The subject is photographed exactly as the thing it is: its anatomy, structure, proportions, number of limbs and parts, and its natural resting posture are strictly the ones described above and never those of a human being; it has no human face, and it wears nothing unless the description above says otherwise. ";
+
+    const sheetWords = kind => kind === "other"
+      ? { who: "subject", sheet: "reference sheet", design: "design",
+          poses: "four views", stance: "natural posture",
+          face: "the part that identifies it best: its head, or its front if it has no head",
+          faceShort: "that same part", headshots: "photographs", expressions: "seen from different angles",
+          details: "its surface, its materials and its distinctive details",
+          flats: "its separable parts laid out flat", swatches: "the subject",
+          identity: "shape, surface and markings" }
+      : { who: "person", sheet: "character reference sheet", design: "character design",
+          poses: "four standing poses", stance: "neutral relaxed stance",
+          face: "the face", faceShort: "the face", headshots: "headshots",
+          expressions: "showing different facial expressions: neutral, smiling, surprised, determined",
+          details: "costume details", flats: "the garments laid out flat, seen from the front",
+          swatches: "the outfit and hair", identity: "face, hair and costume" };
+
+    const SHEET_HEAD = (d, w, guard) =>
+      `A professional photorealistic ${w.sheet} of one single ${w.who}, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${d}. ${guard}`;
+    const SHEET_SWATCHES = w =>
+      `Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of ${w.swatches}. `;
+    const SHEET_SAME = w =>
+      `Every view shows the exact same single ${w.who} with identical ${w.identity}, consistent ${w.design}. `;
+
+    // Schéma de disposition de chaque gabarit (`wire`), dessiné dans le sélecteur : le choix
+    // se fait à l'œil sur l'agencement des cases, pas sur un libellé. Bandeau de palette commun
+    // ajouté au rendu. `currentColor` suit l'état de la carte (grisé au repos, accent si choisi).
+    const SHEET_WIRE_STRIP = `<rect x="6" y="61" width="108" height="6" rx="2" opacity=".3"/>`;
+    const SHEET_TEMPLATES = {
+      // Turnaround 4 vues + rangée d'expressions + détails de costume (gabarit historique).
+      turnaround: { label: "Turnaround + expressions + costume", wire: `<rect x="6" y="6" width="26" height="22" rx="2" opacity=".75"/><rect x="38" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="51" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="64" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="77" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="94" y="9" width="9" height="7" rx="2" opacity=".35"/><rect x="105" y="9" width="9" height="7" rx="2" opacity=".35"/><rect x="94" y="19" width="9" height="7" rx="2" opacity=".35"/><rect x="6" y="33" width="24" height="24" rx="2" opacity=".75"/><rect x="34" y="33" width="24" height="24" rx="2" opacity=".75"/><rect x="62" y="33" width="24" height="24" rx="2" opacity=".75"/><rect x="90" y="33" width="24" height="24" rx="2" opacity=".75"/>`, build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a ${w.stance}, evenly studio-lit. `
+        + `Above the turnaround, one large tight close-up portrait of ${w.face}. `
+        + `A row of several smaller close-up ${w.headshots} of ${w.faceShort} ${w.expressions}. `
+        + `A cluster of detailed close-up photographs of ${w.details}. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Colonne d'expressions à gauche + 3 vues + accessoires isolés (planche de modèle anime).
+      expressions: { label: "Colonne d'expressions + accessoires", wire: `<rect x="6" y="5" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="16" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="27" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="38" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="49" width="11" height="9" rx="2" opacity=".5"/><rect x="24" y="5" width="28" height="42" rx="2" opacity=".75"/><rect x="56" y="5" width="28" height="42" rx="2" opacity=".75"/><rect x="88" y="5" width="26" height="42" rx="2" opacity=".75"/><rect x="24" y="51" width="9" height="7" rx="2" opacity=".35"/><rect x="36" y="51" width="9" height="7" rx="2" opacity=".35"/><rect x="48" y="51" width="9" height="7" rx="2" opacity=".35"/>`, build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows down its entire left side a vertical column of five close-up ${w.headshots} of ${w.faceShort} ${w.expressions}, evenly stacked. `
+        + `Filling the rest of the frame, three large full-body views of the same ${w.who} side by side - front view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+        + `In the lower left corner, below the column, a cluster of isolated close-up photographs of ${w.details}, each one floating separately on the empty background. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Grand portrait héros à gauche + rangée de têtes + vues corps (planche 3D / casting).
+      portrait: { label: "Grand portrait + rangée de têtes", wire: `<rect x="6" y="6" width="34" height="51" rx="2" opacity=".8"/><rect x="46" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="61" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="76" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="91" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="106" y="6" width="8" height="11" rx="2" opacity=".5"/><rect x="46" y="22" width="20" height="35" rx="2" opacity=".75"/><rect x="70" y="22" width="20" height="35" rx="2" opacity=".75"/><rect x="94" y="22" width="20" height="35" rx="2" opacity=".75"/>`, build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows one very large close-up portrait of ${w.face} filling the whole left third of the frame. `
+        + `Across the top of the remaining space, a row of five smaller ${w.headshots} of ${w.faceShort} ${w.expressions}. `
+        + `Below that row, three large full-body views of the same ${w.who} side by side - front view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Portrait + turnaround 4 vues + vêtements à plat (planche costume de production).
+      wardrobe: { label: "Grand portrait + vêtements à plat", wire: `<rect x="6" y="6" width="24" height="19" rx="2" opacity=".8"/><rect x="6" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="28" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="50" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="72" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="96" y="6" width="18" height="15" rx="2" opacity=".45"/><rect x="96" y="24" width="18" height="15" rx="2" opacity=".45"/><rect x="96" y="42" width="18" height="15" rx="2" opacity=".45"/>`, build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows one large close-up portrait of ${w.face} in its upper left corner. `
+        + `Across the middle and lower part of the frame, a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+        + `Along the right edge, a narrow vertical column of separate product photographs showing ${w.flats}, each isolated on its own plain background. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Vues neutres + poses d'action + équipement (planche sport / personnage en mouvement).
+      action: { label: "Poses d'action + équipement", wire: `<rect x="6" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="26" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="46" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="66" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="6" y="33" width="17" height="24" rx="2" opacity=".55"/><rect x="26" y="33" width="17" height="24" rx="2" opacity=".55"/><rect x="46" y="33" width="17" height="24" rx="2" opacity=".55"/><rect x="88" y="6" width="26" height="20" rx="2" opacity=".8"/><rect x="88" y="29" width="11" height="9" rx="2" opacity=".5"/><rect x="103" y="29" width="11" height="9" rx="2" opacity=".5"/><rect x="88" y="41" width="11" height="9" rx="2" opacity=".35"/><rect x="103" y="41" width="11" height="9" rx="2" opacity=".35"/>`, build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows across its top a row of four full-body views of the same ${w.who} - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}. `
+        + `Below them, a second row of three full-body action poses of the same ${w.who} caught in mid-movement, each one isolated on the background. `
+        + `In the upper right corner, one large close-up portrait of ${w.face}, and beside it four smaller ${w.headshots} ${w.expressions}. `
+        + `In the lower right corner, a cluster of isolated close-up photographs of ${w.details} laid out flat. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) }
+    };
+
+    // Gabarit actif : id figé sur la session Réalisateur (director.sheetTemplate) sinon lu au
+    // sélecteur, même repli que currentStyleText. "auto" = turnaround, c'est-à-dire le
+    // comportement d'avant l'ajout du menu.
+    function currentSheetLayout() {
+      const id = director?.sheetTemplate ?? $("sheetTemplateSelect")?.value ?? "auto";
+      return SHEET_TEMPLATES[id] ? SHEET_TEMPLATES[id] : SHEET_TEMPLATES.turnaround;
+    }
+    // Le <select> reste la source de vérité (figeage de session, persistance, restauration
+    // lisent sa valeur) ; il est masqué et piloté par les vignettes.
+    function renderSheetTemplateOptions() {
+      const sel = $("sheetTemplateSelect");
+      const cur = SHEET_TEMPLATES[sel.value] ? sel.value : "auto";
+      const entries = [["auto", { label: "Auto (selon le sujet)", wire: SHEET_TEMPLATES.turnaround.wire }],
+                       ...Object.entries(SHEET_TEMPLATES)];
+      sel.innerHTML = entries.map(([id, v]) => `<option value="${id}">${tr(v.label)}</option>`).join("");
+      sel.value = cur;
+      const grid = $("sheetTemplateWrap").querySelector(".tpl-grid");
+      grid.innerHTML = entries.map(([id, v]) => `<button type="button" class="tpl-card" data-tpl="${id}"
+          aria-pressed="${id === cur}"><svg viewBox="0 0 120 72" aria-hidden="true" fill="currentColor">${
+          id === "auto" ? `<g opacity=".55">${v.wire}${SHEET_WIRE_STRIP}</g>` : v.wire + SHEET_WIRE_STRIP
+        }</svg><span class="tpl-name"></span></button>`).join("");
+      grid.querySelectorAll(".tpl-card").forEach((card, i) => {
+        card.querySelector(".tpl-name").textContent = tr(entries[i][1].label);
+        card.addEventListener("click", () => selectSheetTemplate(card.dataset.tpl));
+      });
+    }
+    // Un clic de vignette écrit dans le <select> et émet son "change" : le figeage de session
+    // et la sauvegarde passent par le même chemin que n'importe quel autre contrôle.
+    function selectSheetTemplate(id) {
+      const sel = $("sheetTemplateSelect");
+      if (sel.value === id) return;
+      sel.value = id;
+      $("sheetTemplateWrap").querySelectorAll(".tpl-card")
+        .forEach(c => c.setAttribute("aria-pressed", String(c.dataset.tpl === id)));
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function buildCharsheetGraph(charFields, negText, seed, width, height, loraName) {
       const { g, add } = makeGraphBuilder();
       const kx = addKrea2Shared(add, loraName);
       const styleText = currentStyleText();
+      const charDesc = charDescFromFields(charFields);
+      const kind = charKindOf(charFields);
+      const layout = currentSheetLayout();
       const dec = addKrea2Shot(add, kx,
-        `A professional photorealistic character reference sheet of one single person, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. Arranged neatly, the sheet shows a full-body turnaround of the same person in four standing poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a neutral relaxed stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the face. A row of several smaller close-up headshots of the face showing different facial expressions: neutral, smiling, surprised, determined. A cluster of detailed close-up photographs of costume details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the outfit and hair. Every view shows the exact same single person with identical face, hair and costume, consistent character design. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
+        `${layout.build(charDesc, sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
         seed, 1920, 1088, 1);
       add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/charsheet" });
       return g;
@@ -4281,8 +4628,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Mêmes graphes/prompts que l'ancienne implémentation monolithique, juste sortis
     // en fonctions réutilisables pour que le mode Réalisateur puisse s'arrêter entre
     // chaque étape sans dupliquer la logique de construction de graphe.
-    async function submitCharsheetJob(charDesc, negText, seed, width, height, wf) {
-      return submitGraph(buildCharsheetGraph(charDesc, negText, seed, width, height, $("sheetLoraSelect").value),
+    async function submitCharsheetJob(charFields, negText, seed, width, height, wf) {
+      return submitGraph(buildCharsheetGraph(charFields, negText, seed, width, height, $("sheetLoraSelect").value),
         "Storyboard · fiche personnage", `${wf.model} · charsheet · seed ${seed}`);
     }
     async function submitLocsheetJob(locDesc, negText, seed, width, height, wf) {
@@ -4298,11 +4645,27 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const up = await reupload(file);
       return { ...up, file };
     }
-    async function submitKeyframeJob(anchorRaw, shot, charDesc, negText, charName, locName, seed, width, height, idx, n) {
+    // 3e entrée image du nœud Qwen-Edit (image3, optionnelle) : ajoutée À LA VOLÉE pour un
+    // plan à deux sujets, le gabarit `qwen_edit_dual.json` qualifié à un sujet reste intouché
+    // (une entrée LoadImage de plus dans le fichier voudrait un nom d'image à chaque rendu).
+    // Piège n°10 : seule image1 alimente VAEEncode (géométrie de départ = 1er sujet) ;
+    // image2/image3 ne font que du conditioning.
+    function addKeyframeThirdRef(g, imageName) {
+      g["sbv2:ref3"] = { class_type: "LoadImage", inputs: { image: imageName } };
+      g["sbv2:ref3s"] = { class_type: "FluxKontextImageScale", inputs: { image: ["sbv2:ref3", 0] } };
+      for (const node of Object.values(g))
+        if (node.class_type === "TextEncodeQwenImageEditPlus") node.inputs.image3 = ["sbv2:ref3s", 0];
+    }
+    // `subjects` = [{desc, name}] du plan (1 ou 2). À un sujet : image1 = planche perso,
+    // image2 = décor — exactement l'ancien câblage. À deux : image1/image2 = les deux
+    // planches perso, le décor passe sur image3.
+    async function submitKeyframeJob(anchorRaw, shot, subjects, negText, locName, seed, width, height, idx, n) {
+      const refs = (Array.isArray(subjects) ? subjects : [subjects]).filter(Boolean);
       const g = buildGraph(anchorRaw, {
-        prompt: compileKeyframePrompt(shot, charDesc), negative: negText,
-        seed, image: charName, image2: locName, width, height, batch: 1
+        prompt: compileKeyframePrompt(shot, refs.map(r => r.desc)), negative: negText,
+        seed, image: refs[0]?.name, image2: refs[1] ? refs[1].name : locName, width, height, batch: 1
       });
+      if (refs[1]) addKeyframeThirdRef(g, locName);
       for (const node of Object.values(g))
         if (node.class_type === "SaveImage") node.inputs.filename_prefix = `studio/story/key_${String(idx + 1).padStart(2, "0")}`;
       return submitGraph(g, `Storyboard · keyframe ${idx + 1}/${n}`, `Qwen-Edit ancré · seed ${seed}`);
@@ -4330,56 +4693,6 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     async function submitAnimaticJob(cutNames, withAudio, seed) {
       return submitGraph(buildAnimaticGraph(cutNames, withAudio), "Storyboard · animatic (assemblage)",
         `${cutNames.length} cuts francs · ${withAudio ? "audio" : "muet"} · fps 24 · seed ${seed}`);
-    }
-
-    // charsheet → N keyframes ancrées Qwen-Edit → grille → 1 cut i2v/keyframe → assemblage (mode Auto).
-    async function generateStoryboardV2(seed, width, height) {
-      if (!brief.value.trim()) throw new Error("Décrivez la scène dans le brief avant de générer le storyboard.");
-      const wf = currentWorkflow();
-      const n = Math.min(16, Math.max(4, parseInt($("shotCount").value, 10) || 4));
-      const holdDur = Math.min(8, Math.max(0, parseInt($("holdDuration").value, 10) || 0));
-      const negText = negative.value.trim(), withAudio = $("audioToggle").checked;
-
-      // 3 appels gemma distincts : fiche personnage + fiche décor (objets de champs,
-      // compilés en chaînes par les helpers) + liste de N plans Scene DNA.
-      addEvent("REQ", `Fiche personnage + fiche décor + ${n} plans via ${OLLAMA_MODEL}…`, "req");
-      const charDesc = charDescFromFields(await characterSheetFromBrief());
-      const locDesc = locDescFromFields(await locationSheetFromBrief());
-      const shots = await shotListFromBrief(n);
-
-      // (a) Planches personnage + décor (Krea 2) → attendre → ré-uploader comme ancres.
-      const csId = await submitCharsheetJob(charDesc, negText, seed, width, height, wf);
-      const lsId = await submitLocsheetJob(locDesc, negText, seed + 101, width, height, wf);
-      const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
-      const charName = charRef.name, locName = locRef.name;
-      setSoulAnchors(charRef, locRef); // affichage seul (pastille d'identité)
-
-      // (c) 1 job Qwen-Edit dual par case : personnage (ancre 1) DANS le décor (ancre 2).
-      const anchorRaw = await getTemplate(wf.anchor);
-      const keyIds = [];
-      for (let i = 0; i < n; i++)
-        keyIds.push(await submitKeyframeJob(anchorRaw, shots[i], charDesc, negText, charName, locName, seed + 11 + i, width, height, i, n));
-      const keyEntries = await waitForJobs(keyIds);
-      const keys = [];
-      for (const id of keyIds) keys.push(await reupload(outputFiles(keyEntries[id], ".png")[0]));
-
-      // (d) Grille contact-sheet adaptative.
-      await submitGridJob(keys);
-
-      // (e) 1 cut i2v par plan (durée par plan issue du DNA) + tenue du plan final optionnelle.
-      const i2vRaw = await getTemplate("api/ltx25_i2v.json");
-      const plan = shots.map((shot, k) => ({ keyObj: keys[k], shot, dur: shot.duration, holdMotion: null }));
-      if (holdDur > 0)
-        plan.push({ keyObj: keys[keys.length - 1], shot: shots[shots.length - 1], dur: holdDur, holdMotion: HOLD_MOTION });
-      const cutIds = [];
-      for (let k = 0; k < plan.length; k++)
-        cutIds.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, charDesc, locDesc, negText, seed + 31 + k, k, plan.length, plan[k].dur, plan[k].holdMotion));
-      const cutEntries = await waitForJobs(cutIds);
-      const cutNames = [];
-      for (const id of cutIds) cutNames.push((await reupload(outputFiles(cutEntries[id], ".mp4")[0])).name);
-
-      // (f) Assemblage par cuts francs + audio.
-      await submitAnimaticJob(cutNames, withAudio, seed);
     }
 
     // ── Reference2Video (Minimax H3 r2v, LOT 1) : réutilise la génération charsheet/locsheet
@@ -4451,12 +4764,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       }
 
       addEvent("REQ", `Fiche personnage + fiche décor via ${OLLAMA_MODEL}…`, "req");
-      const charDesc = charDescFromFields(await characterSheetFromBrief());
+      const charFields = await characterSheetFromBrief();
+      const charDesc = charDescFromFields(charFields);
       const locDesc = locDescFromFields(await locationSheetFromBrief());
 
       // Mêmes planches Krea 2 que storyboard_v2 : elles servent ici directement de
       // ref_image_0/ref_image_1 (personnage / décor) du template Minimax H3 r2v.
-      const csId = await submitCharsheetJob(charDesc, negText, seed, width, height, wf);
+      const csId = await submitCharsheetJob(charFields, negText, seed, width, height, wf);
       const lsId = await submitLocsheetJob(locDesc, negText, seed + 101, width, height, wf);
       const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
       setSoulAnchors(charRef, locRef); // affichage seul (pastille d'identité)
@@ -4488,17 +4802,10 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     $("directorR2VLaunchBtn").addEventListener("click", generateReference2VideoFromDirector);
 
     // ── Mode Réalisateur (storyboard_v2) : studio plein écran ────────────────────
-    let directorMode = false; // état non persisté (défaut : Auto)
+    // Il n'y a plus de bascule : la revue étape par étape est le seul mode. Le sélecteur
+    // Auto/Réalisateur et la chaîne `generateStoryboardV2` qu'il lançait ont été retirés
+    // le 2026-09-21 sur demande de l'utilisateur.
     let director = null;      // session Réalisateur en cours
-
-    function setDirectorMode(on) {
-      directorMode = on;
-      $("modeAutoBtn").classList.toggle("active", !on);
-      $("modeDirectorBtn").classList.toggle("active", on);
-      resetDirectorZone();
-    }
-    $("modeAutoBtn").addEventListener("click", () => setDirectorMode(false));
-    $("modeDirectorBtn").addEventListener("click", () => setDirectorMode(true));
 
     // Coquille studio : bascule vue classique ↔ studio (le header reste visible).
     function enterStudio() { document.body.dataset.studio = "1"; }
@@ -4579,7 +4886,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const locFields = await locationSheetFromBrief();
       // Les deux planches partent en génération tout de suite (pendant que gemma découpe les plans).
       const csSeed = seed, lsSeed = seed + 101;
-      const csId = await submitCharsheetJob(charDescFromFields(charFields), negText, csSeed, width, height, wf);
+      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf);
       const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf);
       const shots = await shotListFromBrief(n);
 
@@ -4588,21 +4895,22 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         pipeline: "storyboard_v2",
         seed, width, height, wf, negText, withAudio, n, segDur, holdDur, shots, keyframes: null,
         style: $("styleSelect").value,           // style figé à l'ouverture de la session
+        sheetTemplate: $("sheetTemplateSelect").value,  // gabarit de planche figé de même
         cutPlan: null, cuts: null, order: null, animatic: null,  // état Montage
         // Fiches structurées éditables (menus Personnage/Décor) + historiques de variantes.
-        charFields, locFields,
-        charVariants: [{ file: null, inputName: null, seed: csSeed, source: "generated",
-                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }],
+        // `chars` = liste de sujets (un seul à l'ouverture, « + Ajouter un sujet » en ajoute) ;
+        // `charIdx` = celui qu'édite le menu Personnage.
+        locFields,
+        chars: [newCharSlot(charFields, [{ file: null, inputName: null, seed: csSeed, source: "generated",
+                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }])],
+        charIdx: 0,
         locVariants: [{ file: null, inputName: null, seed: lsSeed, source: "generated",
                         prompt: locDescFromFields(locFields), status: "pending", blob: null, url: null }],
-        charActive: 0, locActive: 0, validated: false,
-        // Compat directorStep2/3 + regenerateKeyframe : mêmes noms qu'avant, recalculés
-        // depuis la variante active / les champs édités.
-        get charName() { return this.charVariants[this.charActive]?.inputName || null; },
-        get locName() { return this.locVariants[this.locActive]?.inputName || null; },
-        get charDesc() { return charDescFromFields(this.charFields); },
-        get locDesc() { return locDescFromFields(this.locFields); }
+        locActive: 0, validated: false
       };
+      // Compat directorStep2/3 + regenerateKeyframe : charFields/charVariants/charActive/
+      // charName/charDesc gardent leurs noms et pointent sur le sujet en cours d'édition.
+      attachSheetAccessors(director);
       updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
@@ -4638,24 +4946,22 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const charFields = await characterSheetFromBrief();
       const locFields = await locationSheetFromBrief();
       const csSeed = seed, lsSeed = seed + 101;
-      const csId = await submitCharsheetJob(charDescFromFields(charFields), negText, csSeed, width, height, wf);
+      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf);
       const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf);
 
       resetDirectorZone();
       director = {
         pipeline: "reference2video",
         seed, width, height, wf, negText, duration, turboOn, loraName,
-        charFields, locFields,
-        charVariants: [{ file: null, inputName: null, seed: csSeed, source: "generated",
-                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }],
+        locFields,
+        chars: [newCharSlot(charFields, [{ file: null, inputName: null, seed: csSeed, source: "generated",
+                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }])],
+        charIdx: 0,
         locVariants: [{ file: null, inputName: null, seed: lsSeed, source: "generated",
                         prompt: locDescFromFields(locFields), status: "pending", blob: null, url: null }],
-        charActive: 0, locActive: 0, validated: false,
-        get charName() { return this.charVariants[this.charActive]?.inputName || null; },
-        get locName() { return this.locVariants[this.locActive]?.inputName || null; },
-        get charDesc() { return charDescFromFields(this.charFields); },
-        get locDesc() { return locDescFromFields(this.locFields); }
+        locActive: 0, validated: false
       };
+      attachSheetAccessors(director);
       updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
@@ -4681,25 +4987,169 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       variant.blob = uploaded.blob;
       variant.url = URL.createObjectURL(uploaded.blob);
       variant.status = "ready";
-      const arr = kind === "char" ? director?.charVariants : director?.locVariants;
+      // Le job résolu peut appartenir à un sujet que le menu n'affiche pas : on cherche la
+      // variante dans TOUS les sujets, sinon une planche de sujet 2 resterait « Génération… ».
+      const arr = kind === "char" ? director?.chars?.flatMap(c => c.variants) : director?.locVariants;
       if (!arr || !arr.includes(variant)) return; // session remplacée entre-temps
       refreshSheetUI(kind);
       saveProject();
     }
 
-    // Prêt = la variante ACTIVE de chaque planche est prête (générée ou importée).
+    // Prêt = la planche ACTIVE de CHAQUE sujet + celle du décor (une keyframe à deux sujets
+    // ne peut pas partir si la 2e planche n'est pas rendue).
     function anchorsReady() {
       return !!director
-        && director.charVariants[director.charActive]?.status === "ready"
+        && director.chars.every(c => c.variants[c.active]?.status === "ready")
         && director.locVariants[director.locActive]?.status === "ready";
     }
 
     // ── Menus Personnage / Décor : champs éditables + historique de variantes + import ──
     function sheetSection(kind) { return $(kind === "char" ? "studioCharacter" : "studioLocation"); }
 
+    // Étiquettes des champs de fiche personnage (clés FR = clés I18N).
+    const CHAR_FIELD_LABELS = {
+      face: "Visage", hair: "Cheveux", outfit: "Tenue", accessories: "Accessoires",
+      subject: "Sujet", form: "Forme", surface: "Surface", details: "Détails", palette: "Palette"
+    };
+
+    // Le menu Personnage suit le squelette du sujet : un lion, un robot ou un objet n'ont ni tenue
+    // ni accessoires, ils ont une forme et une surface. Les <label> sont recréés (nœuds texte neufs,
+    // sans __orig mémorisé par translateTree) puis traduits ; l'édition passe par un écouteur
+    // délégué sur la section, donc les champs reconstruits restent câblés.
+    function renderCharFields(keys) {
+      const stack = $("studioCharacter").querySelector(".form-stack");
+      const shown = [...stack.querySelectorAll("[data-field]")].map(i => i.dataset.field);
+      if (shown.join() === keys.join()) return;
+      const actions = stack.querySelector(".sheet-actions");
+      stack.querySelectorAll("label").forEach(l => l.remove());
+      for (const k of keys) {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "text";
+        input.dataset.field = k;
+        label.append(CHAR_FIELD_LABELS[k], input);
+        stack.insertBefore(label, actions);
+      }
+      translateTree(stack);
+    }
+
+    // ── Sujets multiples : onglets du menu Personnage ─────────────────────
+    // Le menu Personnage édite UN sujet à la fois (`director.charIdx`) ; les onglets
+    // choisissent lequel, ajoutent un sujet ou retirent celui affiché. Réservé au
+    // storyboard_v2 : reference2video n'a qu'un couple personnage/décor.
+    function renderSubjectTabs() {
+      const wrap = $("subjectTabs");
+      wrap.hidden = !director || director.pipeline !== "storyboard_v2";
+      if (wrap.hidden) return;
+      const busy = director.chars.some(c => c.variants.some(v => v.status === "pending"));
+      wrap.innerHTML = "";
+      const tab = (cls, text, onClick, disabled) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "subject-tab" + cls;
+        b.textContent = text;
+        b.disabled = !!disabled;
+        b.addEventListener("click", onClick);
+        wrap.appendChild(b);
+      };
+      director.chars.forEach((c, i) =>
+        tab(i === director.charIdx ? " active" : "", subjectLabel(i), () => selectSubject(i)));
+      tab(" add", tr("+ Ajouter un sujet"), addSubject);
+      // Retirer un sujet dont la planche est en cours laisserait un job orphelin : seul ce
+      // bouton-là attend. Ajouter, non : il lance son propre job, en parallèle.
+      if (director.chars.length > 1)
+        tab(" del", tr("Retirer ce sujet"), () => removeSubject(director.charIdx), busy);
+    }
+
+    // Bascule humain / autre du sujet affiché. gemma tranche à la création, mais il se trompe
+    // (et, sur un brief à un seul sujet, il INVENTE le second, humain par défaut) : sans ce
+    // contrôle le squelette de champs était figé pour la session et le gabarit de planche
+    // avec lui. Les deux jeux de clés étant disjoints, ils cohabitent dans le même objet —
+    // rebasculer ne perd donc rien de ce qui a été saisi.
+    function renderCharKind() {
+      const wrap = $("charKindToggle");
+      wrap.hidden = !director;
+      if (wrap.hidden) return;
+      const kind = charKindOf(director.charFields);
+      wrap.querySelectorAll("[data-kind]")
+        .forEach(b => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
+    }
+    $("charKindToggle").addEventListener("click", e => {
+      const btn = e.target.closest("[data-kind]");
+      if (!btn || !director || charKindOf(director.charFields) === btn.dataset.kind) return;
+      const f = director.charFields;
+      // `palette` est la seule clé commune aux deux jeux : elle reste en place et ne doit pas
+      // être reversée, sinon elle se retrouverait deux fois dans la description compilée.
+      const before = stripPromptPadding(charFieldKeys(f)
+        .filter(k => k !== "palette").map(k => fieldText(f[k])).filter(Boolean).join(", "));
+      f.kind = btn.dataset.kind;
+      // Bascule vers un jeu de champs encore vide (cas normal : gemma n'avait rempli que
+      // l'autre) → la description déjà là est reversée dans le 1er champ du nouveau jeu,
+      // sinon régénérer la planche partirait sur un prompt vide.
+      const keys = charFieldKeys(f);
+      if (before && !keys.some(k => k !== "palette" && fieldText(f[k]))) f[keys[0]] = before;
+      renderSheetMenu("char");   // squelette de champs, étiquettes et onglets suivent
+      saveProject();
+    });
+
+    function selectSubject(i) {
+      if (!director || i === director.charIdx || !director.chars[i]) return;
+      director.charIdx = i;
+      renderSheetMenu("char");
+      saveProject();
+    }
+
+    // Nouveau sujet : gemma décrit le sujet suivant du brief (en excluant ceux déjà décrits),
+    // puis sa planche part en génération comme la première. La liste de plans N'EST PAS
+    // regénérée (elle porte les éditions de l'utilisateur) : le taggage des plans est manuel.
+    async function addSubject() {
+      if (!director || director.pipeline !== "storyboard_v2") return;
+      addEvent("REQ", `Sujet supplémentaire : fiche via ${OLLAMA_MODEL}…`, "req");
+      let fields;
+      try { fields = await characterSheetFromBrief(director.chars.map(c => charDescFromFields(c.fields))); }
+      catch (err) { addEvent("WARN", err.message, "warn"); return; }
+      const seed = director.seed + 211 + director.chars.length;
+      const variant = { file: null, inputName: null, seed, source: "generated",
+                        prompt: charDescFromFields(fields), status: "pending", blob: null, url: null };
+      director.chars.push(newCharSlot(fields, [variant]));
+      director.charIdx = director.chars.length - 1;
+      director.validated = false;   // une planche de plus à valider avant les keyframes
+      renderSheetMenu("char");
+      refreshSheetUI("char");
+      renderShotDNAList();          // les pastilles de taggage apparaissent dès le 2e sujet
+      saveProject();
+      try {
+        await resolveVariantJob("char", variant,
+          await submitCharsheetJob(fields, director.negText, seed, director.width, director.height, director.wf));
+      } catch (err) {
+        variant.status = "error";
+        refreshSheetUI("char");
+        addEvent("WARN", err.message, "warn");
+        saveProject();
+      }
+    }
+
+    // Retrait d'un sujet : les plans le désignent PAR INDICE, il faut donc décaler les leurs
+    // (calculé avant le splice). Un plan qui n'aurait plus aucun sujet retombe sur le sujet 1.
+    function removeSubject(i) {
+      if (!director || director.chars.length < 2 || !director.chars[i]) return;
+      if (director.chars.some(c => c.variants.some(v => v.status === "pending"))) return;
+      const shots = director.shots || [];
+      const remap = shots.map(shot => shotSubjectIdx(shot).filter(x => x !== i).map(x => (x > i ? x - 1 : x)));
+      director.chars.splice(i, 1);
+      shots.forEach((shot, k) => { shot.subjects = remap[k].length ? remap[k] : [0]; });
+      director.charIdx = Math.min(director.charIdx, director.chars.length - 1);
+      director.validated = false;
+      renderSheetMenu("char");
+      refreshSheetUI("char");
+      renderShotDNAList();
+      saveProject();
+    }
+
     function renderSheetMenu(kind) {
       const isChar = kind === "char";
       const fields = director ? (isChar ? director.charFields : director.locFields) : null;
+      if (isChar) { renderSubjectTabs(); renderCharKind(); renderCharFields(charFieldKeys(fields)); }
       sheetSection(kind).querySelectorAll("[data-field]").forEach(input => {
         input.value = fields ? (fields[input.dataset.field] || "") : "";
         input.disabled = !fields;
@@ -4720,7 +5170,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         thumb.type = "button";
         thumb.className = "variant-thumb" + (idx === active ? " active" : "");
         thumb.innerHTML = (v.status === "missing" ? `<div class="thumb-missing"></div>` : `<img alt="" />`)
-          + `<span class="variant-meta"></span>`;
+          + `<span class="variant-badge"></span><span class="variant-meta"></span>`;
+        thumb.querySelector(".variant-badge").textContent = tr("Active");
         if (v.status === "missing") thumb.querySelector(".thumb-missing").textContent = tr("Manquant");
         else if (v.url) thumb.querySelector("img").src = v.url;
         // LOT C : variante non active (jamais re-résolue au restore) → lecture directe /view.
@@ -4741,13 +5192,18 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       else { img.removeAttribute("src"); img.style.display = "none"; }
       const word = !av ? "" : av.status === "pending" ? "Génération…" : av.status === "error" ? "Erreur"
         : av.status === "missing" ? "Manquant" : "Prêt";
-      section.querySelector(".sheet-status").textContent = word ? tr(word) : "";
+      section.querySelector(".sheet-status").textContent =
+        !word ? "" : variants.length > 1 ? `${tr(word)} · ${dyn("activeSheet", active + 1, variants.length)}` : tr(word);
       section.querySelector(".sheet-regen").disabled = !director || variants.some(v => v.status === "pending");
       section.querySelector(".sheet-import").disabled = !director;
     }
 
     function refreshSheetUI(kind) {
       renderVariantStrip(kind);
+      // Les onglets de sujet portent l'état des planches (libellé, boutons) : sans ce rendu,
+      // ils restaient figés sur l'état capturé à l'ouverture de la session — « Ajouter un
+      // sujet » grisé pour toujours parce que la 1re planche était encore en génération.
+      if (kind === "char") renderSubjectTabs();
       updateValidateButtonState();
       updateGateState();
     }
@@ -4781,7 +5237,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       refreshSheetUI(kind);
       try {
         const promptId = isChar
-          ? await submitCharsheetJob(desc, director.negText, seed, director.width, director.height, director.wf)
+          ? await submitCharsheetJob(director.charFields, director.negText, seed, director.width, director.height, director.wf)
           : await submitLocsheetJob(desc, director.negText, seed, director.width, director.height, director.wf);
         await resolveVariantJob(kind, variant, promptId);
       } catch (err) {
@@ -4814,11 +5270,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     for (const kind of ["char", "loc"]) {
       const isChar = kind === "char";
       const section = sheetSection(kind);
-      section.querySelectorAll("[data-field]").forEach(input =>
-        input.addEventListener("change", () => {
-          if (!director) return;
-          (isChar ? director.charFields : director.locFields)[input.dataset.field] = input.value.trim();
-        }));
+      section.addEventListener("change", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input || !director) return;
+        (isChar ? director.charFields : director.locFields)[input.dataset.field] = input.value.trim();
+        // L'étiquette d'un sujet est tirée de son 1er champ rempli : onglets et pastilles
+        // de plan la suivent (édition validée au blur, jamais à la frappe).
+        if (isChar && director.chars.length > 1) { renderSubjectTabs(); renderShotDNAList(); }
+      });
       section.querySelector(".sheet-regen").addEventListener("click", () => regenerateSheet(kind));
       const fileInput = section.querySelector(".sheet-import-input");
       section.querySelector(".sheet-import").addEventListener("click", () => fileInput.click());
@@ -4883,7 +5342,43 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       return Object.entries(lib)
         .map(([id, v]) => `<option value="${id}"${id === selected ? " selected" : ""}>${tr(v.label)}</option>`).join("");
     }
+    // Taggage des sujets d'un plan : une pastille par sujet, allumée = présent dans le plan.
+    // Le plafond (MAX_SHOT_SUBJECTS) vient des entrées image du nœud Qwen-Edit, décor compris :
+    // au-delà, les pastilles éteintes sont DÉSACTIVÉES avec la raison affichée, plutôt que de
+    // laisser cliquer un 3e sujet qui ne serait jamais envoyé au graphe.
+    function renderShotSubjects(item, shot) {
+      if (!director || director.chars.length < 2) return;
+      const sel = shotSubjectIdx(shot);
+      const full = sel.length >= MAX_SHOT_SUBJECTS;
+      const row = document.createElement("div");
+      row.className = "shot-subjects";
+      const lbl = document.createElement("p");
+      lbl.className = "hint shot-subjects-lbl";
+      lbl.textContent = full ? dyn("subjectsCap", MAX_SHOT_SUBJECTS) : tr("Sujets du plan");
+      row.appendChild(lbl);
+      director.chars.forEach((c, si) => {
+        const on = sel.includes(si);
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "subj-chip" + (on ? " on" : "");
+        chip.textContent = subjectLabel(si);
+        // Seul le 3e sujet est GRISÉ (il ne passerait pas dans le graphe). La pastille
+        // allumée d'un plan à un seul sujet reste allumée — la griser la ferait lire comme
+        // « pas dans le plan » alors qu'elle y est —, son clic ne fait simplement rien.
+        chip.disabled = !on && full;
+        chip.addEventListener("click", () => {
+          if (on && sel.length === 1) return;   // un plan garde au moins un sujet
+          shot.subjects = on ? sel.filter(x => x !== si) : [...sel, si];
+          renderShotDNAList();
+          saveProject();
+        });
+        row.appendChild(chip);
+      });
+      item.insertBefore(row, item.children[1]);
+    }
+
     function renderShotDNAList() {
+      if (!director?.shots) return;   // session reference2video : pas de liste de plans
       const list = $("shotEditList");
       list.innerHTML = "";
       director.shots.forEach((shot, i) => {
@@ -4902,6 +5397,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
           <label><span class="lbl-extra"></span><input type="text" data-field="extra" /></label>
           <p class="hint lbl-durhint"></p>`;
         item.querySelector("strong").textContent = dyn("shotLabel", i + 1, director.n);
+        renderShotSubjects(item, shot);
         item.querySelector(".lbl-cam").textContent = tr("Caméra");
         item.querySelector(".lbl-light").textContent = tr("Lumière");
         item.querySelector(".lbl-action").textContent = tr("Action");
@@ -4953,8 +5449,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const seed = director.seed + 11 + i;
         director.keyframes[i].seed = seed;
         renderKeyframeCard(i);
-        ids.push(await submitKeyframeJob(director.anchorRaw, director.shots[i], director.charDesc, director.negText,
-          director.charName, director.locName, seed, director.width, director.height, i, director.n));
+        ids.push(await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
+          director.locName, seed, director.width, director.height, i, director.n));
       }
       await Promise.all(ids.map((id, i) => trackKeyframeCompletion(i, id)));
     }
@@ -5013,8 +5509,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       renderKeyframeCard(i);
       updateLaunchButtonState();
       try {
-        const promptId = await submitKeyframeJob(director.anchorRaw, director.shots[i], director.charDesc, director.negText,
-          director.charName, director.locName, kf.seed, director.width, director.height, i, director.n);
+        const promptId = await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
+          director.locName, kf.seed, director.width, director.height, i, director.n);
         await trackKeyframeCompletion(i, promptId);
       } catch (err) {
         kf.status = "error";
@@ -5063,7 +5559,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     async function generateCuts() {
       if (!director || !keyframesAllReady()) return;
       $("directorLaunchBtn").disabled = true;
-      const { negText, seed, charDesc, locDesc } = director;
+      const { negText, seed, locDesc } = director;
       try {
         addEvent("REQ", "Montage : grille + cuts i2v (1 par plan)…", "req");
         await submitGridJob(director.keyframes); // fire-and-forget (non attendu)
@@ -5074,14 +5570,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         director.order = plan.map((_, k) => k);
         const ids = [];
         for (let k = 0; k < plan.length; k++)
-          ids.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, charDesc, locDesc, negText,
+          ids.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, shotCharDesc(plan[k].shot), locDesc, negText,
             seed + 31 + k, k, plan.length, plan[k].duration, plan[k].holdMotion));
         const entries = await waitForJobs(ids);
         for (let k = 0; k < ids.length; k++) {
           const f = outputFiles(entries[ids[k]], ".mp4")[0];
           const up = await reupload(f);
           director.cuts[k] = { file: f, inputName: up.name, seed: seed + 31 + k, duration: plan[k].duration,
-            status: "ready", prompt: compileCutPrompt(plan[k].shot, charDesc, locDesc, plan[k].holdMotion) };
+            status: "ready", prompt: compileCutPrompt(plan[k].shot, shotCharDesc(plan[k].shot), locDesc, plan[k].holdMotion) };
         }
         addEvent("OK", `${plan.length} cuts générés — réordonnez puis assemblez.`, "ok");
       } catch (err) { addEvent("WARN", err.message, "warn"); }
@@ -5099,13 +5595,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       renderMontage(); renderFooterTimeline(); updateMontageButtons();
       try {
         const i2vRaw = await getTemplate("api/ltx25_i2v.json");
-        const id = await submitCutJob(i2vRaw, p.keyObj, p.shot, director.charDesc, director.locDesc, director.negText,
+        const id = await submitCutJob(i2vRaw, p.keyObj, p.shot, shotCharDesc(p.shot), director.locDesc, director.negText,
           cut.seed, k, director.cutPlan.length, cut.duration, p.holdMotion);
         const entry = (await waitForJobs([id]))[id];
         const f = outputFiles(entry, ".mp4")[0];
         const up = await reupload(f);
         cut.file = f; cut.inputName = up.name; cut.status = "ready";
-        cut.prompt = compileCutPrompt(p.shot, director.charDesc, director.locDesc, p.holdMotion);
+        cut.prompt = compileCutPrompt(p.shot, shotCharDesc(p.shot), director.locDesc, p.holdMotion);
       } catch (err) { cut.status = "error"; addEvent("WARN", err.message, "warn"); }
       renderMontage(); renderFooterTimeline(); updateMontageButtons();
       saveProject();
@@ -5261,11 +5757,12 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const p = {
         version: 1, savedAt: new Date().toISOString(),
         brief: brief.value.trim(), negText: director.negText, wfId: director.wf.id,
-        style: director.style, seed: director.seed, width: director.width, height: director.height,
+        style: director.style, sheetTemplate: director.sheetTemplate,
+        seed: director.seed, width: director.width, height: director.height,
         n: director.n, segDur: director.segDur, holdDur: director.holdDur,
         withAudio: director.withAudio, validated: director.validated,
-        charFields: director.charFields, locFields: director.locFields,
-        charVariants: director.charVariants, charActive: director.charActive,
+        locFields: director.locFields,
+        chars: director.chars, charIdx: director.charIdx,
         locVariants: director.locVariants, locActive: director.locActive,
         shots: director.shots, keyframes: director.keyframes,
         cuts: director.cuts, order: director.order, animatic: director.animatic
@@ -5295,11 +5792,17 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       return p;
     }
 
-    // Bouton « Reprendre le projet » : visible dans modeWrap quand le pipeline
-    // storyboard_v2 est sélectionné et qu'un projet valide est en stock.
+    // Bouton « Reprendre le projet » : visible quand le pipeline storyboard_v2 est
+    // sélectionné et qu'un projet valide est en stock. Son conteneur n'est plus piloté par
+    // les `controls` du manifest (il ne portait le bouton que parce qu'il portait le
+    // sélecteur de mode, retiré) : cette fonction décide des deux, sinon un cadre vide
+    // resterait dans le formulaire quand il n'y a rien à reprendre.
     function updateResumeButton() {
       const b = $("resumeProjectBtn");
-      if (b) b.style.display = savedProjectCache && pipelineSelect.value === "storyboard_v2" ? "" : "none";
+      if (!b) return;
+      const show = !!savedProjectCache && pipelineSelect.value === "storyboard_v2";
+      b.style.display = show ? "" : "none";
+      $("resumeWrap").style.display = show ? "" : "none";
     }
 
     // Re-résout une référence fichier persistée : /view (pattern reupload) → blob +
@@ -5319,7 +5822,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const p = loadSavedProject();
       if (!p) { updateResumeButton(); return; }
       const wf = manifest.workflows.find(w => w.id === p.wfId);
-      // Sélection scénario + pipeline + mode Réalisateur (mêmes chemins que l'UI).
+      // Sélection scénario + pipeline (mêmes chemins que l'UI).
       if (activeScenario !== "storyboard")
         document.querySelector('.scenario-tab[data-scenario="storyboard"]')?.click();
       if (pipelineSelect.value !== "storyboard_v2" &&
@@ -5328,13 +5831,17 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         updateModelOptions();
       }
       if ([...modelSelect.options].some(o => o.value === p.wfId)) { modelSelect.value = p.wfId; updateModelLabel(); }
-      setDirectorMode(true); // resetDirectorZone inclus — ne touche pas à la clé persistée
+      resetDirectorZone(); // ne touche pas à la clé persistée
       // Formulaire ré-aligné sur le projet.
       brief.value = p.brief || brief.value;
       negative.value = p.negText ?? negative.value;
       $("shotCount").value = p.n; $("videoDuration").value = p.segDur; $("holdDuration").value = p.holdDur;
       $("audioToggle").checked = !!p.withAudio;
       if (STYLE_PACKS[p.style]) $("styleSelect").value = p.style;
+      // Projet d'avant le menu Gabarit : pas de sheetTemplate → "auto", soit le gabarit avec
+      // lequel ses planches ont été rendues.
+      $("sheetTemplateSelect").value = SHEET_TEMPLATES[p.sheetTemplate] ? p.sheetTemplate : "auto";
+      renderSheetTemplateOptions();   // remet les vignettes en phase avec le gabarit restauré
       $("seed").value = String(p.seed);
       // Statut au restore : "pending" non persisté → file présent = ready (à re-résoudre),
       // absent = error ; "missing" retenté (le fichier a pu revenir).
@@ -5344,18 +5851,21 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         pipeline: "storyboard_v2",
         seed: p.seed, width: p.width, height: p.height, wf, negText: p.negText || "",
         withAudio: !!p.withAudio, n: p.n, segDur: p.segDur, holdDur: p.holdDur,
-        shots: p.shots, style: p.style, validated: !!p.validated,
-        charFields: p.charFields, locFields: p.locFields,
-        charVariants: (p.charVariants || []).map(revive), charActive: p.charActive ?? 0,
+        shots: p.shots, style: p.style, sheetTemplate: $("sheetTemplateSelect").value,
+        validated: !!p.validated,
+        locFields: p.locFields,
+        // Projet d'avant les sujets multiples : charFields/charVariants/charActive à plat
+        // → un seul sujet, soit exactement ce qu'il contenait.
+        chars: (p.chars || [{ fields: p.charFields, variants: p.charVariants, active: p.charActive }])
+          .map(c => newCharSlot(c.fields, (c.variants || []).map(revive), c.active ?? 0)),
+        charIdx: 0,
         locVariants: (p.locVariants || []).map(revive), locActive: p.locActive ?? 0,
         keyframes: p.keyframes ? p.keyframes.map(revive) : null,
         cutPlan: null, cuts: p.cuts ? p.cuts.map(revive) : null,
-        order: p.order || null, animatic: p.animatic || null,
-        get charName() { return this.charVariants[this.charActive]?.inputName || null; },
-        get locName() { return this.locVariants[this.locActive]?.inputName || null; },
-        get charDesc() { return charDescFromFields(this.charFields); },
-        get locDesc() { return locDescFromFields(this.locFields); }
+        order: p.order || null, animatic: p.animatic || null
       };
+      attachSheetAccessors(director);
+      director.charIdx = Math.min(Math.max(0, p.charIdx ?? 0), director.chars.length - 1);
       if (director.keyframes) {
         director.anchorRaw = await getTemplate(wf.anchor); // régénérations possibles d'emblée
         if (director.cuts) director.cutPlan = buildCutPlan();
@@ -5373,17 +5883,20 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       addEvent("OK", `Projet restauré (sauvé le ${p.savedAt}) — re-résolution des fichiers…`, "ok");
       // Re-résolutions async : try/catch PAR ITEM, jamais bloquant (pattern preloadGallery).
       const tasks = [];
-      for (const kind of ["char", "loc"]) {
-        const arr = kind === "char" ? director.charVariants : director.locVariants;
-        const v = arr[kind === "char" ? director.charActive : director.locActive];
-        if (v?.status === "ready" && v.file) tasks.push((async () => {
+      // Chaque sujet a sa propre planche active à re-résoudre, pas seulement celui affiché :
+      // une keyframe à deux sujets a besoin des deux ancres.
+      const reresolveActive = (v, kind) => {
+        if (v?.status !== "ready" || !v.file) return;
+        tasks.push((async () => {
           try {
             const r = await resolveFileRef(v.file);
             v.inputName = r.name; v.blob = r.blob; v.url = r.url;
           } catch { v.status = "missing"; }
           refreshSheetUI(kind);
         })());
-      }
+      };
+      director.chars.forEach(c => reresolveActive(c.variants[c.active], "char"));
+      reresolveActive(director.locVariants[director.locActive], "loc");
       (director.keyframes || []).forEach((kf, i) => {
         if (kf.status !== "ready" || !kf.file) { return; }
         tasks.push((async () => {
@@ -5408,7 +5921,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       })());
       await Promise.allSettled(tasks);
       renderMontage(); renderFooterTimeline(); updateMontageButtons(); updateGateState();
-      const missing = [...(director.charVariants || []), ...(director.locVariants || []),
+      const missing = [...director.chars.flatMap(c => c.variants), ...(director.locVariants || []),
         ...(director.keyframes || []), ...(director.cuts || [])].filter(x => x?.status === "missing").length;
       addEvent(missing ? "WARN" : "OK",
         missing ? `Projet restauré : ${missing} fichier(s) manquant(s) — régénérez-les.` : "Projet restauré : tous les fichiers re-résolus.",
@@ -5496,6 +6009,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     addEvent("SYS", "AI Content Studio chargé (mode 100% local, sans backend).", "sys");
     applyLang(LANG);
     renderStyleOptions();
+    renderSheetTemplateOptions();
     loadManifest();
     connectWS();
     restoreGallery();
