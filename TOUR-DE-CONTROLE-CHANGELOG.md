@@ -1,5 +1,26 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite 2) — Premier A/B en image, et élargissement du filtre aux « boosters »
+
+**Premier résultat visuel** (même brief `A red panda astronaut poster…`, 16:9, un rendu par condition — n=1, pas une qualification).
+
+- **Sans enrichissement** : cadrage très serré sur la tête, le panda remplit le cadre, fond noir avec bokeh. Le modèle a **dessiné du faux texte** dans le bas de l'image — « FIWDE TIMLE » — parce que le brief demande littéralement « space for title text ». Aucune place laissée pour un titre : l'affiche est inutilisable telle quelle.
+- **Avec enrichissement** : plan plus large, décor de nébuleuse conforme au brief, **aucun texte parasite**, et le tiers supérieur est effectivement libre. C'est la différence entre une image et une affiche exploitable.
+
+L'écart le plus net n'est donc pas la « beauté » mais la **composition** et l'absence de faux texte : l'enrichisseur a traduit « space for title text » en « leaving significant clean negative space at the top for title typography », ce que le modèle interprète comme *laisser de la place* et non *écrire un titre*.
+
+Réserve : la version enrichie a viré vers l'illustration 3D (combinaison argentée inventée, rendu lisse) là où la version brute était plus photographique. Cohérent avec la queue du prompt — `trending on ArtStation, Octane render`.
+
+**Élargissement du filtre.** Le §24 du document de référence n'était qu'un point de départ, pas un inventaire. gemma produit spontanément la famille « booster » héritée de Stable Diffusion, absente de ce §24 : `trending on ArtStation`, `Octane render`. `PROMPT_PADDING` les couvre désormais, avec `cgsociety`, `deviantart`, `pixiv`, `unreal engine`, `v-ray`, `redshift render`, `uhd`. Ajout aussi d'une règle de ponctuation : quand une phrase entière n'est que du remplissage, son retrait laissait un `..`.
+
+Un blocage par liste reste une liste — ajouter un terme est une ligne. C'est assumé : la contrainte est vérifiable en code, donc elle n'a rien à faire dans une consigne adressée à un modèle de 4 Md de paramètres.
+
+### Vérification
+
+9 assertions headless rejouant la sortie gemma réelle du jour : les quatre termes de remplissage disparaissent, le sujet et la consigne de composition restent, `highly reflective` (qui n'est pas du remplissage) survit, et le prompt se termine proprement sur `typography.`. Zéro régression sur `SHEET_CLEAN`, les 14 `STYLE_PACKS` et les formulations de la taxonomie (`high-end CGI render`, `architectural clay model`, `fine detail`, `epic cinematic scale`).
+
+**Reste ouvert** : l'effet du filtre sur l'image n'a pas encore été vu — l'A/B ci-dessus a été rendu avec les boosters encore présents.
+
 ## 2026-09-21 (suite) — gemma n'obéit pas à l'interdiction de vocabulaire : filet déterministe
 
 Premier test en rendu réel sur le GB10, après bascule sur la branche. La consigne `KREA2_ENRICH_SYSTEM` porte sur deux points des trois visés, mais pas sur le troisième.

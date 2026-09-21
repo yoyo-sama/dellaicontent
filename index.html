@@ -3073,13 +3073,25 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // la place d'une description visuelle utile. Liste volontairement étroite — uniquement des
     // termes sans direction visuelle : "photorealistic", "fine detail", "epic scale" et les
     // mots-clés de STYLE_PACKS doivent survivre intacts.
-    const PROMPT_PADDING = /\s*\b(?:masterpiece|best quality|highest quality|high quality|award[- ]winning|ultra[- ]detailed|hyper[- ]detailed|highly detailed|extremely detailed|insanely detailed|highly rendered|8k|4k|16k|32k)\b/gi;
+    const PROMPT_PADDING = new RegExp("\\s*\\b(?:" + [
+      // §24 du document de référence
+      "masterpiece", "best quality", "highest quality", "high quality",
+      "award[- ]winning", "ultra[- ]detailed", "hyper[- ]detailed", "highly detailed",
+      "extremely detailed", "insanely detailed", "super detailed", "highly rendered",
+      // Famille "booster" héritée de Stable Diffusion, absente du §24 mais tout aussi vide —
+      // ajoutée après observation en rendu réel (2026-09-21) : gemma sort spontanément
+      // "trending on ArtStation, Octane render", qui tire le rendu vers l'illustration 3D.
+      "trending on artstation", "artstation", "cgsociety", "deviantart", "pixiv",
+      "octane render", "rendered in octane", "unreal engine(?: \\d)?", "v-?ray", "redshift render",
+      "8k(?: uhd)?", "4k", "16k", "32k", "uhd",
+    ].join("|") + ")\\b", "gi");
     function stripPromptPadding(text) {
       const out = text.replace(PROMPT_PADDING, "")
         .replace(/,(\s*,)+/g, ",")
         .replace(/([.!?])\s*,\s*/g, "$1 ")
         .replace(/,\s*([.!?])/g, "$1")
         .replace(/\s+([,.!?])/g, "$1")
+        .replace(/([.!?])(?:\s*[.!?])+/g, "$1")   // phrase entièrement retirée → "..".
         .replace(/\s{2,}/g, " ")
         .replace(/^[\s,]+/, "").replace(/[\s,]+$/, "").trim();
       return out || text;   // un prompt intégralement fait de remplissage : on garde l'original
