@@ -1,5 +1,31 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite 4) — Grammaire de prompt Minimax H3 et description des sources par vision
+
+Demande de l'utilisateur : intégrer la mécanique de `BMB12d3/minimax-h3-prompt-composer`, et pouvoir décrire les images sources par un modèle Ollama — nécessaire en Ref2VA pour les notions de `<Subject x>`.
+
+### Ce que fait le composer de référence
+
+Un seul fichier HTML (9 492 lignes), aucune dépendance, aucun appel réseau — même architecture que nous. Il **ne génère rien et n'appelle aucun modèle** : on remplit des champs, il assemble un prompt structuré, il le vérifie, on copie-colle dans ComfyUI. Sa valeur tient à la grammaire H3 et à son validateur ; le reste (planificateur de caméra 3D, extracteur de frames, assistants d'édition) est du cockpit, contraire à la raison d'être de cette démo, et n'a pas été repris.
+
+### Le mécanisme `<Subject x>`, et l'écart qu'il révélait
+
+Deux numérotations distinctes : `<Picture N>` est l'entrée physique ComfyUI 1-indexée (`ref_image_{N-1}`), `<Subject N>` une identité logique, la liaison tenant en une phrase de `subject_definitions`. Nos deux planches r2v **étaient** bien `ref_image_0`/`ref_image_1`, mais le prompt était la chaîne plate `charDesc. locDesc. brief` : rien ne disait au modèle laquelle des deux images était le personnage. Le job passait, l'image sortait — d'où un défaut invisible jusqu'ici. Détail dans `docs/LESSONS.md`, piège n°19.
+
+### Ce qui change
+
+- Ref2VA émet les 6 champs de la grammaire (`buildH3RefPrompt`), les 3 chemins (Auto, bypass fiches, Réalisateur) passant par le même point unique `submitReference2VideoGraph`.
+- I2VA reçoit la phrase d'alignement temporel (`H3_I2V_ALIGNMENT`), absente du template.
+- Plafond dur de 7 000 caractères appliqué (`capH3Prompt`), il ne l'était nulle part.
+- Les références fournies par l'utilisateur sont décrites par `gemma4:e4b` en vision (`describeRefImages`) — capacité confirmée par l'utilisateur en direct, et sondée au premier usage plutôt que supposée. C'est sur le chemin « Ignorer les fiches » que ça compte le plus : sans fiche générée, c'était la seule chose qui pouvait dire au modèle ce que contiennent ses images.
+- UI : attribution des numéros de sujet **par l'app**, jamais saisie (option « implicite », tranchée par l'utilisateur). Légende de slot sous chaque image de référence, et une rangée de puces d'insertion sous le brief pour les cas où plusieurs sujets agissent dans le même plan — « `<Subject 1>` tend la boîte à `<Subject 2>` » n'a aucune autre façon de s'exprimer en Ref2VA.
+
+### Vérifications
+
+JS validé (`node --check`), builder exercé hors navigateur sur cas nominal et cas limites (aucune description, brief sans ponctuation, description déjà ponctuée, troncature à 7 000). UI capturée en headless Chromium en clair et sombre à 1440 et 390 px : puces et légendes correctes, insertion au curseur fonctionnelle, aucun débordement horizontal, aucune erreur JS. Les 4 langues vérifiées. **Aucun rendu réel** : ComfyUI et Ollama tournent sur la machine de l'utilisateur, pas dans la session — l'effet en vidéo reste à constater par lui.
+
+---
+
 ## 2026-09-21 (suite 3) — Couverture Krea 2 complète, plus de titre incrusté, et la vraie cause du « je ne vois pas les styles »
 
 Trois demandes de l'utilisateur après le second A/B.
