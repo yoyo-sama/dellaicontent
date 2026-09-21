@@ -2204,10 +2204,10 @@
       "Cheveux": { en: "Hair", es: "Cabello", de: "Haar" },
       "Tenue": { en: "Outfit", es: "Vestuario", de: "Outfit" },
       "Accessoires": { en: "Accessories", es: "Accesorios", de: "Accessoires" },
-      "Espèce": { en: "Species", es: "Especie", de: "Art" },
-      "Tête": { en: "Head", es: "Cabeza", de: "Kopf" },
-      "Pelage": { en: "Coat", es: "Pelaje", de: "Fell" },
-      "Marques": { en: "Markings", es: "Marcas", de: "Zeichnung" },
+      "Sujet": { en: "Subject", es: "Sujeto", de: "Motiv" },
+      "Forme": { en: "Form", es: "Forma", de: "Form" },
+      "Surface": { es: "Superficie", de: "Oberfläche" },
+      "Détails": { en: "Details", es: "Detalles", de: "Details" },
       "Palette": { es: "Paleta" },
       "Lieu": { en: "Place", es: "Lugar", de: "Ort" },
       "Architecture": { es: "Arquitectura", de: "Architektur" },
@@ -3978,8 +3978,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
         + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
         + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
-        + "body plan, head, hair or fur, markings, clothing if any and colors identical to the first "
-        + "reference image.";
+        + "body plan, head, surface, materials, markings, clothing if any and colors identical to the "
+        + "first reference image.";
       if (extra) s += " " + extra;
       if (styleText) s += " " + styleText;
       return s;
@@ -4096,15 +4096,18 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Ordre canonique des champs de fiche (personnage / décor) : la jointure ", " de ces
     // champs par les helpers ci-dessous reproduit EXACTEMENT l'ancienne chaîne charDesc/locDesc.
-    // Deux squelettes : visage/cheveux/tenue ne veulent rien dire pour un lion de
-    // documentaire animalier — sur un sujet animal, gemma casait "fur" dans `outfit` et la
-    // planche sortait un lion anthropomorphe habillé. `kind` (renvoyé par gemma, stocké dans
-    // l'objet de champs, absent des deux listes donc jamais compilé dans le prompt) choisit
-    // la liste ; un projet restauré sans `kind` reste humain, comme avant.
+    // Deux squelettes : visage/cheveux/tenue ne veulent rien dire hors d'un sujet humain — sur
+    // un lion de documentaire animalier, gemma casait "fur" dans `outfit` et la planche sortait
+    // un lion anthropomorphe habillé. Le second squelette est volontairement générique plutôt
+    // qu'animalier : il doit aussi porter une créature imaginaire, un robot non humanoïde, un
+    // extraterrestre, un véhicule ou un objet, sans multiplier les gabarits. Le chemin humain
+    // reste séparé parce que c'est celui qui est qualifié en rendu réel (LOT 7). `kind`
+    // (renvoyé par gemma, stocké dans l'objet de champs, absent des deux listes donc jamais
+    // compilé dans le prompt) choisit la liste ; un projet restauré sans `kind` reste humain.
     const CHAR_FIELD_KEYS = ["face", "hair", "outfit", "accessories", "palette"];
-    const CHAR_ANIMAL_FIELD_KEYS = ["species", "head", "coat", "markings", "palette"];
-    const charKindOf = f => (f?.kind === "animal" ? "animal" : "human");
-    const charFieldKeys = f => (charKindOf(f) === "animal" ? CHAR_ANIMAL_FIELD_KEYS : CHAR_FIELD_KEYS);
+    const CHAR_OTHER_FIELD_KEYS = ["subject", "form", "surface", "details", "palette"];
+    const charKindOf = f => (f?.kind && f.kind !== "human" ? "other" : "human");
+    const charFieldKeys = f => (charKindOf(f) === "other" ? CHAR_OTHER_FIELD_KEYS : CHAR_FIELD_KEYS);
     const LOC_FIELD_KEYS = ["place", "architecture", "materials", "lighting", "palette"];
     // Ces deux chaînes alimentent des graphes KREA 2 (buildCharsheetGraph/buildLocsheetGraph)
     // : elles passent donc par le même filtre de remplissage que l'enrichissement, sinon un
@@ -4119,7 +4122,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     }
 
     // Fiche personnage figée : OBJET de champs structurés gemma, {face,hair,outfit,accessories,
-    // palette} pour un sujet humain, {species,head,coat,markings,palette} pour un sujet animal
+    // palette} pour un sujet humain, {subject,form,surface,details,palette} pour tout le reste
     // (éditable dans le menu Personnage du studio) ; charDescFromFields le compile en une chaîne.
     // `kind` commande aussi le gabarit de planche (buildCharsheetGraph) et les étiquettes du menu.
     // Fallback sans LLM : brief dans le 1er champ, autres vides.
@@ -4127,7 +4130,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const scene = brief.value.trim();
       try {
         const out = await gemmaJSON(
-          `You are a character designer. From the user's scene, take the SINGLE most prominent character and describe it so it stays IDENTICAL across shots. It may be a human being, or an animal (wildlife documentary, pet, mascot). FIRST set "kind": "human" for a human being, "animal" for any animal. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. If kind is "human", answer ONLY with JSON {"kind":"human","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "animal", answer ONLY with JSON {"kind":"animal","species":"exact species, sex, age and body plan, e.g. adult male African lion, four-legged big cat","head":"...","coat":"...","markings":"...","palette":"..."}. For an animal, describe a real undressed wild animal: never mention clothing, outfit, accessories, human hair or a human face, and never make it stand or behave like a human.`,
+          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. If kind is "human", answer ONLY with JSON {"kind":"human","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.`,
           scene);
         const fields = { kind: out.kind === "animal" ? "animal" : "human" };
         for (const k of charFieldKeys(fields)) fields[k] = fieldText(out[k]);
@@ -4168,7 +4171,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       let shots;
       try {
         const out = await gemmaJSON(
-          `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character's appearance and the setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one subject in frame, a person or an animal) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
+          `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character's appearance and the setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one subject in frame, a person, an animal, a creature, a machine or an object) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
           scene);
         shots = normalizeShotList(out.shots, n, scene);
         addEvent("OK", `${n} plans Scene DNA (caméra/lumière/action) générés par ${OLLAMA_MODEL}.`, "ok");
@@ -4252,18 +4255,20 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Planche personnage multi-vues (ancre d'apparence, image 1 des keyframes duales).
     // Format 16:9 large obligatoire (layout prouvé au Lot 1), indépendant du ratio UI.
     // Deux gabarits : « one single person », les quatre poses debout et la grappe de détails de
-    // costume fabriquaient un lion anthropomorphe habillé sur un brief animalier — le sujet animal
-    // a donc son propre gabarit (anatomie animale, aucun vêtement, vues rapprochées de la tête et
-    // du pelage). charFields porte `kind` ; une fiche sans `kind` reste humaine.
+    // costume fabriquaient un lion anthropomorphe habillé sur un brief animalier. Le second gabarit
+    // ne décrit donc aucune morphologie : il renvoie le sujet à ce que `charDesc` en dit (nombre de
+    // membres, structure, posture, matière) et se contente d'interdire le corps humain par défaut,
+    // ce qui couvre aussi bien un lion qu'une créature, un robot non humanoïde ou un objet, sans un
+    // gabarit par famille. charFields porte `kind` ; une fiche sans `kind` reste humaine.
     const CHARSHEET_HUMAN = charDesc => `A professional photorealistic character reference sheet of one single person, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. Arranged neatly, the sheet shows a full-body turnaround of the same person in four standing poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a neutral relaxed stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the face. A row of several smaller close-up headshots of the face showing different facial expressions: neutral, smiling, surprised, determined. A cluster of detailed close-up photographs of costume details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the outfit and hair. Every view shows the exact same single person with identical face, hair and costume, consistent character design. `;
-    const CHARSHEET_ANIMAL = charDesc => `A professional photorealistic wildlife reference sheet of one single real animal, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. The subject is a real wild animal photographed exactly as it exists in nature: true animal anatomy and true animal proportions, bare natural fur or skin, its whole body carried in its natural animal posture with all of its legs on the ground and its head level with its body. Arranged neatly, the sheet shows a full-body turnaround of the same animal in four natural poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in the same natural stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the head. A row of several smaller close-up photographs of the head seen from different angles. A cluster of detailed close-up photographs of the coat, paws, tail and other natural body details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the animal coat. Every view shows the exact same single animal with identical head, coat and markings, consistent animal design, filmed like the subject of a nature documentary. `;
+    const CHARSHEET_SUBJECT = charDesc => `A professional photorealistic reference sheet of one single subject, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. The subject is photographed exactly as the thing it is: its anatomy, structure, proportions, number of limbs and parts, and its natural resting posture are strictly the ones described above and never those of a human being; it has no human face, and it wears nothing unless the description above says otherwise. Arranged neatly, the sheet shows a full-body turnaround of the same subject in four views evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in the same natural posture and at the same scale, evenly studio-lit. Above the turnaround, one large tight close-up of the part that identifies it best: its head, or its front if it has no head. A row of several smaller close-up photographs of that same part seen from different angles. A cluster of detailed close-up photographs of its surface, its materials and its distinctive details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the subject. Every view shows the exact same single subject with identical shape, surface and markings, consistent design, photographed as one real physical thing under the same studio light. `;
 
     function buildCharsheetGraph(charFields, negText, seed, width, height, loraName) {
       const { g, add } = makeGraphBuilder();
       const kx = addKrea2Shared(add, loraName);
       const styleText = currentStyleText();
       const charDesc = charDescFromFields(charFields);
-      const layout = charKindOf(charFields) === "animal" ? CHARSHEET_ANIMAL : CHARSHEET_HUMAN;
+      const layout = charKindOf(charFields) === "other" ? CHARSHEET_SUBJECT : CHARSHEET_HUMAN;
       const dec = addKrea2Shot(add, kx,
         `${layout(charDesc)}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
         seed, 1920, 1088, 1);
@@ -4726,11 +4731,11 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Étiquettes des champs de fiche personnage (clés FR = clés I18N).
     const CHAR_FIELD_LABELS = {
       face: "Visage", hair: "Cheveux", outfit: "Tenue", accessories: "Accessoires",
-      species: "Espèce", head: "Tête", coat: "Pelage", markings: "Marques", palette: "Palette"
+      subject: "Sujet", form: "Forme", surface: "Surface", details: "Détails", palette: "Palette"
     };
 
-    // Le menu Personnage suit le squelette du sujet : un lion n'a ni tenue ni accessoires, il a
-    // une espèce, une tête, un pelage et des marques. Les <label> sont recréés (nœuds texte neufs,
+    // Le menu Personnage suit le squelette du sujet : un lion, un robot ou un objet n'ont ni tenue
+    // ni accessoires, ils ont une forme et une surface. Les <label> sont recréés (nœuds texte neufs,
     // sans __orig mémorisé par translateTree) puis traduits ; l'édition passe par un écouteur
     // délégué sur la section, donc les champs reconstruits restent câblés.
     function renderCharFields(keys) {
