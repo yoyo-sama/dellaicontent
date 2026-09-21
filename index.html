@@ -4311,7 +4311,11 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // plans) : numéro attribué par l'app + les premiers mots du 1er champ descriptif rempli.
     function subjectLabel(i) {
       const f = director?.chars?.[i]?.fields;
-      const head = (charFieldKeys(f).map(k => fieldText(f?.[k])).find(Boolean) || "")
+      // `label` est un nom court demandé à gemma, hors des listes de champs (jamais compilé
+      // dans le prompt). Repli sur le 1er champ descriptif : sur un sujet non humain il donne
+      // l'espèce (« adult male African lion »), sur un humain il donne le visage
+      // (« sharply defined »), ce qui ne distingue pas deux personnes — d'où `label`.
+      const head = (fieldText(f?.label) || charFieldKeys(f).map(k => fieldText(f?.[k])).find(Boolean) || "")
         .split(/[,;.]/)[0].trim().split(/\s+/).slice(0, 4).join(" ");
       return head ? `${dyn("subjectN", i + 1)} · ${head}` : dyn("subjectN", i + 1);
     }
@@ -4333,7 +4337,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         : "";
       try {
         const out = await gemmaJSON(
-          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. If kind is "human", answer ONLY with JSON {"kind":"human","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.${more}`,
+          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. Also set "label": a plain 2-to-4-word name for this subject that tells it apart from other subjects of the same scene, e.g. "weary detective", "young farmhand", "adult male lion", "six-legged mining robot". If kind is "human", answer ONLY with JSON {"kind":"human","label":"...","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","label":"...","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.${more}`,
           scene);
         // Le squelette se décide sur les champs que gemma a REMPLIS, pas sur l'étiquette
         // `kind` qu'il annonce : il décrit régulièrement un lion dans {subject, form, surface}
@@ -4346,6 +4350,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const nHuman = filledCount(CHAR_FIELD_KEYS), nOther = filledCount(CHAR_OTHER_FIELD_KEYS);
         const fields = { kind: nOther > nHuman ? "other" : nHuman > nOther ? "human"
                                : (out.kind === "human" ? "human" : "other") };
+        fields.label = fieldText(out.label);   // hors listes de champs : onglets seuls, jamais le prompt
         for (const k of charFieldKeys(fields)) fields[k] = fieldText(out[k]);
         // Une fiche réduite à la palette n'est pas une fiche : elle décrit des couleurs et
         // aucun sujet, et Krea 2 invente alors le personnage de toutes pièces. On exige donc
@@ -5122,7 +5127,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       };
       director.chars.forEach((c, i) =>
         tab(i === director.charIdx ? " active" : "", subjectLabel(i), () => selectSubject(i)));
-      tab(" add", tr("+ Ajouter un sujet"), addSubject, busy);
+      tab(" add", tr("+ Ajouter un sujet"), addSubject);
+      // Retirer un sujet dont la planche est en cours laisserait un job orphelin : seul ce
+      // bouton-là attend. Ajouter, non : il lance son propre job, en parallèle.
       if (director.chars.length > 1)
         tab(" del", tr("Retirer ce sujet"), () => removeSubject(director.charIdx), busy);
     }
@@ -5235,6 +5242,10 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     function refreshSheetUI(kind) {
       renderVariantStrip(kind);
+      // Les onglets de sujet portent l'état des planches (libellé, boutons) : sans ce rendu,
+      // ils restaient figés sur l'état capturé à l'ouverture de la session — « Ajouter un
+      // sujet » grisé pour toujours parce que la 1re planche était encore en génération.
+      if (kind === "char") renderSubjectTabs();
       updateValidateButtonState();
       updateGateState();
     }
