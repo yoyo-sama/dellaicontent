@@ -1714,6 +1714,8 @@
                   Negative prompt
                   <textarea id="negative" class="small">low quality, blurry, distorted faces, unreadable text, watermark, extra limbs</textarea>
                 </label>
+                <!-- Hors du <label> : celui-ci force text-transform:uppercase, illisible pour une phrase. -->
+                <small id="negativeNote" class="hint" style="display:none">Krea 2 n'encode aucun prompt négatif : exprimez la contrainte positivement dans le brief.</small>
                 <div class="actions">
                   <button class="secondary-btn" id="enrichBtn"
                     title="Réécrit votre brief en prompt de diffusion détaillé (+ negative prompt) via le LLM, une seule fois, sans lancer de génération">Enrichir le brief (LLM)</button>
@@ -1966,7 +1968,7 @@
     // Fallback si le manifest ne fournit pas la section "pipelines" (manifest v2).
     // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora, sheetLora}
     const PIPELINES_FALLBACK = [
-      { id: "text2image", label: "Text2Image", controls: ["variants", "ratio", "lora"] },
+      { id: "text2image", label: "Text2Image", controls: ["variants", "ratio", "lora", "style"] },
       { id: "image2image", label: "Image2Image / Edit", controls: ["variants", "ratio", "image", "markets"] },
       { id: "image2video", label: "Image2Video", controls: ["duration", "ratio", "image", "audio", "turbo", "mp", "turboSteps", "lora"] },
       { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps", "lora"] },
@@ -1974,9 +1976,9 @@
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
         controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio", "sheetLora"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["mode", "duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "skipSheets"], defaults: { duration: 2 } },
+        controls: ["mode", "duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "skipSheets", "style"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
-        controls: ["duration", "variants", "audio"], defaults: { duration: 5 } }
+        controls: ["duration", "variants", "audio", "style"], defaults: { duration: 5 } }
     ];
     function pipelineDef(id) {
       return (manifest.pipelines || []).find(p => p.id === id)
@@ -2214,6 +2216,19 @@
       "Film noir": { es: "Cine negro" },
       "Documentaire": { en: "Documentary", es: "Documental", de: "Dokumentarisch" },
       "Anime": {},
+      "Éditorial": { en: "Editorial", es: "Editorial", de: "Editorial" },
+      "Argentique 35 mm": { en: "35mm analog", es: "Analógico 35 mm", de: "35-mm-Analog" },
+      "Cinéma d'auteur": { en: "Arthouse", es: "Cine de autor", de: "Autorenkino" },
+      "SF blockbuster": { en: "Sci-fi blockbuster", es: "Ciencia ficción blockbuster", de: "Sci-Fi-Blockbuster" },
+      "Luxe discret": { en: "Quiet luxury", es: "Lujo discreto", de: "Stiller Luxus" },
+      "Packshot produit": { en: "Product visualization", es: "Packshot de producto", de: "Produkt-Packshot" },
+      "Sérigraphie": { en: "Screen print", es: "Serigrafía", de: "Siebdruck" },
+      "Peinture à l'huile": { en: "Oil painting", es: "Pintura al óleo", de: "Ölgemälde" },
+      "Onirique": { en: "Dreamlike", es: "Onírico", de: "Traumhaft" },
+      "Krea 2 n'encode aucun prompt négatif : exprimez la contrainte positivement dans le brief.": {
+        en: "Krea 2 encodes no negative prompt: state the constraint positively in the brief.",
+        es: "Krea 2 no codifica ningún prompt negativo: exprese la restricción en positivo en el brief.",
+        de: "Krea 2 kodiert keinen Negativ-Prompt: Formulieren Sie die Einschränkung positiv im Brief." },
       // Presets caméra (Scene DNA)
       "Très gros plan": { en: "Extreme close-up", es: "Primerísimo plano", de: "Extreme Nahaufnahme" },
       "Gros plan": { en: "Close-up", es: "Primer plano", de: "Nahaufnahme" },
@@ -2406,6 +2421,11 @@
       modelLabel.textContent = wf ? `${wf.model} · ${wf.pipeline}` : "—";
       updateTurboControls();
       renderLoraSelect();
+      // Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a pas de
+      // placeholder {{NEGATIVE_PROMPT}} (piège n°16) : champ désactivé plutôt que sans effet.
+      const krea2 = isKrea2Workflow(wf);
+      negative.disabled = krea2;
+      $("negativeNote").style.display = krea2 ? "" : "none";
     }
 
     // Turbo LoRA (Minimax H3 uniquement) : sans effet sur LTX 2.5 (nœud absent du template) → désactiver les deux champs.
@@ -2943,9 +2963,9 @@
       try {
         if (autoEnrich && wf.enrich !== "builtin") {
           addEvent("REQ", `Auto-enrichissement du brief via ${OLLAMA_MODEL}…`, "req");
-          await enrichBrief();
+          await enrichBrief(wf);
         } else if (autoEnrich) {
-          addEvent("SYS", `Enrichissement intégré au workflow ${wf.label} — gemma non sollicité.`, "sys");
+          addEvent("SYS", `Le workflow ${wf.label} construit ses propres prompts — brief transmis tel quel.`, "sys");
         }
         // text2video/image2video/reference2video pilotent la résolution par mégapixels
         // (cf. computeMPResolution) — unité ×64 pour LTX 2.5 (2 passes), ×32 pour Minimax H3.
@@ -2966,9 +2986,14 @@
           await BUILDERS[wf.builder](seed, width, height);
           return;
         }
+        // Style ajouté EN FIN de prompt : le sujet reste en tête, conformément à l'ordre de
+        // priorité sujet > style déjà appliqué par compileKeyframePrompt/compileCutPrompt.
+        // No-op sur les pipelines qui n'exposent pas le contrôle (currentStyleText renvoie "").
+        const styleText = currentStyleText();
+        const withStyle = t => styleText ? `${t} ${styleText}` : t;
         const jobsSpec = wf.pipeline === "image2image" && selectedMarkets.size
-          ? [...selectedMarkets].map(id => ({ prompt: marketPrompt(id), tag: MARKETS[id].label }))
-          : [{ prompt: brief.value.trim(), tag: null }];
+          ? [...selectedMarkets].map(id => ({ prompt: withStyle(marketPrompt(id)), tag: MARKETS[id].label }))
+          : [{ prompt: withStyle(brief.value.trim()), tag: null }];
         let image = "", uploaded = false;
         for (let i = 0; i < jobsSpec.length; i++) {
           const spec = jobsSpec[i];
@@ -3013,16 +3038,39 @@
     });
 
     // ── Prompt enrichment (Ollama) ─────────────────────────────────
+    // Workflows dont les images sont rendues par Krea 2 : le text2image générique et les
+    // 3 visuels de la campagne (buildCampaignFullGraph → addKrea2Shot).
+    const KREA2_WORKFLOWS = new Set(["krea2_t2i", "campaign_full"]);
+    const isKrea2Workflow = wf => !!wf && KREA2_WORKFLOWS.has(wf.id);
+
+    // Deux consignes : la générique (moteurs qui encodent réellement un négatif) et celle
+    // de Krea 2. Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a
+    // même pas de placeholder {{NEGATIVE_PROMPT}} : un négatif enrichi y serait perdu en
+    // silence (LESSONS piège n°16). Sa consigne impose donc l'ordre de construction, la
+    // longueur, l'interdiction du remplissage et la reformulation POSITIVE des contraintes.
     const ENRICH_SYSTEM = `You are a prompt engineer for diffusion image and video models.
 Rewrite the user's creative brief into a single rich English diffusion prompt (subject, style, lighting, composition, mood) and a matching negative prompt.
 Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
 
-    async function callOllama(withThink) {
+    const KREA2_ENRICH_SYSTEM = `You are a visual prompt architect for Krea 2, an aesthetic-focused image model.
+Rewrite the user's brief into ONE English image prompt, built in this order and keeping only what carries visual information: subject, action, environment, style, lighting, camera and optics, composition, color, material and texture, atmosphere.
+Rules:
+- Name the main subject first and unambiguously; never let style wording replace or obscure it.
+- Preserve the user's subject, action and intent exactly. Invent no detail the brief does not imply.
+- Describe the visual result, not how to achieve it.
+- Krea 2 never encodes a negative prompt, so express every constraint POSITIVELY: write "clean seamless background", never "no clutter"; write "both hands fully visible and correctly formed", never "no extra limbs".
+- Keep one dominant style. Do not stack unrelated style keywords.
+- 40 to 100 words. Every phrase must add visual information; delete filler.
+- Never use "masterpiece", "best quality", "8k", "ultra detailed", "award winning", "stunning" or "beautiful lighting" — they carry no visual direction.
+- A PRIMARY_STYLE line may follow the brief. Build the description so it fits that style, but do NOT restate the style wording itself: it is appended separately.
+Answer ONLY with JSON: {"positive_prompt": "..."}`;
+
+    async function callOllama(system, user, withThink) {
       const body = {
         model: OLLAMA_MODEL, stream: false, format: "json",
         messages: [
-          { role: "system", content: ENRICH_SYSTEM },
-          { role: "user", content: brief.value.trim() }
+          { role: "system", content: system },
+          { role: "user", content: user }
         ]
       };
       if (withThink) body.think = false;
@@ -3209,16 +3257,24 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       return `${brief.value.trim()} Adapt this asset for the ${MARKETS[id].label} market: ${MARKETS[id].cues}. Keep the composition, main character, logo placement and brand palette unchanged.`;
     }
 
-    async function enrichBrief() {
+    // Sur Krea 2 on n'écrit JAMAIS dans le champ négatif : il ne serait pas encodé, et le
+    // remplir laisserait croire qu'il agit. Le style courant est transmis en PRIMARY_STYLE
+    // pour que gemma compose autour de lui au lieu d'en inventer un concurrent — il n'est
+    // pas réécrit dans le prompt, il est ajouté en fin de prompt au moment de la soumission.
+    async function enrichBrief(wf) {
+      const krea2 = isKrea2Workflow(wf);
+      const system = krea2 ? KREA2_ENRICH_SYSTEM : ENRICH_SYSTEM;
+      const styleText = krea2 ? currentStyleText() : "";
+      const user = brief.value.trim() + (styleText ? `\nPRIMARY_STYLE: ${styleText}` : "");
       $("stepEnrich").classList.add("active");
       try {
         let data;
-        try { data = await callOllama(true); }
-        catch { data = await callOllama(false); }
+        try { data = await callOllama(system, user, true); }
+        catch { data = await callOllama(system, user, false); }
         const out = JSON.parse(data.message.content);
         if (out.positive_prompt) brief.value = out.positive_prompt;
-        if (out.negative_prompt) negative.value = out.negative_prompt;
-        addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}.`, "ok");
+        if (!krea2 && out.negative_prompt) negative.value = out.negative_prompt;
+        addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
       } finally {
         $("stepEnrich").classList.remove("active");
       }
@@ -3228,7 +3284,7 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       const btn = $("enrichBtn");
       btn.disabled = true;
       addEvent("REQ", `Enrichissement du brief via ${OLLAMA_MODEL}…`, "req");
-      try { await enrichBrief(); }
+      try { await enrichBrief(currentWorkflow()); }
       catch (err) { addEvent("WARN", `Enrichissement impossible : ${err.message}`, "warn"); }
       finally { btn.disabled = false; }
     });
@@ -3710,17 +3766,20 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     async function buildCampaignFullGraph(prompt, negText, seed, batch, teaserDur) {
       const { g, add } = makeGraphBuilder();
       const img = addKrea2Shared(add);
+      // Style en dernier, après le suffixe de format : sujet > format > style.
+      const styleText = currentStyleText();
+      const tail = suffix => `${prompt} ${suffix}${styleText ? " " + styleText : ""}`;
       [["poster", 832, 1216, batch, "Poster composition with space for title text."],
        ["thumbnail", 1280, 720, batch, "YouTube thumbnail composition, bold and readable."],
        ["social", 1024, 1024, 1, "Square social media visual."]].forEach(([name, w, h, b, suffix], i) => {
-        const dec = addKrea2Shot(add, img, `${prompt} ${suffix}`, seed + 200 + i, w, h, b);
+        const dec = addKrea2Shot(add, img, tail(suffix), seed + 200 + i, w, h, b);
         add("SaveImage", { images: [dec, 0], filename_prefix: `studio/campaign/${name}` });
       });
       // Teaser vertical : réutilise le template LTX 2.5 t2v validé (2 passes + upscale,
       // audio natif câblé dans le template — aucun ajout côté JS).
       const raw = await getTemplate("api/ltx25_t2v.json");
       const t2v = buildGraph(raw, {
-        prompt: `${prompt} Dynamic cinematic teaser, energetic camera movement.`,
+        prompt: tail("Dynamic cinematic teaser, energetic camera movement."),
         negative: negText, seed, width: 720, height: 1280, batch: 1, duration: teaserDur
       });
       for (const n of Object.values(t2v)) if (n.class_type === "SaveVideo") n.inputs.filename_prefix = "studio/campaign/teaser";
@@ -3780,21 +3839,60 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
       night: { label: "Nuit",
         text: "The whole scene is set at night under cool artificial lighting, with pools of light, deep shadow and a dark sky." },
     };
+    // Styles curés sur les 9 familles de la taxonomie Krea 2 (PHOTO / CINE / FASH / ILLU /
+    // PAINT / CGI / ANIME / EXP), retenus pour les 3 scénarios de la démo (campagne,
+    // storyboard, localisation) plutôt que les 72 entrées du document. Le texte suit la forme
+    // recommandée — mots-clés de style puis affinités lumière / optique / couleur / texture,
+    // pas une phrase figée — et reste POSITIF (Krea 2 n'encode aucun négatif, piège n°16).
+    // Ordre de priorité sujet > style : ce texte est toujours ajouté EN FIN de prompt.
+    // Les ids none/cinematic/noir/documentary/anime sont conservés : un projet enregistré
+    // avant cette liste garde son style (chargement gardé par STYLE_PACKS[p.style]).
     const STYLE_PACKS = {
       none: { label: "Aucun", text: "" },
+      // PHOTO
+      editorial: { label: "Éditorial",
+        text: "Editorial photography, sophisticated composition, magazine aesthetic, controlled studio lighting, refined neutral palette." },
+      analog35: { label: "Argentique 35 mm",
+        text: "35mm film, analog grain, soft halation, warm natural light, gentle imperfect exposure." },
+      documentary: { label: "Documentaire",
+        text: "Naturalistic documentary photography look, available light, realistic muted colors and candid unposed framing." },
+      // CINE
       cinematic: { label: "Cinématique",
         text: "Shot on 35mm Kodak Vision3 film, cinematic color grading, soft natural film grain, natural contrast and shallow depth of field." },
       noir: { label: "Film noir",
         text: "High-contrast black-and-white film-noir look, deep shadows, hard directional light and dramatic chiaroscuro." },
-      documentary: { label: "Documentaire",
-        text: "Naturalistic documentary photography look, available light, realistic muted colors and candid unposed framing." },
+      arthouse: { label: "Cinéma d'auteur",
+        text: "Arthouse cinema, restrained palette, symbolic composition, naturalistic soft light and quiet contemplative atmosphere." },
+      scifi: { label: "SF blockbuster",
+        text: "Cinematic science-fiction, ambitious production design, dramatic volumetric lighting, cool steel and neon palette." },
+      // FASH
+      quiet_luxury: { label: "Luxe discret",
+        text: "Quiet luxury, minimalist styling, neutral palette, soft directional light, premium understated materials." },
+      // CGI
+      product: { label: "Packshot produit",
+        text: "Premium product visualization, controlled studio environment, physically accurate materials, clean gradient backdrop, precise specular highlights." },
+      // ANIME
       anime: { label: "Anime",
         text: "Stylized Japanese anime illustration look, clean cel-shaded artwork, vivid saturated colors and expressive linework." },
+      // ILLU
+      screenprint: { label: "Sérigraphie",
+        text: "Screen print, flat inks, bold graphic shapes, halftone texture, limited high-contrast palette." },
+      // PAINT
+      oil: { label: "Peinture à l'huile",
+        text: "Classical oil painting, controlled chiaroscuro, rich pigments, visible brushwork on canvas texture." },
+      // EXP
+      dreamlike: { label: "Onirique",
+        text: "Dreamlike atmosphere, soft diffusion, ethereal light, hazy pastel palette and weightless depth." },
     };
 
     // Style actif : id figé sur la session Réalisateur (director.style) sinon lu au sélecteur.
     // Marche sans director (mode Auto) : repli sur la valeur du <select>.
+    // Le <select> garde sa valeur même masqué : on ne renvoie du texte que si le pipeline
+    // courant expose bien le contrôle "style", sinon un pipeline sans champ Style se verrait
+    // appliquer en silence le dernier style choisi ailleurs (c'était le cas des fiches
+    // perso/décor de reference2video, qui recevaient "cinematic" sans que rien ne l'affiche).
     function currentStyleText() {
+      if (!pipelineDef(pipelineSelect.value)?.controls?.includes("style")) return "";
       const id = director?.style ?? $("styleSelect")?.value ?? "cinematic";
       return (STYLE_PACKS[id] || STYLE_PACKS.none).text;
     }

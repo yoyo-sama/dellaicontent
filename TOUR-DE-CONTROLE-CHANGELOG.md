@@ -1,5 +1,39 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 — Qualité des contenus Krea 2 : consigne d'enrichissement dédiée + bibliothèque de styles
+
+Point de départ : deux documents fournis par l'utilisateur — une taxonomie des styles visuels Krea 2 (9 familles, 72 styles, séparation style / look / technique / lumière / caméra / composition / couleur / texture) et un system prompt « architecte de prompt Krea 2 » (ordre de construction, sujet d'abord, 40–100 mots, formulations bannies, résolution de conflits). Comparaison faite avec ce que le code fabriquait réellement, puis deux niveaux retenus sur trois proposés (la cible à quatre phases du document — moteur de compatibilité, panneau à dix champs — a été écartée : elle ajoute des réglages là où la démo existe pour en retirer).
+
+### Niveau 1 — l'enrichissement parlait à tous les moteurs et à aucun
+
+`ENRICH_SYSTEM` faisait trois lignes et demandait « un prompt de diffusion + un negative prompt correspondant », quel que soit le moteur ciblé. Sur Krea 2 ce négatif n'arrive nulle part : le `KSampler` reçoit un `ConditioningZeroOut` du positif (piège n°16) et `api/krea2_t2i.json` n'a même pas de placeholder `{{NEGATIVE_PROMPT}}`. Toute contrainte que gemma choisissait de formuler en négatif était donc perdue au lieu d'être reformulée en positif.
+
+- `KREA2_ENRICH_SYSTEM` ajouté : ordre sujet → action → environnement → style → lumière → optique → composition → couleur → matière → atmosphère, sujet nommé en premier, 40–100 mots, vocabulaire de remplissage explicitement banni (`masterpiece`, `8k`, `best quality`…), un seul style dominant, et **toute contrainte exprimée positivement** — la discipline déjà appliquée par `SHEET_CLEAN` aux planches perso/décor.
+- `enrichBrief(wf)` choisit la consigne via `isKrea2Workflow(wf)` (`krea2_t2i`, `campaign_full`) et **n'écrit plus jamais** dans le champ négatif pour ces workflows. Le style courant est transmis en ligne `PRIMARY_STYLE` pour que gemma compose autour de lui sans en inventer un concurrent ; il n'est pas réécrit dans le prompt, il est ajouté à la soumission (vérifié : une seule occurrence).
+- Champ « Negative prompt » désactivé, avec une note traduite, quand la cible est Krea 2 — plutôt que laissé actif, prérempli et sans effet.
+- `storyboard_v2` et `minimax_h3_r2v` passent à `"enrich": "builtin"` dans le manifest. L'auto-enrichissement s'exécutait avant le dispatch vers les builders et réécrivait le brief en y injectant caméra, lumière et composition, alors que `characterSheetFromBrief`/`locationSheetFromBrief` ont pour consigne explicite « no camera/scene/action wording ». Les deux se contredisaient.
+
+### Niveau 2 — 5 styles, et pas là où Krea 2 génère
+
+`STYLE_PACKS` comptait 5 entrées et n'était exposé que sur `storyboard_v2`. Les deux chemins où Krea 2 fabrique les images de la démo (`text2image`, `campaign_full`) n'avaient aucun vocabulaire de style.
+
+- 14 entrées curées sur les 9 familles de la taxonomie (PHOTO, CINE, FASH, CGI, ANIME, ILLU, PAINT, EXP), au format mots-clés + affinités lumière/optique/couleur/texture recommandé par le document, et non plus une phrase figée. Les 5 ids historiques (`none`, `cinematic`, `noir`, `documentary`, `anime`) sont conservés : un projet enregistré garde son style.
+- Contrôle `style` ajouté à `text2image`, `campaign_full` et `reference2video` dans `workflows/manifest.json` **et** dans `PIPELINES_FALLBACK` (miroir utilisé si le fetch du manifest échoue).
+- Le style est ajouté **en fin** de prompt sur le chemin générique et sur les 3 visuels + le teaser de la campagne : le sujet reste en tête, conformément à l'ordre de priorité sujet > style déjà appliqué par `compileKeyframePrompt`/`compileCutPrompt`.
+- Correctif au passage : `currentStyleText()` ne renvoie du texte que si le pipeline courant expose le contrôle `style`. Le `<select>` gardait sa valeur même masqué, si bien que les fiches perso/décor de `reference2video` recevaient « cinematic » sans que rien ne l'affiche. `reference2video` expose maintenant le champ.
+
+### Vérification
+
+`node --check` sur le JS extrait, `manifest.json` relu en JSON. 51 assertions passées dans trois harnais headless (Chromium `headless_shell`) qui pilotent la page réelle via ses propres fonctions et interceptent `fetch` :
+
+- **UI / câblage (25)** — 14 styles dont les 9 nouveaux et les 5 ids historiques ; champ Style visible sur `text2image`, `campaign_full`, `reference2video`, `storyboard_v2` et masqué sur `text2video` ; `currentStyleText()` vide sur un pipeline sans le contrôle (plus de fuite) ; champ négatif désactivé sur Krea 2 et réactivé ailleurs ; libellés et note traduits en EN.
+- **Prompts soumis (18)** — graphe `krea2_t2i` intercepté : un seul `CLIPTextEncode`, sujet en tête, style présent et placé après le sujet, aucun texte négatif dans le graphe ; style « Aucun » laisse le brief intact ; sous auto-enrichissement, consigne Krea 2 envoyée, `PRIMARY_STYLE` transmis, champ négatif non écrasé, style présent une seule fois ; hors Krea 2, consigne générique conservée et négatif bien réécrit.
+- **Campagne et storyboard (8)** — les 3 visuels Krea 2 et le teaser LTX portent le style, ordre sujet > format > style respecté ; `storyboard_v2` ne déclenche plus l'enrichissement générique.
+
+Captures headless clair et sombre à 390 / 768 / 1250 / 1440 px : le champ Style s'insère dans la barre de génération sans casser la mise en page, et la note du champ négatif se lit en casse normale (elle a été sortie du `<label>`, qui force `text-transform: uppercase`).
+
+**Non vérifié** : aucun rendu GPU réel n'a été fait (ni ComfyUI ni Ollama dans l'environnement de travail). La qualité visuelle effective des nouveaux prompts reste à confirmer par un rendu sur le GB10.
+
 ## 2026-09-10 (suite 6) — Guide de dépannage en anglais + réponse sur l'ordre de création du dossier de destination
 
 **Version anglaise.** `docs/TROUBLESHOOTING.md` est désormais en anglais (la langue par défaut du dépôt pour tout ce qui est opérationnel, comme les scripts et `README.md`), et la version française devient `docs/TROUBLESHOOTING.fr.md` — même convention que `README.md` / `README.fr.md`. Les liens sont ajustés partout : `README.md` pointe sur la version anglaise, `README.fr.md` sur la française, chaque arborescence liste les deux, et `AGENTS.md` mentionne les deux. Contrôle d'ancres sur les quatre fichiers : aucun renvoi cassé ; les 21 (GB10) et 23 (x86) blocs de commandes passent `bash -n`.
