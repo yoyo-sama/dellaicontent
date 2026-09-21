@@ -4151,10 +4151,24 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const out = await gemmaJSON(
           `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. If kind is "human", answer ONLY with JSON {"kind":"human","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.`,
           scene);
-        const fields = { kind: out.kind === "animal" ? "animal" : "human" };
+        // Le squelette se décide sur les champs que gemma a REMPLIS, pas sur l'étiquette
+        // `kind` qu'il annonce : il décrit régulièrement un lion dans {subject, form, surface}
+        // tout en se déclarant "human" (et l'inverse). Se fier à l'étiquette donnait une fiche
+        // vide — les clés lues n'étaient pas celles écrites — donc un prompt réduit à la
+        // palette, et Krea 2 rendait alors un humain quelconque. `palette` est exclu du compte :
+        // c'est la seule clé commune aux deux jeux, elle ne départage rien. `kind` ne sert plus
+        // que d'arbitre quand les deux jeux sont remplis pareil.
+        const filledCount = keys => keys.filter(k => k !== "palette" && fieldText(out[k])).length;
+        const nHuman = filledCount(CHAR_FIELD_KEYS), nOther = filledCount(CHAR_OTHER_FIELD_KEYS);
+        const fields = { kind: nOther > nHuman ? "other" : nHuman > nOther ? "human"
+                               : (out.kind === "human" ? "human" : "other") };
         for (const k of charFieldKeys(fields)) fields[k] = fieldText(out[k]);
-        if (charDescFromFields(fields)) { addEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
-        throw new Error("format inattendu");
+        // Une fiche réduite à la palette n'est pas une fiche : elle décrit des couleurs et
+        // aucun sujet, et Krea 2 invente alors le personnage de toutes pièces. On exige donc
+        // au moins un champ descriptif rempli, sinon repli sur le brief (qui, lui, nomme le
+        // sujet) plutôt qu'un prompt de trois couleurs.
+        if (filledCount(charFieldKeys(fields))) { addEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
+        throw new Error("aucun champ descriptif rempli");
       } catch (e) {
         addEvent("WARN", `Fiche personnage LLM indisponible (${e.message}) — brief utilisé tel quel.`, "warn");
         return { face: scene, hair: "", outfit: "", accessories: "", palette: "" };
