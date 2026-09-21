@@ -996,6 +996,37 @@
        une couche au-dessus pour pouvoir s'ouvrir depuis un aperçu. */
     .cut-engine { display: block; margin: 0 0 6px; max-width: 420px; }
 
+    .relay-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+    .relay-seg {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      background: var(--card-2);
+      padding: 10px;
+    }
+    .relay-seg .seg-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--text-2); }
+    .relay-seg textarea {
+      grid-column: 1 / -1;
+      min-height: 60px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-light);
+      background: var(--card);
+      color: var(--text);
+    }
+    .relay-seg .seg-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .relay-seg .seg-row label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .relay-seg .seg-row input[type="number"] { width: 72px; }
+    .relay-seg .seg-link.active { border-color: var(--accent); color: var(--accent); }
+    .relay-seg video { grid-column: 1 / -1; width: 100%; border-radius: 8px; }
+    .relay-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    #relayPlayer video { width: 100%; margin-top: 12px; border-radius: var(--radius); }
+
     #promptModal {
       position: fixed;
       inset: 0;
@@ -1928,6 +1959,7 @@
         <button type="button" class="studio-nav-btn" data-section="location">Décor</button>
         <button type="button" class="studio-nav-btn locked" data-section="storyboard" disabled>Storyboard</button>
         <button type="button" class="studio-nav-btn locked" data-section="montage" disabled>Montage</button>
+        <button type="button" class="studio-nav-btn locked" data-section="relay" disabled>Relay</button>
         <button type="button" class="studio-nav-btn locked" data-section="video" disabled style="display:none">Vidéo</button>
         <div class="studio-nav-foot">
           <button type="button" class="primary-btn" id="directorValidateBtn" disabled>Valider les planches</button>
@@ -2018,6 +2050,25 @@
           <div class="montage-list" id="montageList"></div>
           <button type="button" class="primary-btn" id="directorAssembleBtn" disabled style="margin-top:12px">Assembler l'animatic</button>
           <div id="montagePlayer"></div>
+        </section>
+
+        <section id="studioRelay" class="studio-section" style="display:none">
+          <h3 class="section-title">Prompt Relay</h3>
+          <p class="hint">Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle keyframe est composée sur les planches validées.</p>
+          <label class="cut-engine">Moteur des segments
+            <select id="relayEngineSelect">
+              <option value="ltx25">LTX 2.5 i2v</option>
+              <option value="minimax_h3">Minimax H3 i2v (grammaire Prompt Composer)</option>
+            </select>
+          </label>
+          <div class="relay-list" id="relayList"></div>
+          <div class="relay-foot">
+            <button type="button" class="secondary-btn" id="relayAddBtn">＋ Ajouter un segment</button>
+            <button type="button" class="primary-btn" id="relayRunBtn" disabled>Générer la chaîne</button>
+            <button type="button" class="primary-btn" id="relayAssembleBtn" disabled>Assembler la séquence</button>
+          </div>
+          <p class="hint" id="relayStatus"></p>
+          <div id="relayPlayer"></div>
         </section>
 
         <section id="studioVideoR2V" class="studio-section" style="display:none">
@@ -2489,6 +2540,24 @@
         { en: "LTX 2.5 runs at cfg 1: its built-in enhancer rules, keep the character identity and the location in the prompt.",
           es: "LTX 2.5 funciona con cfg 1: su enhancer integrado manda, mantenga la identidad del personaje y el decorado en el prompt.",
           de: "LTX 2.5 läuft mit cfg 1: Sein integrierter Enhancer entscheidet, Charakteridentität und Kulisse im Prompt belassen." },
+      // Prompt Relay
+      "Relay": {},
+      "Prompt Relay": {},
+      "Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle keyframe est composée sur les planches validées.":
+        { en: "A chain of short video segments rather than one long shot: each segment has its own prompt and duration, and continuity comes from the chaining. Link 🔗: the segment picks up the previous one's last frame, exactly. Link 🎞: an assumed cut, a new keyframe is composed on the validated sheets.",
+          es: "Una cadena de segmentos de vídeo cortos en lugar de un único plano largo: cada segmento tiene su prompt y su duración, y la coherencia viene del encadenado. Enlace 🔗: el segmento retoma el último fotograma del anterior, exactamente. Enlace 🎞: corte asumido, se compone un nuevo fotograma clave sobre las láminas validadas.",
+          de: "Eine Kette kurzer Videosegmente statt einer einzigen langen Einstellung: Jedes Segment hat eigenen Prompt und eigene Dauer, die Kohärenz entsteht durch die Verkettung. Verbindung 🔗: Das Segment übernimmt exakt das letzte Bild des vorherigen. Verbindung 🎞: bewusster Schnitt, ein neues Keyframe wird auf den bestätigten Bögen komponiert." },
+      "Moteur des segments": { en: "Segment engine", es: "Motor de los segmentos", de: "Segment-Engine" },
+      "＋ Ajouter un segment": { en: "＋ Add a segment", es: "＋ Añadir un segmento", de: "＋ Segment hinzufügen" },
+      "Générer la chaîne": { en: "Generate the chain", es: "Generar la cadena", de: "Kette generieren" },
+      "Assembler la séquence": { en: "Assemble the sequence", es: "Ensamblar la secuencia", de: "Sequenz zusammensetzen" },
+      "Ce qui se passe dans ce segment.": { en: "What happens in this segment.", es: "Lo que ocurre en este segmento.", de: "Was in diesem Segment geschieht." },
+      "À générer": { en: "To generate", es: "Por generar", de: "Zu generieren" },
+      "🎞 Premier segment": { en: "🎞 First segment", es: "🎞 Primer segmento", de: "🎞 Erstes Segment" },
+      "Continu (frame exacte)": { en: "Continuous (exact frame)", es: "Continuo (fotograma exacto)", de: "Fortlaufend (exaktes Bild)" },
+      "Coupure (nouvelle keyframe)": { en: "Cut (new keyframe)", es: "Corte (nuevo fotograma clave)", de: "Schnitt (neues Keyframe)" },
+      "✨ Enrichir": { en: "✨ Enrich", es: "✨ Enriquecer", de: "✨ Anreichern" },
+      "✕ Retirer": { en: "✕ Remove", es: "✕ Quitar", de: "✕ Entfernen" },
       // Moteur des cuts
       "Moteur des cuts": { en: "Cut engine", es: "Motor de los cortes", de: "Cut-Engine" },
       "Minimax H3 i2v (grammaire Prompt Composer)":
@@ -2549,11 +2618,14 @@
       studioJobs: {
         fr: n => `${n} job(s) en cours`, en: n => `${n} job(s) running`,
         es: n => `${n} trabajo(s) en curso`, de: n => `${n} Job(s) aktiv` },
+      relaySegment: {
+        fr: (i, n) => `Segment ${i}/${n}`, en: (i, n) => `Segment ${i}/${n}`,
+        es: (i, n) => `Segmento ${i}/${n}`, de: (i, n) => `Segment ${i}/${n}` },
       h3CutDuration: {
-        fr: (d, r) => `Durée : ${d} s demandées rendront ${r} s (grille 17n+5 du modèle).`,
-        en: (d, r) => `Duration: ${d} s requested will render ${r} s (the model's 17n+5 grid).`,
-        es: (d, r) => `Duración: ${d} s solicitados rendirán ${r} s (rejilla 17n+5 del modelo).`,
-        de: (d, r) => `Dauer: ${d} s angefordert ergeben ${r} s (17n+5-Raster des Modells).` }
+        fr: (d, r) => `Durée : par défaut ${d} s demandées rendront ${r} s (grille 17n+5 du modèle) ; chaque plan affiche la sienne.`,
+        en: (d, r) => `Duration: by default ${d} s requested will render ${r} s (the model's 17n+5 grid); each shot shows its own.`,
+        es: (d, r) => `Duración: por defecto ${d} s solicitados rendirán ${r} s (rejilla 17n+5 del modelo); cada plano muestra la suya.`,
+        de: (d, r) => `Dauer: standardmäßig ergeben ${d} s angefordert ${r} s (17n+5-Raster des Modells); jede Einstellung zeigt ihre eigene.` }
     };
     let LANG = localStorage.getItem("lang") || "fr";
     function tr(key) { return LANG === "fr" ? key : (I18N[key]?.[LANG] ?? key); }
@@ -5540,7 +5612,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     function exitStudio() { delete document.body.dataset.studio; }
 
     const STUDIO_SECTIONS = { character: "studioCharacter", location: "studioLocation",
-                              storyboard: "studioStoryboard", montage: "studioMontage", video: "studioVideoR2V" };
+                              storyboard: "studioStoryboard", montage: "studioMontage",
+                              relay: "studioRelay", video: "studioVideoR2V" };
     function selectStudioSection(name) {
       for (const [key, id] of Object.entries(STUDIO_SECTIONS))
         $(id).style.display = key === name ? "" : "none";
@@ -5556,6 +5629,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const isR2V = director?.pipeline === "reference2video";
       document.querySelector('#studioNav [data-section="storyboard"]').style.display = isR2V ? "none" : "";
       document.querySelector('#studioNav [data-section="montage"]').style.display = isR2V ? "none" : "";
+      document.querySelector('#studioNav [data-section="relay"]').style.display = isR2V ? "none" : "";
       document.querySelector('#studioNav [data-section="video"]').style.display = isR2V ? "" : "none";
     }
     document.querySelectorAll("#studioNav .studio-nav-btn").forEach(btn =>
@@ -5625,6 +5699,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         style: $("styleSelect").value,           // style figé à l'ouverture de la session
         sheetTemplate: $("sheetTemplateSelect").value,  // gabarit de planche figé de même
         cutPlan: null, cuts: null, order: null, animatic: null,  // état Montage
+        cutEngine: "ltx25", relay: null,                          // moteur des cuts + Prompt Relay
         // Fiches structurées éditables (menus Personnage/Décor) + historiques de variantes.
         // `chars` = liste de sujets (un seul à l'ouverture, « + Ajouter un sujet » en ajoute) ;
         // `charIdx` = celui qu'édite le menu Personnage.
@@ -5642,6 +5717,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
+      ensureRelay();
+      $("relayEngineSelect").value = director.relay.engine;
+      updateCutEngineHint();
+      renderRelay(); renderRelayPlayer();
       renderSheetMenu("char");
       renderSheetMenu("loc");
       updateValidateButtonState();
@@ -6075,6 +6154,12 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         const mt = document.querySelector('#studioNav [data-section="montage"]');
         mt.disabled = !mtReady;
         mt.classList.toggle("locked", !mtReady);
+        // Le Relay n'a pas besoin des keyframes du storyboard : il compose les siennes à
+        // partir des planches. Il s'ouvre donc en même temps que le Storyboard.
+        const rl = document.querySelector('#studioNav [data-section="relay"]');
+        rl.disabled = !unlocked;
+        rl.classList.toggle("locked", !unlocked);
+        updateRelayButtons();
       }
       refreshSoulId();
     }
@@ -6342,6 +6427,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const dur = Math.min(8, Math.max(1, parseInt($("videoDuration").value, 10) || 2));
       el.textContent = `${tr("Grammaire du Prompt Composer (subject_definitions / retention_analysis) et turbo 8 steps.")} `
         + dyn("h3CutDuration", dur, h3RealDuration(dur).toFixed(2));
+      // La durée réellement rendue est aussi rappelée sur chaque clip, qui peut avoir la sienne.
     }
     $("cutEngineSelect").addEventListener("change", () => {
       if (director) { director.cutEngine = currentCutEngine(); saveProject(); }
@@ -6502,8 +6588,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
           </div>`;
         clip.querySelector("strong").textContent = dyn("shotLabel", k + 1, director.cutPlan.length);
         const stale = cut.status === "stale";
+        const realDur = cut.engine === "minimax_h3" ? ` · ${h3RealDuration(cut.duration).toFixed(2)} s rendus` : "";
         clip.querySelector(".clip-meta").innerHTML =
-          `seed ${cut.seed} · ${stale ? `<span class="stale">${tr("à re-rendre")}</span>` :
+          `seed ${cut.seed}${realDur} · ${stale ? `<span class="stale">${tr("à re-rendre")}</span>` :
             tr(cut.status === "pending" ? "Génération…" : cut.status === "error" ? "Erreur" : cut.status === "missing" ? "Manquant" : "Prêt")}`;
         const vid = clip.querySelector("video"), missEl = clip.querySelector(".thumb-missing");
         if (cut.status === "missing") { vid.hidden = true; missEl.hidden = false; missEl.textContent = tr("Manquant"); }
@@ -6581,6 +6668,282 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     $("directorLaunchBtn").addEventListener("click", generateCuts);
     $("directorAssembleBtn").addEventListener("click", assembleTimeline);
 
+    // ── Prompt Relay : chaîne de segments vidéo courts ────────────────────────────
+    // Porté de la piste « Cinema Studio » (dépôt yoyo-sama/cinema-ai-studio), où la chaîne a
+    // été qualifiée en rendu réel. Le principe : plutôt qu'un seul long plan, n segments
+    // courts — chacun s'infère mieux — dont la cohérence vient du CHAÎNAGE et non du prompt.
+    //
+    // Deux liaisons par segment, et c'est tout le mécanisme :
+    //   🔗 « continu » : la DERNIÈRE FRAME du segment précédent est ré-uploadée TELLE QUELLE
+    //      comme image de départ du segment suivant. Aucune keyframe, donc aucune
+    //      réinterprétation : c'est la seule façon d'obtenir une continuité frame-exacte
+    //      (la repasse par Qwen-Edit produisait une coupure visible à chaque raccord).
+    //   🎞 « coupure » : changement de plan assumé — une keyframe Qwen-Edit est composée sur
+    //      la frame de transition (ou sur les planches pour le premier segment) et le décor.
+    // Le segment 1 est toujours en coupure : il n'a pas de frame précédente à reprendre.
+    const RELAY_MAX_SEGMENTS = 10;
+    const RELAY_MODES = { continue: "🔗", cut: "🎞" };
+
+    // Extraction de la dernière frame d'un cut. Il n'existe AUCUN nœud « VideoFrameExtract »
+    // dans ce runtime : la chaîne native est LoadVideo → GetVideoComponents →
+    // ImageFromBatch → SaveImage, celle que docs/TESTING.md emploie déjà pour inspecter des
+    // frames. `batch_index: -1` (dernière frame) est accepté par l'API bien que le widget
+    // annonce un minimum de 0 — vérifié sur la piste Cinema Studio.
+    function buildLastFrameGraph(videoName) {
+      const { g, add } = makeGraphBuilder();
+      const comps = add("GetVideoComponents", { video: [add("LoadVideo", { file: videoName }), 0] });
+      const frame = add("ImageFromBatch", { image: [comps, 0], batch_index: -1, length: 1 });
+      add("SaveImage", { images: [frame, 0], filename_prefix: "studio/relay/transition" });
+      return g;
+    }
+
+    // Rend { name, file, blob } — `name` est une entrée ComfyUI fraîche, utilisable aussi
+    // bien comme image de départ d'un i2v que comme référence d'une keyframe.
+    async function extractLastFrame(videoFile) {
+      const up = await reupload(videoFile);
+      const id = await submitGraph(buildLastFrameGraph(up.name), "Relay · frame de transition",
+        `${up.name} → dernière frame`);
+      const entry = (await waitForJobs([id]))[id];
+      const file = outputFiles(entry, ".png")[0];
+      if (!file) throw new Error("frame de transition : aucune image en sortie");
+      return { ...(await reupload(file)), file };
+    }
+
+    // Prompt de keyframe d'un segment en coupure. Premier segment : exactement la structure
+    // d'ancrage des keyframes de storyboard (image 1 = planche personnage, image 2 = décor).
+    // Segments suivants : l'image 1 n'est plus une planche mais la frame de transition, et le
+    // prompt doit le DIRE, sinon Qwen-Edit la traite comme une fiche de référence et recompose
+    // une pose. Le bloc d'ancrage solo est ré-apposé dans les deux cas.
+    function compileRelayKeyframePrompt(text, charDesc, locDesc, isFirst) {
+      const styleText = currentStyleText();
+      let s;
+      if (isFirst) {
+        s = "Use the first reference image only as the appearance guide for one single character, "
+          + charDesc
+          + ", and use the second reference image only as the guide for the environment"
+          + (locDesc ? ", " + locDesc : "") + ". "
+          + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+          + "instance of that character inside the environment of the second reference image: "
+          + text + ".";
+      } else {
+        s = "The first reference image is the last film frame of the previous segment of one single "
+          + "continuous shot. Continue that exact scene: keep the character's face, hair, clothing, "
+          + "position and the environment strictly continuous with that first reference image. "
+          + "The second reference image is the guide for the environment"
+          + (locDesc ? ", " + locDesc : "") + ". "
+          + "Create the next photorealistic cinematic film still of this same continuous shot, moments "
+          + "later: " + text + ".";
+      }
+      s += " " + KEYFRAME_ANCHOR_SOLO;
+      if (styleText) s += " " + styleText;
+      return s;
+    }
+
+    // Prompt vidéo d'un segment : même matière que les cuts, mais l'« action » est le texte
+    // du segment et non un plan de la Scene DNA. On passe donc par un shot minimal, ce qui
+    // laisse compileCutPrompt / buildH3CutPrompt seuls responsables de la forme du prompt.
+    function relayShot(seg) {
+      return { camera: "medium", lighting: "golden_hour", action: seg.prompt.trim(),
+               emotion: "", extra: "", duration: seg.duration, subjects: [0] };
+    }
+
+    const relayEngine = () => (CUT_ENGINES[$("relayEngineSelect").value] ? $("relayEngineSelect").value : "ltx25");
+    const newRelaySegment = () => ({ prompt: "", duration: 3, mode: "continue", status: "idle",
+                                     file: null, inputName: null, seed: 0, prompt_used: null });
+
+    function ensureRelay() {
+      if (!director) return null;
+      if (!director.relay) director.relay = { segments: [newRelaySegment()], engine: "ltx25", video: null };
+      return director.relay;
+    }
+
+    function relayReady() {
+      const r = director?.relay;
+      return !!(r && r.segments.length && r.segments.every(seg => seg.prompt.trim()));
+    }
+    function updateRelayButtons() {
+      const r = director?.relay;
+      const unlocked = anchorsReady() && !!director?.validated;
+      const busy = !!r && r.segments.some(seg => seg.status === "pending");
+      $("relayRunBtn").disabled = !unlocked || !relayReady() || busy;
+      $("relayAddBtn").disabled = !r || r.segments.length >= RELAY_MAX_SEGMENTS || busy;
+      $("relayAssembleBtn").disabled = !r || busy || !r.segments.length || !r.segments.every(seg => seg.status === "ready");
+    }
+
+    function renderRelay() {
+      const list = $("relayList");
+      list.innerHTML = "";
+      const r = director?.relay;
+      if (!r) return;
+      r.segments.forEach((seg, i) => {
+        const el = document.createElement("div");
+        el.className = "relay-seg";
+        el.innerHTML = `<div class="seg-head"><strong></strong><span class="seg-status"></span></div>
+          <textarea spellcheck="false"></textarea>
+          <div class="seg-row">
+            <label><span class="seg-dur-lbl"></span><input type="number" min="2" max="8" /></label>
+            <button type="button" class="secondary-btn seg-link"></button>
+            <button type="button" class="secondary-btn seg-enrich"></button>
+            <button type="button" class="secondary-btn seg-del"></button>
+          </div>
+          <video muted preload="metadata" hidden></video>`;
+        el.querySelector("strong").textContent = dyn("relaySegment", i + 1, r.segments.length);
+        el.querySelector(".seg-status").textContent = tr(
+          seg.status === "pending" ? "Génération…" : seg.status === "error" ? "Erreur"
+          : seg.status === "ready" ? "Prêt" : "À générer");
+        const area = el.querySelector("textarea");
+        area.value = seg.prompt;
+        area.placeholder = tr("Ce qui se passe dans ce segment.");
+        area.addEventListener("change", () => { seg.prompt = area.value; updateRelayButtons(); saveProject(); });
+        el.querySelector(".seg-dur-lbl").textContent = tr("Durée (s)");
+        const dur = el.querySelector('input[type="number"]');
+        dur.value = seg.duration;
+        dur.addEventListener("change", () => {
+          seg.duration = Math.min(8, Math.max(2, parseInt(dur.value, 10) || seg.duration));
+          dur.value = seg.duration;
+          saveProject();
+        });
+        // Le premier segment n'a pas de frame précédente : sa liaison n'existe pas, le bouton
+        // le dit plutôt que d'afficher un choix sans effet.
+        const link = el.querySelector(".seg-link");
+        if (i === 0) {
+          link.textContent = tr("🎞 Premier segment");
+          link.disabled = true;
+        } else {
+          link.textContent = `${RELAY_MODES[seg.mode]} ${tr(seg.mode === "continue" ? "Continu (frame exacte)" : "Coupure (nouvelle keyframe)")}`;
+          link.classList.toggle("active", seg.mode === "continue");
+          link.addEventListener("click", () => {
+            seg.mode = seg.mode === "continue" ? "cut" : "continue";
+            renderRelay(); saveProject();
+          });
+        }
+        const enrich = el.querySelector(".seg-enrich");
+        enrich.textContent = tr("✨ Enrichir");
+        enrich.addEventListener("click", async () => {
+          const label = enrich.textContent;
+          enrich.disabled = true;
+          enrich.textContent = tr("Enrichissement…");
+          try {
+            seg.prompt = await enrichCutText(area.value.trim(), relayEngine());
+            area.value = seg.prompt;
+            saveProject();
+          } finally { enrich.textContent = label; enrich.disabled = false; }
+        });
+        const del = el.querySelector(".seg-del");
+        del.textContent = tr("✕ Retirer");
+        del.disabled = r.segments.length < 2;
+        del.addEventListener("click", () => {
+          r.segments.splice(i, 1);
+          renderRelay(); updateRelayButtons(); saveProject();
+        });
+        const vid = el.querySelector("video");
+        if (seg.file) { vid.hidden = false; vid.src = viewURL(seg.file); }
+        list.appendChild(el);
+      });
+      translateTree(list);
+      updateRelayButtons();
+    }
+
+    // Génération de la chaîne. Séquentielle par construction : un segment continu a besoin de
+    // la dernière frame du précédent, donc rien ne peut partir en parallèle.
+    async function runRelay() {
+      const r = ensureRelay();
+      if (!r || !relayReady()) return;
+      const engine = relayEngine();
+      r.engine = engine;
+      const { negText, seed, locDesc } = director;
+      const charDesc = charDescFromFields(director.charFields);
+      $("relayRunBtn").disabled = true;
+      let prevFrame = null;
+      try {
+        const anchorRaw = director.anchorRaw || (director.anchorRaw = await getTemplate(director.wf.anchor));
+        const i2vRaw = await getTemplate(cutTemplateFor(engine));
+        for (let i = 0; i < r.segments.length; i++) {
+          const seg = r.segments[i];
+          const mode = i === 0 || !prevFrame ? "cut" : seg.mode;
+          seg.status = "pending";
+          renderRelay();
+          const shot = relayShot(seg);
+          let keyObj;
+          if (mode === "continue") {
+            // Frame exacte : aucune keyframe, l'image de départ EST la dernière frame rendue.
+            addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : vidéo (liaison continue)…`, "req");
+            keyObj = prevFrame;
+          } else {
+            addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : keyframe (liaison coupure)…`, "req");
+            const kPrompt = compileRelayKeyframePrompt(seg.prompt.trim(), charDesc, locDesc, i === 0);
+            const kId = await submitKeyframeJob(anchorRaw, shot,
+              [{ desc: charDesc, name: prevFrame ? prevFrame.name : director.charName }],
+              negText, director.locName, seed + 401 + i, director.width, director.height, i, r.segments.length, kPrompt);
+            keyObj = await resolveImageJob(kId);
+          }
+          addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : vidéo…`, "req");
+          seg.seed = seed + 501 + i;
+          seg.prompt_used = compileCutPromptFor(shot, charDesc, locDesc, null, engine, seg.duration);
+          const cutId = await submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText,
+            seg.seed, i, r.segments.length, seg.duration, null, engine, seg.prompt_used);
+          const entry = (await waitForJobs([cutId]))[cutId];
+          const f = outputFiles(entry, ".mp4")[0];
+          if (!f) throw new Error(`segment ${i + 1} : aucune vidéo en sortie`);
+          const up = await reupload(f);
+          seg.file = f; seg.inputName = up.name; seg.status = "ready";
+          renderRelay();
+          saveProject();
+          if (i < r.segments.length - 1) {
+            addEvent("REQ", "Relay · extraction de la dernière frame…", "req");
+            prevFrame = await extractLastFrame(f);
+          }
+        }
+        addEvent("OK", `Relay : ${r.segments.length} segments générés — assemblez la séquence.`, "ok");
+      } catch (err) {
+        const pending = r.segments.find(seg => seg.status === "pending");
+        if (pending) pending.status = "error";
+        addEvent("WARN", err.message, "warn");
+      }
+      renderRelay();
+      updateRelayButtons();
+      saveProject();
+    }
+
+    // Assemblage : mêmes cuts francs que l'animatic du storyboard, dans l'ordre des segments.
+    async function assembleRelay() {
+      const r = director?.relay;
+      if (!r || !r.segments.every(seg => seg.inputName)) return;
+      $("relayAssembleBtn").disabled = true;
+      try {
+        addEvent("REQ", "Relay : assemblage de la séquence…", "req");
+        const id = await submitAnimaticJob(r.segments.map(seg => seg.inputName), director.withAudio, director.seed);
+        const entry = (await waitForJobs([id]))[id];
+        r.video = { file: outputFiles(entry, ".mp4")[0], seed: director.seed };
+        renderRelayPlayer();
+        addEvent("OK", "Relay : séquence assemblée.", "ok");
+      } catch (err) { addEvent("WARN", err.message, "warn"); }
+      updateRelayButtons();
+      saveProject();
+    }
+
+    function renderRelayPlayer() {
+      const wrap = $("relayPlayer");
+      wrap.innerHTML = "";
+      if (!director?.relay?.video) return;
+      const vid = document.createElement("video");
+      vid.controls = true; vid.playsInline = true;
+      vid.src = viewURL(director.relay.video.file);
+      wrap.appendChild(vid);
+    }
+
+    $("relayAddBtn").addEventListener("click", () => {
+      const r = ensureRelay();
+      if (!r || r.segments.length >= RELAY_MAX_SEGMENTS) return;
+      r.segments.push(newRelaySegment());
+      renderRelay(); saveProject();
+    });
+    $("relayRunBtn").addEventListener("click", runRelay);
+    $("relayAssembleBtn").addEventListener("click", assembleRelay);
+    $("relayEngineSelect").addEventListener("change", () => {
+      if (director?.relay) { director.relay.engine = relayEngine(); saveProject(); }
+    });
+
     // ── LOT C : persistance de session (clé localStorage "studioProject") ──────────
     // Tout l'état projet du studio est sauvegardé PAR RÉFÉRENCES de fichiers ComfyUI
     // ({filename, subfolder, type} — sorties disque re-lisibles via /view) : jamais de
@@ -6617,7 +6980,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         locVariants: director.locVariants, locActive: director.locActive,
         shots: director.shots, keyframes: director.keyframes,
         cuts: director.cuts, order: director.order, animatic: director.animatic,
-        cutEngine: director.cutEngine || "ltx25"
+        cutEngine: director.cutEngine || "ltx25",
+        relay: director.relay || null
         // cutPlan : non persisté — reconstruit au restore via buildCutPlan().
       };
       try {
@@ -6715,7 +7079,12 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         keyframes: p.keyframes ? p.keyframes.map(revive) : null,
         cutPlan: null, cuts: p.cuts ? p.cuts.map(revive) : null,
         order: p.order || null, animatic: p.animatic || null,
-        cutEngine: CUT_ENGINES[p.cutEngine] ? p.cutEngine : "ltx25"
+        cutEngine: CUT_ENGINES[p.cutEngine] ? p.cutEngine : "ltx25",
+        // Projet d'avant le Prompt Relay : pas de clé `relay` → chaîne vierge à un segment.
+        relay: p.relay ? { engine: CUT_ENGINES[p.relay.engine] ? p.relay.engine : "ltx25",
+                           video: p.relay.video || null,
+                           segments: (p.relay.segments || []).map(seg => ({ ...newRelaySegment(), ...seg,
+                             status: seg.file ? "ready" : "idle" })) } : null
       };
       attachSheetAccessors(director);
       director.charIdx = Math.min(Math.max(0, p.charIdx ?? 0), director.chars.length - 1);
@@ -6732,6 +7101,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       if (director.keyframes) { $("directorStep2").style.display = ""; renderAllKeyframeCards(); }
       $("cutEngineSelect").value = director.cutEngine;
       updateCutEngineHint();
+      ensureRelay();
+      $("relayEngineSelect").value = director.relay.engine;
+      renderRelay(); renderRelayPlayer();
       renderMontage(); renderFooterTimeline(); renderMontagePlayer();
       updateMontageButtons();
       updateGateState();
@@ -6770,12 +7142,24 @@ Answer ONLY with JSON: {"prompt": "..."}`;
           catch { cut.status = "missing"; }
         })());
       });
+      (director.relay?.segments || []).forEach(seg => {
+        if (!seg?.file || seg.status !== "ready") return;
+        tasks.push((async () => {
+          try { seg.inputName = (await resolveFileRef(seg.file)).name; }
+          catch { seg.status = "error"; }
+        })());
+      });
+      if (director.relay?.video?.file) tasks.push((async () => {
+        try { if (!(await fetch(viewURL(director.relay.video.file))).ok) throw new Error(); }
+        catch { director.relay.video = null; renderRelayPlayer(); }
+      })());
       if (director.animatic?.file) tasks.push((async () => {
         try { if (!(await fetch(viewURL(director.animatic.file))).ok) throw new Error(); }
         catch { director.animatic = null; renderMontagePlayer(); }
       })());
       await Promise.allSettled(tasks);
       renderMontage(); renderFooterTimeline(); updateMontageButtons(); updateGateState();
+      renderRelay();
       const missing = [...director.chars.flatMap(c => c.variants), ...(director.locVariants || []),
         ...(director.keyframes || []), ...(director.cuts || [])].filter(x => x?.status === "missing").length;
       addEvent(missing ? "WARN" : "OK",

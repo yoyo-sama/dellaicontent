@@ -1,5 +1,35 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite 6) — Prompt Relay, prompts éditables, composer H3 sur les cuts
+
+Trois demandes de l'utilisateur, posées ensemble parce qu'elles touchent le même code de studio, et deux documents de référence fournis par lui : l'ontologie de styles et le system prompt Qwen-Image-Edit-2509.
+
+### 1. Prompts éditables partout, ré-enrichissement par moteur
+
+Un bouton « ✎ Prompt » sur les deux planches, sur chaque keyframe et sur chaque cut ouvre une modale montrant le texte réellement envoyé au graphe. Le texte appliqué part **verbatim** — l'app ne recompile rien par-dessus — et il est rangé sur l'objet (variante, keyframe, cut), donc il survit à la persistance et une régénération ultérieure ne ramène pas la compilation d'origine.
+
+Trois consignes, une par moteur : planches → `KREA2_ENRICH_SYSTEM` (existante), keyframes → `QWEN_EDIT_ENRICH_SYSTEM` (nouvelle, tirée du document fourni : dire quoi changer et quoi préserver, rôles d'images explicites, identité non réinventée, formulation positive puisque cfg 1, interdiction du vocabulaire « storyboard/planche »), cuts → consigne dépendante du moteur ciblé.
+
+L'invariant d'ancrage des keyframes sort en constantes et n'est jamais soumis à gemma : détail et règle générale dans `docs/LESSONS.md`, piège n°21.
+
+### 2. Moteur des cuts : LTX 2.5 ou Minimax H3
+
+Le menu Montage expose un sélecteur. LTX 2.5 reste le défaut, prompt inchangé au caractère près (formulation qualifiée au LOT 4, piège n°9). Minimax H3 réutilise la grammaire du Prompt Composer déjà portée pour le `reference2video`, avec **une seule adaptation** : un cut n'a qu'une image d'entrée, la keyframe, où personnage et décor sont déjà composés ensemble — tous les sujets se définissent donc sur `<Picture 1>` et seule la numérotation des `<Subject>` varie. La phrase d'alignement dit au modèle que la keyframe est l'instant 0 du clip ; le graphe part en turbo 8 steps, sans `last_frame`.
+
+Le moteur est rangé **sur chaque cut** : re-rendre un plan ne change jamais son moteur, même si le sélecteur a bougé depuis, sinon un montage finirait mi-LTX mi-H3 sans que rien ne le dise. La grille 17n+5 est annoncée avant le lancement et rappelée sur chaque clip, qui a sa propre durée.
+
+### 3. Prompt Relay
+
+Porté depuis la piste « Cinema Studio » (`yoyo-sama/cinema-ai-studio`), où la chaîne a été qualifiée en rendu réel. Nouvelle section du studio, ouverte dès les planches validées (elle n'a pas besoin des keyframes du storyboard, elle compose les siennes). De 1 à 10 segments, chacun avec son prompt, sa durée, son enrichissement et sa **liaison** : 🔗 continu (la dernière frame du segment précédent est ré-uploadée telle quelle) ou 🎞 coupure (keyframe composée). L'assemblage réutilise les cuts francs de l'animatic.
+
+Pourquoi deux liaisons plutôt qu'une : `docs/LESSONS.md`, piège n°22 — repasser la frame de transition par Qwen-Edit produit une coupure visible, c'est l'inverse de l'effet recherché.
+
+### Vérification
+
+75 assertions headless (Chromium, ComfyUI et Ollama bouchonnés) : invariant d'ancrage et ses trois replis d'enrichissement, grammaire H3 des cuts, câblage réel des graphes soumis, éditeur de prompt, chaîne relay complète (suite de jobs `key,cut,frame,cut,frame,key,cut` sur trois segments en liaisons coupure/continu/coupure), persistance. Captures clair et sombre à 1440 et 390 px.
+
+**Rien n'est vérifié en pixels** : ni ComfyUI ni Ollama ne tournent dans une session distante. Restent à constater sur le GB10 : la tenue d'un cut H3 par rapport au même plan en LTX, et la continuité réelle d'un raccord 🔗.
+
 ## 2026-09-21 (suite 5) — FL2VA Minimax H3
 
 L'utilisateur signale que le nœud `MiniMaxH3ImageToVideo` couvre trois modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, `first_frame` + `last_frame` = FL2VA. Capture de son ComfyUI à l'appui, les deux entrées y figurant comme facultatives.
