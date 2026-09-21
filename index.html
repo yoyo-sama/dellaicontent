@@ -3063,7 +3063,27 @@ Rules:
 - 40 to 100 words. Every phrase must add visual information; delete filler.
 - Never use "masterpiece", "best quality", "8k", "ultra detailed", "award winning", "stunning" or "beautiful lighting" — they carry no visual direction.
 - A PRIMARY_STYLE line may follow the brief. Build the description so it fits that style, but do NOT restate the style wording itself: it is appended separately.
+Before answering, re-read your prompt and delete any banned word that slipped in.
 Answer ONLY with JSON: {"positive_prompt": "..."}`;
+
+    // Filet déterministe : gemma4:e4b n'honore PAS de façon fiable une interdiction de
+    // vocabulaire (constaté en rendu réel le 2026-09-21 — "ultra-detailed, 8k, highly
+    // rendered" survivent à la consigne). On retire donc ces termes après coup plutôt que de
+    // compter sur le modèle. À 8 steps et cfg 1 ils ne produisent aucun détail : ils occupent
+    // la place d'une description visuelle utile. Liste volontairement étroite — uniquement des
+    // termes sans direction visuelle : "photorealistic", "fine detail", "epic scale" et les
+    // mots-clés de STYLE_PACKS doivent survivre intacts.
+    const PROMPT_PADDING = /\s*\b(?:masterpiece|best quality|highest quality|high quality|award[- ]winning|ultra[- ]detailed|hyper[- ]detailed|highly detailed|extremely detailed|insanely detailed|highly rendered|8k|4k|16k|32k)\b/gi;
+    function stripPromptPadding(text) {
+      const out = text.replace(PROMPT_PADDING, "")
+        .replace(/,(\s*,)+/g, ",")
+        .replace(/([.!?])\s*,\s*/g, "$1 ")
+        .replace(/,\s*([.!?])/g, "$1")
+        .replace(/\s+([,.!?])/g, "$1")
+        .replace(/\s{2,}/g, " ")
+        .replace(/^[\s,]+/, "").replace(/[\s,]+$/, "").trim();
+      return out || text;   // un prompt intégralement fait de remplissage : on garde l'original
+    }
 
     async function callOllama(system, user, withThink) {
       const body = {
@@ -3272,9 +3292,15 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         try { data = await callOllama(system, user, true); }
         catch { data = await callOllama(system, user, false); }
         const out = JSON.parse(data.message.content);
-        if (out.positive_prompt) brief.value = out.positive_prompt;
+        let stripped = 0;
+        if (out.positive_prompt) {
+          const raw = out.positive_prompt;
+          brief.value = krea2 ? stripPromptPadding(raw) : raw;
+          stripped = raw.length - brief.value.length;
+        }
         if (!krea2 && out.negative_prompt) negative.value = out.negative_prompt;
         addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
+        if (stripped > 0) addEvent("SYS", `Remplissage retiré du prompt (${stripped} caractères sans direction visuelle).`, "sys");
       } finally {
         $("stepEnrich").classList.remove("active");
       }

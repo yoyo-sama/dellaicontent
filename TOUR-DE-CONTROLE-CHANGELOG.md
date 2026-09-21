@@ -1,5 +1,24 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite) — gemma n'obéit pas à l'interdiction de vocabulaire : filet déterministe
+
+Premier test en rendu réel sur le GB10, après bascule sur la branche. La consigne `KREA2_ENRICH_SYSTEM` porte sur deux points des trois visés, mais pas sur le troisième.
+
+Brief : `A red panda astronaut poster, cinematic lighting, poster composition with space for title text.`
+
+- **Avant** (consigne générique, `main`) : « A whimsical and detailed poster featuring a red panda dressed as an astronaut… vintage sci-fi poster… **Ultra-detailed, photorealistic, 8k**, deep space nebula background, volumetric lighting. » — le prompt s'ouvre sur « poster », et trois directions se disputent (*whimsical*, *vintage sci-fi poster*, *photorealistic*).
+- **Après** (nouvelle consigne) : « **A photorealistic red panda astronaut standing confidently**… Cinematic volumetric lighting… Poster composition, centered subject with ample negative space… science fiction aesthetic, **ultra-detailed, 8k, highly rendered**, epic scale. » — le sujet passe en tête, l'ordre sujet → environnement → lumière → composition → style est respecté, et les styles concurrents se réduisent à *photorealistic* + *science fiction*, compatibles.
+
+**Le remplissage, lui, survit.** `ultra-detailed`, `8k` et `highly rendered` traversent une interdiction pourtant explicite. C'est un comportement attendu d'un modèle local de cette taille : une consigne négative enfouie dans une liste de règles n'est pas fiable, surtout en `format: "json"`. Conclusion retenue : **ne pas compter sur le modèle pour une contrainte vérifiable en code**.
+
+`stripPromptPadding()` retire donc ces termes de la sortie de gemma, sur le chemin Krea 2 uniquement, avant que le prompt n'atteigne le graphe et le champ brief. La liste `PROMPT_PADDING` est volontairement étroite — seulement des termes sans direction visuelle (`masterpiece`, `best quality`, `award-winning`, `ultra/hyper/highly/extremely/insanely detailed`, `highly rendered`, `8k`/`4k`/`16k`/`32k`). Vérifié comme survivant intacts : `photorealistic`, `photorealistic CGI`, `fine detail`, `epic cinematic scale` et les mots-clés des 14 `STYLE_PACKS`. Garde-fou : un prompt intégralement composé de remplissage est renvoyé tel quel plutôt que vidé. Une ligne du journal indique le nombre de caractères retirés. La consigne gagne au passage une relecture finale explicite, sans qu'on compte dessus.
+
+### Vérification
+
+11 assertions headless supplémentaires, en rejouant **la sortie gemma réelle observée** comme réponse stubée : les trois termes disparaissent du `CLIPTextEncode` soumis, `epic scale` et la description de composition restent, la ponctuation ne casse pas, le champ brief montre à l'utilisateur le prompt nettoyé, et rien n'est retiré hors Krea 2 (où le négatif continue d'être réécrit normalement).
+
+**Toujours non vérifié** : l'effet sur l'image. Les prompts sont maintenant conformes à la grammaire du document, reste à confirmer que ça se voit au rendu.
+
 ## 2026-09-21 — Qualité des contenus Krea 2 : consigne d'enrichissement dédiée + bibliothèque de styles
 
 Point de départ : deux documents fournis par l'utilisateur — une taxonomie des styles visuels Krea 2 (9 familles, 72 styles, séparation style / look / technique / lumière / caméra / composition / couleur / texture) et un system prompt « architecte de prompt Krea 2 » (ordre de construction, sujet d'abord, 40–100 mots, formulations bannies, résolution de conflits). Comparaison faite avec ce que le code fabriquait réellement, puis deux niveaux retenus sur trois proposés (la cible à quatre phases du document — moteur de compatibilité, panneau à dix champs — a été écartée : elle ajoute des réglages là où la démo existe pour en retirer).
