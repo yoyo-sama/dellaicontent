@@ -3807,9 +3807,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       // Style en dernier, après le suffixe de format : sujet > format > style.
       const styleText = currentStyleText();
       const tail = suffix => `${prompt} ${suffix}${styleText ? " " + styleText : ""}`;
-      [["poster", 832, 1216, batch, "Poster composition with space for title text."],
-       ["thumbnail", 1280, 720, batch, "YouTube thumbnail composition, bold and readable."],
-       ["social", 1024, 1024, 1, "Square social media visual."]].forEach(([name, w, h, b, suffix], i) => {
+      // Aucun titre incrusté par défaut : Krea 2 rend parfois un titre lisible, parfois du
+      // charabia ("TUMLILE", constaté en rendu réel le 2026-09-21). On lui fait donc réserver
+      // la place au lieu d'écrire. Formulation calquée sur SHEET_CLEAN, la seule validée sur
+      // ce point (LESSONS piège n°16).
+      const NO_LETTERING = "The picture itself is completely free of any text, letters, words, caption, watermark or logo.";
+      [["poster", 832, 1216, batch, `Vertical poster composition, the upper third kept as clean uncluttered background so a title can be overlaid afterwards. ${NO_LETTERING}`],
+       ["thumbnail", 1280, 720, batch, `Horizontal thumbnail composition, one bold clearly readable subject on a clean background. ${NO_LETTERING}`],
+       ["social", 1024, 1024, 1, `Square social media composition, centered subject with even margins. ${NO_LETTERING}`]].forEach(([name, w, h, b, suffix], i) => {
         const dec = addKrea2Shot(add, img, tail(suffix), seed + 200 + i, w, h, b);
         add("SaveImage", { images: [dec, 0], filename_prefix: `studio/campaign/${name}` });
       });
@@ -4088,11 +4093,16 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // champs par les helpers ci-dessous reproduit EXACTEMENT l'ancienne chaîne charDesc/locDesc.
     const CHAR_FIELD_KEYS = ["face", "hair", "outfit", "accessories", "palette"];
     const LOC_FIELD_KEYS = ["place", "architecture", "materials", "lighting", "palette"];
+    // Ces deux chaînes alimentent des graphes KREA 2 (buildCharsheetGraph/buildLocsheetGraph)
+    // : elles passent donc par le même filtre de remplissage que l'enrichissement, sinon un
+    // "ultra-detailed fur, 8k" lâché par gemma dans un champ de fiche atterrit tel quel dans
+    // le prompt Krea 2. Point de passage unique de TOUS les appelants (mode Auto, mode
+    // Réalisateur, projet restauré, menus Personnage/Décor du studio).
     function charDescFromFields(f) {
-      return CHAR_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", ");
+      return stripPromptPadding(CHAR_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
     }
     function locDescFromFields(f) {
-      return LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", ");
+      return stripPromptPadding(LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
     }
 
     // Fiche personnage figée : OBJET de champs structurés gemma {face,hair,outfit,accessories,palette}

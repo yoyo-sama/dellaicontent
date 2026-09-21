@@ -1,5 +1,37 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite 3) — Couverture Krea 2 complète, plus de titre incrusté, et la vraie cause du « je ne vois pas les styles »
+
+Trois demandes de l'utilisateur après le second A/B.
+
+### 1. Pas de titre incrusté par défaut
+
+Arbitrage tranché : Krea 2 rend parfois un titre lisible (« LONE EXPLORER », run de qualification) et parfois du charabia (« TUMLILE », « FIWDE TIMLE », constatés aujourd'hui). Devant un client, le second cas coûte plus que le premier ne rapporte. Les trois suffixes de `buildCampaignFullGraph` demandent désormais une image **sans aucun lettrage**, l'affiche réservant son tiers supérieur à un titre ajouté après coup. Formulation calquée sur `SHEET_CLEAN`, la seule validée en rendu réel sur ce point. La note de `docs/LESSONS.md` qui vantait le titre lisible est marquée comme révisée plutôt que supprimée.
+
+### 2. Tous les chemins Krea 2 passent par le même système de prompt
+
+Audit des appelants de `addKrea2Shot`/`addKrea2Shared` — trois sites, pas un de plus :
+
+| Site | Prompt | Couverture |
+|---|---|---|
+| `krea2_t2i` (chemin générique) | brief + style | `enrichBrief` (consigne Krea 2 + filtre) |
+| `buildCampaignFullGraph` | brief + suffixe de format + style | idem, `campaign_full` est dans `KREA2_WORKFLOWS` |
+| `buildCharsheetGraph` / `buildLocsheetGraph` | `SHEET_CLEAN` + description gemma + style | **était le trou** |
+
+Les fiches personnage et décor sont bien rendues par Krea 2, mais leur description vient de `characterSheetFromBrief`/`locationSheetFromBrief` (consignes gemma distinctes, hors `enrichBrief`) : un « ultra-detailed skin, 8k » lâché dans un champ atterrissait tel quel dans le prompt Krea 2. Le filtre est donc appliqué dans `charDescFromFields`/`locDescFromFields`, **point de passage unique** de tous les appelants — mode Auto, mode Réalisateur, projet restauré et menus Personnage/Décor du studio. Une seule ligne par fonction, aucune autre à toucher.
+
+### 3. « Je ne vois pas les 14 styles » — c'était le cache navigateur
+
+Les 14 entrées sont bien présentes et le champ s'affiche : vérifié sur le HEAD courant (`Aucun / Éditorial / Argentique 35 mm / Documentaire / Cinématique / Film noir / Cinéma d'auteur / SF blockbuster / Luxe discret / Packshot produit / Anime / Sérigraphie / Peinture à l'huile / Onirique`). La cause est ailleurs : **`nginx.conf` n'envoyait aucun en-tête de cache**. Sans `Cache-Control`, le navigateur applique sa mise en cache heuristique et continue de servir l'ancien `index.html` après un `git pull` — d'où le `Ctrl+Shift+R` que la doc traîne depuis des mois comme une fatalité. `location /` envoie désormais `Cache-Control: no-cache` : revalidation à chaque requête, 304 si rien n'a changé. Ce n'est pas `no-store`, rien n'est retéléchargé inutilement.
+
+Conséquence : cette modification-ci est la seule du lot à exiger un redémarrage (`docker compose up -d`), `nginx.conf` étant monté dans le conteneur.
+
+### Vérification
+
+12 assertions headless : les 14 libellés dans le champ Style et le champ effectivement visible (display calculé, pas seulement l'attribut) ; `charDescFromFields`/`locDescFromFields` retirent le remplissage y compris la famille ArtStation, et une fiche vide reste vide (le test de truthiness qui pilote le repli sans LLM n'est pas cassé) ; les 3 visuels de campagne exigent une image sans lettrage, l'ancienne formulation a disparu, l'affiche réserve sa zone de titre, le sujet reste en tête et le style est toujours appliqué.
+
+**Non vérifié** : `nginx -t` n'a pas pu être exécuté, Docker n'étant pas disponible dans l'environnement de travail. La modification est d'une ligne dans un bloc existant, mais elle n'a pas été validée par nginx lui-même — à confirmer au redémarrage.
+
 ## 2026-09-21 (suite 2) — Premier A/B en image, et élargissement du filtre aux « boosters »
 
 **Premier résultat visuel** (même brief `A red panda astronaut poster…`, 16:9, un rendu par condition — n=1, pas une qualification).
