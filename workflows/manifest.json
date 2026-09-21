@@ -68,7 +68,8 @@
         "ratio",
         "style",
         "audio",
-        "sheetLora"
+        "sheetLora",
+        "sheetTemplate"
       ],
       "defaults": {
         "duration": 2
@@ -88,6 +89,7 @@
         "lora",
         "refs",
         "sheetLora",
+        "sheetTemplate",
         "skipSheets",
         "style"
       ],

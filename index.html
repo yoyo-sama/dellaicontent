@@ -1634,6 +1634,10 @@
                 Style fiches perso/décor (LoRA)
                 <select id="sheetLoraSelect"><option value="">Aucun</option></select>
               </label>
+              <label class="gb-field" id="sheetTemplateWrap" style="display:none">
+                Gabarit de planche
+                <select id="sheetTemplateSelect"></select>
+              </label>
               <label class="gb-field" id="variantsWrap">
                 Variantes
                 <input type="number" id="variants" min="1" max="8" value="2" />
@@ -1966,7 +1970,7 @@
     });
 
     // Fallback si le manifest ne fournit pas la section "pipelines" (manifest v2).
-    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora, sheetLora}
+    // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora, sheetLora, sheetTemplate}
     const PIPELINES_FALLBACK = [
       { id: "text2image", label: "Text2Image", controls: ["variants", "ratio", "lora", "style"] },
       { id: "image2image", label: "Image2Image / Edit", controls: ["variants", "ratio", "image", "markets"] },
@@ -1974,9 +1978,9 @@
       { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps", "lora"] },
       { id: "sequence2video", label: "Animatic (FLF2V)", scenario: "storyboard", controls: ["seq", "audio"] },
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
-        controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio", "sheetLora"], defaults: { duration: 2 } },
+        controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio", "sheetLora", "sheetTemplate"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["mode", "duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "skipSheets", "style"], defaults: { duration: 2 } },
+        controls: ["mode", "duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "sheetTemplate", "skipSheets", "style"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
         controls: ["duration", "variants", "audio", "style"], defaults: { duration: 5 } }
     ];
@@ -2204,6 +2208,13 @@
       "Cheveux": { en: "Hair", es: "Cabello", de: "Haar" },
       "Tenue": { en: "Outfit", es: "Vestuario", de: "Outfit" },
       "Accessoires": { en: "Accessories", es: "Accesorios", de: "Accessoires" },
+      "Gabarit de planche": { en: "Sheet template", es: "Plantilla de lámina", de: "Bogenvorlage" },
+      "Auto (selon le sujet)": { en: "Auto (follows the subject)", es: "Auto (según el sujeto)", de: "Auto (je nach Motiv)" },
+      "Turnaround + expressions + costume": { en: "Turnaround + expressions + costume", es: "Vueltas + expresiones + vestuario", de: "Turnaround + Ausdrücke + Kostüm" },
+      "Colonne d'expressions + accessoires": { en: "Expression column + props", es: "Columna de expresiones + accesorios", de: "Ausdrucksspalte + Requisiten" },
+      "Grand portrait + rangée de têtes": { en: "Large portrait + head row", es: "Retrato grande + fila de cabezas", de: "Großes Porträt + Kopfreihe" },
+      "Grand portrait + vêtements à plat": { en: "Large portrait + garment flats", es: "Retrato grande + prendas planas", de: "Großes Porträt + Kleidung flach" },
+      "Poses d'action + équipement": { en: "Action poses + equipment", es: "Poses de acción + equipo", de: "Action-Posen + Ausrüstung" },
       "Sujet": { en: "Subject", es: "Sujeto", de: "Motiv" },
       "Forme": { en: "Form", es: "Forma", de: "Form" },
       "Surface": { es: "Superficie", de: "Oberfläche" },
@@ -2328,6 +2339,7 @@
       refreshCloudUI();
       updateStudioJobs(0);
       renderStyleOptions();
+      renderSheetTemplateOptions();
       renderLoraSelect();
       refreshSoulId();
       if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderAllKeyframeCards(); renderMontage(); renderFooterTimeline(); }
@@ -2382,7 +2394,7 @@
       variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap", mode: "modeWrap",
       style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap",
       lora: "loraStyleWrap", refs: "refExtrasWrap", sheetLora: "sheetLoraWrap",
-      skipSheets: "skipSheetsWrap"
+      sheetTemplate: "sheetTemplateWrap", skipSheets: "skipSheetsWrap"
     };
     function updateModelOptions() {
       const wfs = manifest.workflows.filter(w => w.pipeline === pipelineSelect.value);
@@ -3957,6 +3969,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       director.style = STYLE_PACKS[$("styleSelect").value] ? $("styleSelect").value : director.style;
       saveProject();
     });
+    // Même parade pour le gabarit : sans ça, une régénération de planche en cours de session
+    // repartirait sur le gabarit figé à l'ouverture malgré le nouveau choix affiché.
+    $("sheetTemplateSelect").addEventListener("change", () => {
+      if (!director) return;
+      director.sheetTemplate = $("sheetTemplateSelect").value;
+      saveProject();
+    });
 
     function compileKeyframePrompt(shot, charDesc) {
       const cam = CAMERA_LIB[shot.camera] || CAMERA_LIB.medium;
@@ -4254,23 +4273,107 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Planche personnage multi-vues (ancre d'apparence, image 1 des keyframes duales).
     // Format 16:9 large obligatoire (layout prouvé au Lot 1), indépendant du ratio UI.
-    // Deux gabarits : « one single person », les quatre poses debout et la grappe de détails de
-    // costume fabriquaient un lion anthropomorphe habillé sur un brief animalier. Le second gabarit
-    // ne décrit donc aucune morphologie : il renvoie le sujet à ce que `charDesc` en dit (nombre de
-    // membres, structure, posture, matière) et se contente d'interdire le corps humain par défaut,
-    // ce qui couvre aussi bien un lion qu'une créature, un robot non humanoïde ou un objet, sans un
-    // gabarit par famille. charFields porte `kind` ; une fiche sans `kind` reste humaine.
-    const CHARSHEET_HUMAN = charDesc => `A professional photorealistic character reference sheet of one single person, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. Arranged neatly, the sheet shows a full-body turnaround of the same person in four standing poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a neutral relaxed stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the face. A row of several smaller close-up headshots of the face showing different facial expressions: neutral, smiling, surprised, determined. A cluster of detailed close-up photographs of costume details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the outfit and hair. Every view shows the exact same single person with identical face, hair and costume, consistent character design. `;
-    const CHARSHEET_SUBJECT = charDesc => `A professional photorealistic reference sheet of one single subject, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. The subject is photographed exactly as the thing it is: its anatomy, structure, proportions, number of limbs and parts, and its natural resting posture are strictly the ones described above and never those of a human being; it has no human face, and it wears nothing unless the description above says otherwise. Arranged neatly, the sheet shows a full-body turnaround of the same subject in four views evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in the same natural posture and at the same scale, evenly studio-lit. Above the turnaround, one large tight close-up of the part that identifies it best: its head, or its front if it has no head. A row of several smaller close-up photographs of that same part seen from different angles. A cluster of detailed close-up photographs of its surface, its materials and its distinctive details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the subject. Every view shows the exact same single subject with identical shape, surface and markings, consistent design, photographed as one real physical thing under the same studio light. `;
+    // ── Bibliothèque de gabarits de planche personnage ──
+    // Un gabarit ne décrit QUE la composition de la planche : quelles vues, où, dans quel
+    // ordre. Tout le vocabulaire qui dépend de la nature du sujet (une personne ou une chose,
+    // un visage ou une face avant, un costume ou une matière) sort de `sheetWords(kind)`, et
+    // la clause anti-anthropomorphe est ajoutée hors gabarit. Conséquence voulue : un gabarit
+    // de plus marche d'emblée sur un humain comme sur un lion ou un robot, et une famille de
+    // sujets de plus ne demande pas de réécrire les gabarits. Ne pas fusionner les deux.
+    // `turnaround` + sujet humain reproduit au caractère près la formulation qualifiée au
+    // LOT 7 (test headless dédié) — ne pas la retoucher sans un nouveau rendu réel.
+    const SUBJECT_GUARD = "The subject is photographed exactly as the thing it is: its anatomy, structure, proportions, number of limbs and parts, and its natural resting posture are strictly the ones described above and never those of a human being; it has no human face, and it wears nothing unless the description above says otherwise. ";
+
+    const sheetWords = kind => kind === "other"
+      ? { who: "subject", sheet: "reference sheet", design: "design",
+          poses: "four views", stance: "natural posture",
+          face: "the part that identifies it best: its head, or its front if it has no head",
+          faceShort: "that same part", headshots: "photographs", expressions: "seen from different angles",
+          details: "its surface, its materials and its distinctive details",
+          flats: "its separable parts laid out flat", swatches: "the subject",
+          identity: "shape, surface and markings" }
+      : { who: "person", sheet: "character reference sheet", design: "character design",
+          poses: "four standing poses", stance: "neutral relaxed stance",
+          face: "the face", faceShort: "the face", headshots: "headshots",
+          expressions: "showing different facial expressions: neutral, smiling, surprised, determined",
+          details: "costume details", flats: "the garments laid out flat, seen from the front",
+          swatches: "the outfit and hair", identity: "face, hair and costume" };
+
+    const SHEET_HEAD = (d, w, guard) =>
+      `A professional photorealistic ${w.sheet} of one single ${w.who}, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${d}. ${guard}`;
+    const SHEET_SWATCHES = w =>
+      `Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of ${w.swatches}. `;
+    const SHEET_SAME = w =>
+      `Every view shows the exact same single ${w.who} with identical ${w.identity}, consistent ${w.design}. `;
+
+    const SHEET_TEMPLATES = {
+      // Turnaround 4 vues + rangée d'expressions + détails de costume (gabarit historique).
+      turnaround: { label: "Turnaround + expressions + costume", build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a ${w.stance}, evenly studio-lit. `
+        + `Above the turnaround, one large tight close-up portrait of ${w.face}. `
+        + `A row of several smaller close-up ${w.headshots} of ${w.faceShort} ${w.expressions}. `
+        + `A cluster of detailed close-up photographs of ${w.details}. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Colonne d'expressions à gauche + 3 vues + accessoires isolés (planche de modèle anime).
+      expressions: { label: "Colonne d'expressions + accessoires", build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows down its entire left side a vertical column of five close-up ${w.headshots} of ${w.faceShort} ${w.expressions}, evenly stacked. `
+        + `Filling the rest of the frame, three large full-body views of the same ${w.who} side by side - front view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+        + `In the lower left corner, below the column, a cluster of isolated close-up photographs of ${w.details}, each one floating separately on the empty background. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Grand portrait héros à gauche + rangée de têtes + vues corps (planche 3D / casting).
+      portrait: { label: "Grand portrait + rangée de têtes", build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows one very large close-up portrait of ${w.face} filling the whole left third of the frame. `
+        + `Across the top of the remaining space, a row of five smaller ${w.headshots} of ${w.faceShort} ${w.expressions}. `
+        + `Below that row, three large full-body views of the same ${w.who} side by side - front view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Portrait + turnaround 4 vues + vêtements à plat (planche costume de production).
+      wardrobe: { label: "Grand portrait + vêtements à plat", build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows one large close-up portrait of ${w.face} in its upper left corner. `
+        + `Across the middle and lower part of the frame, a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+        + `Along the right edge, a narrow vertical column of separate product photographs showing ${w.flats}, each isolated on its own plain background. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+      // Vues neutres + poses d'action + équipement (planche sport / personnage en mouvement).
+      action: { label: "Poses d'action + équipement", build: (d, w, guard) =>
+        SHEET_HEAD(d, w, guard)
+        + `Arranged neatly, the sheet shows across its top a row of four full-body views of the same ${w.who} - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}. `
+        + `Below them, a second row of three full-body action poses of the same ${w.who} caught in mid-movement, each one isolated on the background. `
+        + `In the upper right corner, one large close-up portrait of ${w.face}, and beside it four smaller ${w.headshots} ${w.expressions}. `
+        + `In the lower right corner, a cluster of isolated close-up photographs of ${w.details} laid out flat. `
+        + SHEET_SWATCHES(w) + SHEET_SAME(w) }
+    };
+
+    // Gabarit actif : id figé sur la session Réalisateur (director.sheetTemplate) sinon lu au
+    // sélecteur, même repli que currentStyleText. "auto" = turnaround, c'est-à-dire le
+    // comportement d'avant l'ajout du menu.
+    function currentSheetLayout() {
+      const id = director?.sheetTemplate ?? $("sheetTemplateSelect")?.value ?? "auto";
+      return SHEET_TEMPLATES[id] ? SHEET_TEMPLATES[id] : SHEET_TEMPLATES.turnaround;
+    }
+    function renderSheetTemplateOptions() {
+      const sel = $("sheetTemplateSelect");
+      const cur = SHEET_TEMPLATES[sel.value] ? sel.value : "auto";
+      sel.innerHTML = `<option value="auto">${tr("Auto (selon le sujet)")}</option>`
+        + Object.entries(SHEET_TEMPLATES).map(([id, v]) => `<option value="${id}">${tr(v.label)}</option>`).join("");
+      sel.value = cur;
+    }
 
     function buildCharsheetGraph(charFields, negText, seed, width, height, loraName) {
       const { g, add } = makeGraphBuilder();
       const kx = addKrea2Shared(add, loraName);
       const styleText = currentStyleText();
       const charDesc = charDescFromFields(charFields);
-      const layout = charKindOf(charFields) === "other" ? CHARSHEET_SUBJECT : CHARSHEET_HUMAN;
+      const kind = charKindOf(charFields);
+      const layout = currentSheetLayout();
       const dec = addKrea2Shot(add, kx,
-        `${layout(charDesc)}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
+        `${layout.build(charDesc, sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
         seed, 1920, 1088, 1);
       add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/charsheet" });
       return g;
@@ -4619,6 +4722,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         pipeline: "storyboard_v2",
         seed, width, height, wf, negText, withAudio, n, segDur, holdDur, shots, keyframes: null,
         style: $("styleSelect").value,           // style figé à l'ouverture de la session
+        sheetTemplate: $("sheetTemplateSelect").value,  // gabarit de planche figé de même
         cutPlan: null, cuts: null, order: null, animatic: null,  // état Montage
         // Fiches structurées éditables (menus Personnage/Décor) + historiques de variantes.
         charFields, locFields,
@@ -5320,7 +5424,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const p = {
         version: 1, savedAt: new Date().toISOString(),
         brief: brief.value.trim(), negText: director.negText, wfId: director.wf.id,
-        style: director.style, seed: director.seed, width: director.width, height: director.height,
+        style: director.style, sheetTemplate: director.sheetTemplate,
+        seed: director.seed, width: director.width, height: director.height,
         n: director.n, segDur: director.segDur, holdDur: director.holdDur,
         withAudio: director.withAudio, validated: director.validated,
         charFields: director.charFields, locFields: director.locFields,
@@ -5394,6 +5499,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       $("shotCount").value = p.n; $("videoDuration").value = p.segDur; $("holdDuration").value = p.holdDur;
       $("audioToggle").checked = !!p.withAudio;
       if (STYLE_PACKS[p.style]) $("styleSelect").value = p.style;
+      // Projet d'avant le menu Gabarit : pas de sheetTemplate → "auto", soit le gabarit avec
+      // lequel ses planches ont été rendues.
+      $("sheetTemplateSelect").value = SHEET_TEMPLATES[p.sheetTemplate] ? p.sheetTemplate : "auto";
       $("seed").value = String(p.seed);
       // Statut au restore : "pending" non persisté → file présent = ready (à re-résoudre),
       // absent = error ; "missing" retenté (le fichier a pu revenir).
@@ -5403,7 +5511,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         pipeline: "storyboard_v2",
         seed: p.seed, width: p.width, height: p.height, wf, negText: p.negText || "",
         withAudio: !!p.withAudio, n: p.n, segDur: p.segDur, holdDur: p.holdDur,
-        shots: p.shots, style: p.style, validated: !!p.validated,
+        shots: p.shots, style: p.style, sheetTemplate: $("sheetTemplateSelect").value,
+        validated: !!p.validated,
         charFields: p.charFields, locFields: p.locFields,
         charVariants: (p.charVariants || []).map(revive), charActive: p.charActive ?? 0,
         locVariants: (p.locVariants || []).map(revive), locActive: p.locActive ?? 0,
@@ -5555,6 +5664,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     addEvent("SYS", "AI Content Studio chargé (mode 100% local, sans backend).", "sys");
     applyLang(LANG);
     renderStyleOptions();
+    renderSheetTemplateOptions();
     loadManifest();
     connectWS();
     restoreGallery();
