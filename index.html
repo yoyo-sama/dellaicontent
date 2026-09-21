@@ -1756,6 +1756,11 @@
                   <button type="button" id="assetChipClear" title="Retirer l'asset sélectionné">✕</button>
                 </span>
               </label>
+              <label class="gb-field gb-wide" id="lastImageWrap" style="display:none">
+                Dernière image (facultatif — FL2VA)
+                <input type="file" id="lastImageInput" accept="image/*"
+                  title="Fournie, la vidéo se termine dessus ; laissée vide, le clip part de la première image comme avant." />
+              </label>
               <button class="primary-btn gb-go" id="generateBtn">Generate</button>
             </div>
 
@@ -2134,6 +2139,9 @@
         en: "In addition to the character/location sheets generated automatically (ref_image_0/1). None required.",
         es: "Además de las fichas de personaje/decorado generadas automáticamente (ref_image_0/1). Ninguna obligatoria.",
         de: "Zusätzlich zu den automatisch erzeugten Figuren-/Schauplatzblättern (ref_image_0/1). Keine erforderlich." },
+      "Dernière image (facultatif — FL2VA)": {
+        en: "Last frame (optional — FL2VA)", es: "Última imagen (opcional — FL2VA)",
+        de: "Letztes Bild (optional — FL2VA)" },
       "Sujet": { en: "Subject", es: "Sujeto", de: "Subjekt" },
       "personnage": { en: "character", es: "personaje", de: "Figur" },
       "décor": { en: "location", es: "decorado", de: "Schauplatz" },
@@ -2563,12 +2571,25 @@
       modelLabel.textContent = wf ? `${wf.model} · ${wf.pipeline}` : "—";
       updateTurboControls();
       renderLoraSelect();
+      // Dernière image : visible seulement là où le template sait quoi en faire, et jamais
+      // hors du pipeline qui expose déjà l'image d'entrée.
+      const lastOk = isH3LastFrameWorkflow(wf) && $("imageInputWrap").style.display !== "none";
+      $("lastImageWrap").style.display = lastOk ? "" : "none";
+      if (!lastOk) $("lastImageInput").value = "";
       // Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a pas de
       // placeholder {{NEGATIVE_PROMPT}} (piège n°16) : champ désactivé plutôt que sans effet.
       const krea2 = isKrea2Workflow(wf);
       negative.disabled = krea2;
       $("negativeNote").style.display = krea2 ? "" : "none";
     }
+
+    // Workflows dont le template câble `last_frame` sur MiniMaxH3ImageToVideo, donc capables
+    // de FL2VA en plus de l'i2v. C'est une capacité du WORKFLOW, pas du pipeline : le champ
+    // n'est donc pas un `controls` du manifest (il n'aurait aucun sens sur ltx25_i2v, qui
+    // partage le pipeline image2video) mais une visibilité pilotée par le modèle sélectionné,
+    // comme le fait déjà updateTurboControls pour le turbo.
+    const H3_LAST_FRAME_WORKFLOWS = new Set(["minimax_h3_i2v"]);
+    const isH3LastFrameWorkflow = wf => !!wf && H3_LAST_FRAME_WORKFLOWS.has(wf.id);
 
     // Turbo LoRA (Minimax H3 uniquement) : sans effet sur LTX 2.5 (nœud absent du template) → désactiver les deux champs.
     function updateTurboControls() {
@@ -3135,7 +3156,7 @@
         const jobsSpec = wf.pipeline === "image2image" && selectedMarkets.size
           ? [...selectedMarkets].map(id => ({ prompt: withStyle(marketPrompt(id)), tag: MARKETS[id].label }))
           : [{ prompt: withStyle(brief.value.trim()), tag: null }];
-        let image = "", uploaded = false;
+        let image = "", lastImage = "", uploaded = false;
         for (let i = 0; i < jobsSpec.length; i++) {
           const spec = jobsSpec[i];
           if (await tryCloudGeneration(wf, {
@@ -3143,20 +3164,25 @@
           })) continue;
           if (["image2image", "image2video"].includes(wf.pipeline) && !uploaded) {
             image = await uploadInputImage();
+            // Dernière image facultative : fournie ⇒ FL2VA, absente ⇒ i2v comme avant.
+            // C'est le même nœud dans les deux cas, seul `last_frame` change.
+            if (isH3LastFrameWorkflow(wf) && $("lastImageInput").files[0])
+              lastImage = await uploadRefFile($("lastImageInput").files[0]);
             uploaded = true;
           }
           const raw = await getTemplate(wf.file);
-          // Minimax H3 i2v : la phrase d'alignement dit au modèle que l'image d'entrée est
-          // la frame 0 du clip. Le template ne le dit nulle part, et H3 l'attend en tête de
-          // prompt (header() du composer de référence). Les autres moteurs l'ignorent, on
-          // ne l'ajoute donc que sur ce workflow.
-          const promptText = wf.id === "minimax_h3_i2v"
-            ? capH3Prompt(`${H3_I2V_ALIGNMENT}\n\n${spec.prompt}`)
+          // Minimax H3 : la phrase d'alignement dit au modèle à quel instant du clip chaque
+          // image d'entrée correspond. Le template ne le dit nulle part, et H3 l'attend en
+          // tête de prompt (header() du composer de référence). Les autres moteurs
+          // l'ignorent, on ne l'ajoute donc que sur ce workflow.
+          const promptText = isH3LastFrameWorkflow(wf)
+            ? capH3Prompt(`${h3Alignment(!!lastImage, duration)}\n\n${spec.prompt}`)
             : spec.prompt;
           const graph = buildGraph(raw, {
             prompt: promptText, negative: negative.value.trim(),
-            seed: seed + i, width, height, batch, duration, image, fps: wf.fps
+            seed: seed + i, width, height, batch, duration, image, image2: lastImage, fps: wf.fps
           });
+          applyMinimaxLastFrame(graph, !!lastImage);
           // Audio : tous les moteurs vidéo restants (LTX 2.5, Minimax H3) câblent
           // CreateVideo.audio nativement dans leur template — rien à ajouter côté JS.
           // Steps 4/6/8 exposés uniquement pour text2video/image2video (fl2v) — reference2video
@@ -3694,6 +3720,33 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Fourni ET turbo actif : 4 → bascule sur MINIMAX_FL2V_LORA_4STEP + BasicScheduler.steps=4 ;
     // 6/8 → LoRA du template conservé + BasicScheduler.steps=steps.
     // turbo OFF : comportement inchangé (LoRA retirée, steps=20), quel que soit `steps`.
+    // Retire `last_frame` (et son LoadImage) du graphe Minimax H3 quand aucune dernière
+    // image n'est fournie. Le nœud `MiniMaxH3ImageToVideo` couvre à lui seul les trois
+    // modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, les deux =
+    // FL2VA — nos templates t2v et i2v sont déjà le MÊME nœud à un champ près. Même idiome
+    // de retrait qu'applyMinimaxTurbo : on supprime la clé et le nœud devenu orphelin.
+    function applyMinimaxLastFrame(graph, hasLast) {
+      const entry = Object.entries(graph).find(([, n]) => n.class_type === "MiniMaxH3ImageToVideo");
+      if (!entry || hasLast) return graph;
+      const src = entry[1].inputs.last_frame;
+      delete entry[1].inputs.last_frame;
+      if (Array.isArray(src)) delete graph[src[0]];
+      return graph;
+    }
+
+    // Durée RÉELLEMENT rendue par Minimax H3, en secondes. La longueur se cale sur la
+    // grille 17n+5 à 24 fps (LESSONS piège n°11) : une demande de 1 s rend 39 frames, soit
+    // 1,625 s. Reproduit l'expression des templates
+    //   max(5, round(a*24)) + (5 - (max(5, round(a*24)) % 17)) % 17
+    // dont le `%` est un modulo à la Python : sur une valeur négative il rend un résultat
+    // POSITIF, contrairement à celui de JavaScript (-2 % 17 vaut 15 d'un côté, -2 de
+    // l'autre). Sans cette correction, une demande de 1 s donnerait 22 frames au lieu de 39.
+    const h3VideoFrames = seconds => {
+      const base = Math.max(5, Math.round(seconds * 24));
+      return base + (((5 - (base % 17)) % 17) + 17) % 17;
+    };
+    const h3RealDuration = seconds => h3VideoFrames(seconds) / 24;
+
     function applyMinimaxTurbo(graph, turboOn, steps) {
       const loraEntry = Object.entries(graph).find(([, n]) => n.class_type === "LoraLoaderModelOnly");
       if (!loraEntry) return graph;
@@ -4974,10 +5027,23 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       return text.slice(0, H3_PROMPT_CHARS);
     }
 
-    // Phrase d'alignement temporel I2VA (header() du composer) : elle dit au modèle que
-    // l'image d'entrée est la frame 0 du clip. Notre template ne le dit nulle part.
-    const H3_I2V_ALIGNMENT =
-      "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
+    // Phrase d'alignement temporel (header() du composer) : elle dit au modèle à quel
+    // instant du clip chaque image d'entrée correspond. Nos templates ne le disent nulle part.
+    // Deux formes selon ce qui est branché sur MiniMaxH3ImageToVideo — i2v (première image
+    // seule) ou FL2VA (première ET dernière).
+    // Le repère temporel de fin est la durée RÉELLEMENT rendue (h3RealDuration), pas celle
+    // demandée : H3 se cale sur la grille 17n+5, donc annoncer « à 2,00 s » sur un clip qui
+    // en fait 2,33 placerait la dernière image avant la fin. C'est exactement le piège n°11.
+    // Le composer écrit ici « Picture 1 » sans chevrons alors que ses autres en-têtes
+    // emploient « <Picture 1> » — et son propre validateur signale la forme nue comme non
+    // canonique. On garde donc partout la forme à chevrons.
+    function h3Alignment(hasLast, seconds) {
+      if (!hasLast)
+        return "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
+      return "How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with "
+        + `the 0.00-second mark of the target video; <Picture 2> (from [Shot 1]) aligns with the `
+        + `${h3RealDuration(seconds).toFixed(2)}-second mark of the target video.`;
+    }
 
     // ── Reference2Video (Minimax H3 r2v, LOT 1) : réutilise la génération charsheet/locsheet
     // existante (Krea 2) comme les deux références de MiniMaxH3ReferenceToVideo — personnage

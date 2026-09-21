@@ -1,5 +1,29 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite 5) — FL2VA Minimax H3
+
+L'utilisateur signale que le nœud `MiniMaxH3ImageToVideo` couvre trois modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, `first_frame` + `last_frame` = FL2VA. Capture de son ComfyUI à l'appui, les deux entrées y figurant comme facultatives.
+
+Vérifié dans le dépôt : nos templates `minimax_h3_t2v.json` et `minimax_h3_i2v.json` utilisent **déjà le même nœud**, à la seule présence de `first_frame` près. Le FL2VA H3 ne coûtait donc qu'une entrée `last_frame` et son `LoadImage` — ce que la note précédente annonçait comme « presque gratuit », confirmé.
+
+### Ce qui change
+
+- `api/minimax_h3_i2v.json` câble `last_frame` sur un `LoadImage` alimenté par `{{IMAGE2}}`. Aucune dernière image fournie ⇒ `applyMinimaxLastFrame` retire la clé et le nœud orphelin, et le graphe redevient **identique à l'ancien** (23 nœuds, aucun lien pendant — vérifié).
+- Un champ « dernière image (facultatif — FL2VA) » apparaît, piloté par le **modèle** sélectionné et non par `pipelines[].controls` : la capacité appartient au workflow, et le champ n'a aucun sens sur `ltx25_i2v`, qui partage pourtant le pipeline `image2video`. Vérifié affiché sur `minimax_h3_i2v`, masqué sur `ltx25_i2v` et hors pipeline image.
+- La phrase d'alignement temporel prend sa forme FL2VA quand les deux images sont là, et son repère de fin est la durée **réellement rendue** — pas celle demandée. H3 se cale sur la grille 17n+5 : annoncer « à 5,00 s » sur un clip qui en rend 5,17 placerait la dernière image avant la fin.
+
+### Un piège rencontré en chemin
+
+Transcrire la formule 17n+5 en JavaScript ne marche pas telle quelle : le `%` de `ComfyMathExpression` est un modulo à la Python, positif sur une valeur négative, là où celui de JS garde le signe. La version naïve rendait **22 frames** pour une demande de 1 s au lieu des 39 mesurées en rendu réel — 40 % d'écart, silencieux. Détail dans `docs/LESSONS.md`, piège n°20.
+
+Autre rappel, refait malgré sa présence dans le dépôt : `.gb-field` est un `<label>` en `text-transform:uppercase`, une phrase d'aide y devient illisible. Constaté en capture, corrigé en `title`.
+
+### Vérifications
+
+JS validé, graphes construits hors navigateur dans les deux modes (i2v inchangé, FL2VA câblé, aucun lien orphelin), `h3VideoFrames(1) = 39` recoupé avec la mesure en rendu réel du piège n°11, UI capturée en clair/sombre à 1440 et 390 px avec la visibilité du champ vérifiée sur les trois cas. **Aucun rendu réel** — ComfyUI tourne sur la machine de l'utilisateur.
+
+---
+
 ## 2026-09-21 (suite 4) — Grammaire de prompt Minimax H3 et description des sources par vision
 
 Demande de l'utilisateur : intégrer la mécanique de `BMB12d3/minimax-h3-prompt-composer`, et pouvoir décrire les images sources par un modèle Ollama — nécessaire en Ref2VA pour les notions de `<Subject x>`.
