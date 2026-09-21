@@ -570,6 +570,7 @@
     .generate-bar .gb-prompt { flex: 4 1 260px; }
     .generate-bar .gb-prompt textarea { min-height: 64px; }
     .generate-bar .gb-field { flex: 0 1 165px; min-width: 130px; }
+    .generate-bar .tpl-field { flex: 1 1 100%; }
     .generate-bar .gb-wide { flex: 0 1 240px; }
     .generate-bar .gb-go { flex: 0 0 auto; padding: 13px 22px; }
 
@@ -1256,7 +1257,7 @@
       cursor: pointer;
     }
     .sheet-status { margin: 8px 0 10px; min-height: 15px; }
-    .variant-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+    .variant-strip { display: flex; flex-wrap: wrap; gap: 10px; padding-bottom: 4px; }
     .variant-thumb {
       flex: 0 0 auto;
       width: 132px;
@@ -1269,7 +1270,21 @@
       text-align: left;
     }
     .variant-thumb img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: var(--bg-mid); }
+    .variant-thumb { position: relative; }
     .variant-thumb.active { border-color: var(--highlight); }
+    .variant-thumb .variant-badge { display: none; }
+    .variant-thumb.active .variant-badge {
+      display: block;
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--highlight);
+      color: var(--on-grad);
+    }
     .variant-thumb .variant-meta {
       display: block;
       padding: 5px 7px;
@@ -1279,6 +1294,42 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    /* ── Sélecteur visuel de gabarit de planche ── */
+    .tpl-field { display: grid; gap: 6px; }
+    .tpl-field > .tpl-caption {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-2);
+      font-weight: 500;
+    }
+    .tpl-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+    .tpl-card {
+      flex: 0 0 auto;
+      width: 124px;
+      padding: 6px;
+      border: 2px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      background: var(--card-2);
+      color: var(--text-2);
+      cursor: pointer;
+      text-align: left;
+    }
+    .tpl-card svg { display: block; width: 100%; height: auto; border-radius: 8px; background: var(--bg-mid); }
+    .tpl-card .tpl-name {
+      display: block;
+      margin-top: 5px;
+      font-size: 10px;
+      line-height: 1.25;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--text-2);
+      min-height: 2.5em;   /* libellés sur 1 à 3 lignes : cartes alignées malgré tout */
+    }
+    .tpl-card[aria-pressed="true"] { border-color: var(--highlight); color: var(--highlight); }
+    .tpl-card[aria-pressed="true"] .tpl-name { color: var(--text); }
+
     /* ── Montage (menu + timeline) ── */
     .montage-list { display: grid; gap: 12px; margin: 12px 0; }
     .montage-clip {
@@ -1634,10 +1685,11 @@
                 Style fiches perso/décor (LoRA)
                 <select id="sheetLoraSelect"><option value="">Aucun</option></select>
               </label>
-              <label class="gb-field" id="sheetTemplateWrap" style="display:none">
-                Gabarit de planche
-                <select id="sheetTemplateSelect"></select>
-              </label>
+              <div class="gb-field tpl-field" id="sheetTemplateWrap" style="display:none">
+                <span class="tpl-caption">Gabarit de planche</span>
+                <select id="sheetTemplateSelect" hidden></select>
+                <div class="tpl-grid" role="group" aria-label="Gabarit de planche"></div>
+              </div>
               <label class="gb-field" id="variantsWrap">
                 Variantes
                 <input type="number" id="variants" min="1" max="8" value="2" />
@@ -2208,6 +2260,7 @@
       "Cheveux": { en: "Hair", es: "Cabello", de: "Haar" },
       "Tenue": { en: "Outfit", es: "Vestuario", de: "Outfit" },
       "Accessoires": { en: "Accessories", es: "Accesorios", de: "Accessoires" },
+      "Active": { es: "Activa", de: "Aktiv" },
       "Gabarit de planche": { en: "Sheet template", es: "Plantilla de lámina", de: "Bogenvorlage" },
       "Auto (selon le sujet)": { en: "Auto (follows the subject)", es: "Auto (según el sujeto)", de: "Auto (je nach Motiv)" },
       "Turnaround + expressions + costume": { en: "Turnaround + expressions + costume", es: "Vueltas + expresiones + vestuario", de: "Turnaround + Ausdrücke + Kostüm" },
@@ -2300,6 +2353,11 @@
         en: (s, t) => `${s} segment(s), ~${t} s — press Generate to run`,
         es: (s, t) => `${s} segmento(s), ~${t} s — pulse Generate para lanzar`,
         de: (s, t) => `${s} Segment(e), ~${t} s — mit Generate starten` },
+      activeSheet: {
+        fr: (i, n) => `planche ${i}/${n} active — c'est elle qui servira d'ancrage`,
+        en: (i, n) => `sheet ${i}/${n} active — this is the one used as the anchor`,
+        es: (i, n) => `lámina ${i}/${n} activa — es la que servirá de anclaje`,
+        de: (i, n) => `Bogen ${i}/${n} aktiv — dieser dient als Anker` },
       shotLabel: {
         fr: (i, n) => `Plan ${i}/${n}`, en: (i, n) => `Shot ${i}/${n}`,
         es: (i, n) => `Plano ${i}/${n}`, de: (i, n) => `Einstellung ${i}/${n}` },
@@ -4320,9 +4378,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     const SHEET_SAME = w =>
       `Every view shows the exact same single ${w.who} with identical ${w.identity}, consistent ${w.design}. `;
 
+    // Schéma de disposition de chaque gabarit (`wire`), dessiné dans le sélecteur : le choix
+    // se fait à l'œil sur l'agencement des cases, pas sur un libellé. Bandeau de palette commun
+    // ajouté au rendu. `currentColor` suit l'état de la carte (grisé au repos, accent si choisi).
+    const SHEET_WIRE_STRIP = `<rect x="6" y="61" width="108" height="6" rx="2" opacity=".3"/>`;
     const SHEET_TEMPLATES = {
       // Turnaround 4 vues + rangée d'expressions + détails de costume (gabarit historique).
-      turnaround: { label: "Turnaround + expressions + costume", build: (d, w, guard) =>
+      turnaround: { label: "Turnaround + expressions + costume", wire: `<rect x="6" y="6" width="26" height="22" rx="2" opacity=".75"/><rect x="38" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="51" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="64" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="77" y="11" width="10" height="10" rx="2" opacity=".5"/><rect x="94" y="9" width="9" height="7" rx="2" opacity=".35"/><rect x="105" y="9" width="9" height="7" rx="2" opacity=".35"/><rect x="94" y="19" width="9" height="7" rx="2" opacity=".35"/><rect x="6" y="33" width="24" height="24" rx="2" opacity=".75"/><rect x="34" y="33" width="24" height="24" rx="2" opacity=".75"/><rect x="62" y="33" width="24" height="24" rx="2" opacity=".75"/><rect x="90" y="33" width="24" height="24" rx="2" opacity=".75"/>`, build: (d, w, guard) =>
         SHEET_HEAD(d, w, guard)
         + `Arranged neatly, the sheet shows a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a ${w.stance}, evenly studio-lit. `
         + `Above the turnaround, one large tight close-up portrait of ${w.face}. `
@@ -4331,7 +4393,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         + SHEET_SWATCHES(w) + SHEET_SAME(w) },
 
       // Colonne d'expressions à gauche + 3 vues + accessoires isolés (planche de modèle anime).
-      expressions: { label: "Colonne d'expressions + accessoires", build: (d, w, guard) =>
+      expressions: { label: "Colonne d'expressions + accessoires", wire: `<rect x="6" y="5" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="16" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="27" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="38" width="11" height="9" rx="2" opacity=".5"/><rect x="6" y="49" width="11" height="9" rx="2" opacity=".5"/><rect x="24" y="5" width="28" height="42" rx="2" opacity=".75"/><rect x="56" y="5" width="28" height="42" rx="2" opacity=".75"/><rect x="88" y="5" width="26" height="42" rx="2" opacity=".75"/><rect x="24" y="51" width="9" height="7" rx="2" opacity=".35"/><rect x="36" y="51" width="9" height="7" rx="2" opacity=".35"/><rect x="48" y="51" width="9" height="7" rx="2" opacity=".35"/>`, build: (d, w, guard) =>
         SHEET_HEAD(d, w, guard)
         + `Arranged neatly, the sheet shows down its entire left side a vertical column of five close-up ${w.headshots} of ${w.faceShort} ${w.expressions}, evenly stacked. `
         + `Filling the rest of the frame, three large full-body views of the same ${w.who} side by side - front view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
@@ -4339,7 +4401,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         + SHEET_SWATCHES(w) + SHEET_SAME(w) },
 
       // Grand portrait héros à gauche + rangée de têtes + vues corps (planche 3D / casting).
-      portrait: { label: "Grand portrait + rangée de têtes", build: (d, w, guard) =>
+      portrait: { label: "Grand portrait + rangée de têtes", wire: `<rect x="6" y="6" width="34" height="51" rx="2" opacity=".8"/><rect x="46" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="61" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="76" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="91" y="6" width="12" height="11" rx="2" opacity=".5"/><rect x="106" y="6" width="8" height="11" rx="2" opacity=".5"/><rect x="46" y="22" width="20" height="35" rx="2" opacity=".75"/><rect x="70" y="22" width="20" height="35" rx="2" opacity=".75"/><rect x="94" y="22" width="20" height="35" rx="2" opacity=".75"/>`, build: (d, w, guard) =>
         SHEET_HEAD(d, w, guard)
         + `Arranged neatly, the sheet shows one very large close-up portrait of ${w.face} filling the whole left third of the frame. `
         + `Across the top of the remaining space, a row of five smaller ${w.headshots} of ${w.faceShort} ${w.expressions}. `
@@ -4347,7 +4409,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         + SHEET_SWATCHES(w) + SHEET_SAME(w) },
 
       // Portrait + turnaround 4 vues + vêtements à plat (planche costume de production).
-      wardrobe: { label: "Grand portrait + vêtements à plat", build: (d, w, guard) =>
+      wardrobe: { label: "Grand portrait + vêtements à plat", wire: `<rect x="6" y="6" width="24" height="19" rx="2" opacity=".8"/><rect x="6" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="28" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="50" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="72" y="29" width="19" height="28" rx="2" opacity=".75"/><rect x="96" y="6" width="18" height="15" rx="2" opacity=".45"/><rect x="96" y="24" width="18" height="15" rx="2" opacity=".45"/><rect x="96" y="42" width="18" height="15" rx="2" opacity=".45"/>`, build: (d, w, guard) =>
         SHEET_HEAD(d, w, guard)
         + `Arranged neatly, the sheet shows one large close-up portrait of ${w.face} in its upper left corner. `
         + `Across the middle and lower part of the frame, a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
@@ -4355,7 +4417,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         + SHEET_SWATCHES(w) + SHEET_SAME(w) },
 
       // Vues neutres + poses d'action + équipement (planche sport / personnage en mouvement).
-      action: { label: "Poses d'action + équipement", build: (d, w, guard) =>
+      action: { label: "Poses d'action + équipement", wire: `<rect x="6" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="26" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="46" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="66" y="6" width="17" height="23" rx="2" opacity=".75"/><rect x="6" y="33" width="17" height="24" rx="2" opacity=".55"/><rect x="26" y="33" width="17" height="24" rx="2" opacity=".55"/><rect x="46" y="33" width="17" height="24" rx="2" opacity=".55"/><rect x="88" y="6" width="26" height="20" rx="2" opacity=".8"/><rect x="88" y="29" width="11" height="9" rx="2" opacity=".5"/><rect x="103" y="29" width="11" height="9" rx="2" opacity=".5"/><rect x="88" y="41" width="11" height="9" rx="2" opacity=".35"/><rect x="103" y="41" width="11" height="9" rx="2" opacity=".35"/>`, build: (d, w, guard) =>
         SHEET_HEAD(d, w, guard)
         + `Arranged neatly, the sheet shows across its top a row of four full-body views of the same ${w.who} - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}. `
         + `Below them, a second row of three full-body action poses of the same ${w.who} caught in mid-movement, each one isolated on the background. `
@@ -4371,12 +4433,34 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const id = director?.sheetTemplate ?? $("sheetTemplateSelect")?.value ?? "auto";
       return SHEET_TEMPLATES[id] ? SHEET_TEMPLATES[id] : SHEET_TEMPLATES.turnaround;
     }
+    // Le <select> reste la source de vérité (figeage de session, persistance, restauration
+    // lisent sa valeur) ; il est masqué et piloté par les vignettes.
     function renderSheetTemplateOptions() {
       const sel = $("sheetTemplateSelect");
       const cur = SHEET_TEMPLATES[sel.value] ? sel.value : "auto";
-      sel.innerHTML = `<option value="auto">${tr("Auto (selon le sujet)")}</option>`
-        + Object.entries(SHEET_TEMPLATES).map(([id, v]) => `<option value="${id}">${tr(v.label)}</option>`).join("");
+      const entries = [["auto", { label: "Auto (selon le sujet)", wire: SHEET_TEMPLATES.turnaround.wire }],
+                       ...Object.entries(SHEET_TEMPLATES)];
+      sel.innerHTML = entries.map(([id, v]) => `<option value="${id}">${tr(v.label)}</option>`).join("");
       sel.value = cur;
+      const grid = $("sheetTemplateWrap").querySelector(".tpl-grid");
+      grid.innerHTML = entries.map(([id, v]) => `<button type="button" class="tpl-card" data-tpl="${id}"
+          aria-pressed="${id === cur}"><svg viewBox="0 0 120 72" aria-hidden="true" fill="currentColor">${
+          id === "auto" ? `<g opacity=".55">${v.wire}${SHEET_WIRE_STRIP}</g>` : v.wire + SHEET_WIRE_STRIP
+        }</svg><span class="tpl-name"></span></button>`).join("");
+      grid.querySelectorAll(".tpl-card").forEach((card, i) => {
+        card.querySelector(".tpl-name").textContent = tr(entries[i][1].label);
+        card.addEventListener("click", () => selectSheetTemplate(card.dataset.tpl));
+      });
+    }
+    // Un clic de vignette écrit dans le <select> et émet son "change" : le figeage de session
+    // et la sauvegarde passent par le même chemin que n'importe quel autre contrôle.
+    function selectSheetTemplate(id) {
+      const sel = $("sheetTemplateSelect");
+      if (sel.value === id) return;
+      sel.value = id;
+      $("sheetTemplateWrap").querySelectorAll(".tpl-card")
+        .forEach(c => c.setAttribute("aria-pressed", String(c.dataset.tpl === id)));
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
     function buildCharsheetGraph(charFields, negText, seed, width, height, loraName) {
@@ -4897,7 +4981,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         thumb.type = "button";
         thumb.className = "variant-thumb" + (idx === active ? " active" : "");
         thumb.innerHTML = (v.status === "missing" ? `<div class="thumb-missing"></div>` : `<img alt="" />`)
-          + `<span class="variant-meta"></span>`;
+          + `<span class="variant-badge"></span><span class="variant-meta"></span>`;
+        thumb.querySelector(".variant-badge").textContent = tr("Active");
         if (v.status === "missing") thumb.querySelector(".thumb-missing").textContent = tr("Manquant");
         else if (v.url) thumb.querySelector("img").src = v.url;
         // LOT C : variante non active (jamais re-résolue au restore) → lecture directe /view.
@@ -4918,7 +5003,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       else { img.removeAttribute("src"); img.style.display = "none"; }
       const word = !av ? "" : av.status === "pending" ? "Génération…" : av.status === "error" ? "Erreur"
         : av.status === "missing" ? "Manquant" : "Prêt";
-      section.querySelector(".sheet-status").textContent = word ? tr(word) : "";
+      section.querySelector(".sheet-status").textContent =
+        !word ? "" : variants.length > 1 ? `${tr(word)} · ${dyn("activeSheet", active + 1, variants.length)}` : tr(word);
       section.querySelector(".sheet-regen").disabled = !director || variants.some(v => v.status === "pending");
       section.querySelector(".sheet-import").disabled = !director;
     }
@@ -5516,6 +5602,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       // Projet d'avant le menu Gabarit : pas de sheetTemplate → "auto", soit le gabarit avec
       // lequel ses planches ont été rendues.
       $("sheetTemplateSelect").value = SHEET_TEMPLATES[p.sheetTemplate] ? p.sheetTemplate : "auto";
+      renderSheetTemplateOptions();   // remet les vignettes en phase avec le gabarit restauré
       $("seed").value = String(p.seed);
       // Statut au restore : "pending" non persisté → file présent = ready (à re-résoudre),
       // absent = error ; "missing" retenté (le fichier a pu revenir).
