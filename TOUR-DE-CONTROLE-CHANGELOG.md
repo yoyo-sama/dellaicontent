@@ -24,6 +24,22 @@ JS validé, graphes construits hors navigateur dans les deux modes (i2v inchang�
 
 ---
 
+## 2026-09-21 (suite 6) — Rebase derrière les fiches personnage
+
+La branche `claude/fiches-personnage-animaux-np87b7` ayant été fusionnée en premier (PR #1, `812499c`), le travail des suites 4 et 5 a été rebasé derrière elle. Trois conflits résolus à la main, aucun arbitrage silencieux :
+
+- `AGENTS.md`, deux fois : les deux branches réécrivaient le même paragraphe de repères JS puis la même puce Minimax H3. Les deux apports sont conservés, pas l'un à la place de l'autre.
+- `index.html` : `main` a supprimé `generateStoryboardV2` (le sélecteur Auto/Réalisateur a disparu, la revue est le seul mode) pendant que la suite 4 insérait ses sections juste après. Suppression conservée, sections conservées.
+
+Deux points d'intégration relevés en relisant plutôt qu'en se fiant au résumé :
+
+- `characterSheetFromBrief` renvoie désormais un objet de champs passé tel quel à `submitCharsheetJob` ; le chemin r2v reprend cette version, la couche vision n'y touchant pas (elle produit une chaîne, indépendante de ce schéma).
+- Le rebase avait introduit un **doublon de clé** dans `I18N` : `"Sujet"` existait des deux côtés, avec un allemand différent (`Subjekt` contre `Motiv`). La dernière écrasait silencieusement la première. L'entrée de `main` est conservée — les onglets de sujet et les puces d'insertion doivent dire le même mot — et l'allemand des libellés associés a été aligné sur `Motiv`.
+
+La frontière convenue avec l'autre fil tient et a été vérifiée dans le navigateur : les puces d'insertion n'apparaissent que sur `reference2video`, jamais sur `storyboard_v2`, donc aucun jeton `<Subject N>` ne peut fuiter dans le prompt Qwen-Edit via le brief.
+
+---
+
 ## 2026-09-21 (suite 4) — Grammaire de prompt Minimax H3 et description des sources par vision
 
 Demande de l'utilisateur : intégrer la mécanique de `BMB12d3/minimax-h3-prompt-composer`, et pouvoir décrire les images sources par un modèle Ollama — nécessaire en Ref2VA pour les notions de `<Subject x>`.
@@ -38,7 +54,7 @@ Deux numérotations distinctes : `<Picture N>` est l'entrée physique ComfyUI 1-
 
 ### Ce qui change
 
-- Ref2VA émet les 6 champs de la grammaire (`buildH3RefPrompt`), les 3 chemins (Auto, bypass fiches, Réalisateur) passant par le même point unique `submitReference2VideoGraph`.
+- Ref2VA émet les 6 champs de la grammaire (`buildH3RefPrompt`), les chemins (revue des planches, bypass fiches) passant par le même point unique `submitReference2VideoGraph`.
 - I2VA reçoit la phrase d'alignement temporel (`H3_I2V_ALIGNMENT`), absente du template.
 - Plafond dur de 7 000 caractères appliqué (`capH3Prompt`), il ne l'était nulle part.
 - Les références fournies par l'utilisateur sont décrites par `gemma4:e4b` en vision (`describeRefImages`) — capacité confirmée par l'utilisateur en direct, et sondée au premier usage plutôt que supposée. C'est sur le chemin « Ignorer les fiches » que ça compte le plus : sans fiche générée, c'était la seule chose qui pouvait dire au modèle ce que contiennent ses images.
