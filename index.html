@@ -2204,6 +2204,10 @@
       "Cheveux": { en: "Hair", es: "Cabello", de: "Haar" },
       "Tenue": { en: "Outfit", es: "Vestuario", de: "Outfit" },
       "Accessoires": { en: "Accessories", es: "Accesorios", de: "Accessoires" },
+      "Espèce": { en: "Species", es: "Especie", de: "Art" },
+      "Tête": { en: "Head", es: "Cabeza", de: "Kopf" },
+      "Pelage": { en: "Coat", es: "Pelaje", de: "Fell" },
+      "Marques": { en: "Markings", es: "Marcas", de: "Zeichnung" },
       "Palette": { es: "Paleta" },
       "Lieu": { en: "Place", es: "Lugar", de: "Ort" },
       "Architecture": { es: "Arquitectura", de: "Architektur" },
@@ -3968,13 +3972,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         + shot.action + ". Frame it as " + cam.frame + ".";
       if (emotion) s += " The character's expression and body language convey " + emotion + ".";
       s += " " + light.text;
-      s += " The character is fully integrated into the scene, standing in that location with correct "
+      s += " The character is fully integrated into the scene, present in that location with correct "
         + "perspective and scale. Do not place the two references side by side, do not create a "
         + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
         + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
         + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
-        + "continuous scene that extends all the way to all four edges. Keep the character's face, "
-        + "hair, costume and colors identical to the first reference image.";
+        + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
+        + "body plan, head, hair or fur, markings, clothing if any and colors identical to the first "
+        + "reference image.";
       if (extra) s += " " + extra;
       if (styleText) s += " " + styleText;
       return s;
@@ -4091,7 +4096,15 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Ordre canonique des champs de fiche (personnage / décor) : la jointure ", " de ces
     // champs par les helpers ci-dessous reproduit EXACTEMENT l'ancienne chaîne charDesc/locDesc.
+    // Deux squelettes : visage/cheveux/tenue ne veulent rien dire pour un lion de
+    // documentaire animalier — sur un sujet animal, gemma casait "fur" dans `outfit` et la
+    // planche sortait un lion anthropomorphe habillé. `kind` (renvoyé par gemma, stocké dans
+    // l'objet de champs, absent des deux listes donc jamais compilé dans le prompt) choisit
+    // la liste ; un projet restauré sans `kind` reste humain, comme avant.
     const CHAR_FIELD_KEYS = ["face", "hair", "outfit", "accessories", "palette"];
+    const CHAR_ANIMAL_FIELD_KEYS = ["species", "head", "coat", "markings", "palette"];
+    const charKindOf = f => (f?.kind === "animal" ? "animal" : "human");
+    const charFieldKeys = f => (charKindOf(f) === "animal" ? CHAR_ANIMAL_FIELD_KEYS : CHAR_FIELD_KEYS);
     const LOC_FIELD_KEYS = ["place", "architecture", "materials", "lighting", "palette"];
     // Ces deux chaînes alimentent des graphes KREA 2 (buildCharsheetGraph/buildLocsheetGraph)
     // : elles passent donc par le même filtre de remplissage que l'enrichissement, sinon un
@@ -4099,23 +4112,25 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // le prompt Krea 2. Point de passage unique de TOUS les appelants (mode Auto, mode
     // Réalisateur, projet restauré, menus Personnage/Décor du studio).
     function charDescFromFields(f) {
-      return stripPromptPadding(CHAR_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
+      return stripPromptPadding(charFieldKeys(f).map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
     }
     function locDescFromFields(f) {
       return stripPromptPadding(LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
     }
 
-    // Fiche personnage figée : OBJET de champs structurés gemma {face,hair,outfit,accessories,palette}
+    // Fiche personnage figée : OBJET de champs structurés gemma, {face,hair,outfit,accessories,
+    // palette} pour un sujet humain, {species,head,coat,markings,palette} pour un sujet animal
     // (éditable dans le menu Personnage du studio) ; charDescFromFields le compile en une chaîne.
+    // `kind` commande aussi le gabarit de planche (buildCharsheetGraph) et les étiquettes du menu.
     // Fallback sans LLM : brief dans le 1er champ, autres vides.
     async function characterSheetFromBrief() {
       const scene = brief.value.trim();
       try {
         const out = await gemmaJSON(
-          `You are a character designer. From the user's scene, take the SINGLE most prominent character and describe them so they stay IDENTICAL across shots. Answer ONLY with JSON with these fields, each a dense ~10-20 word English string, no camera/scene/action wording: {"face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}.`,
+          `You are a character designer. From the user's scene, take the SINGLE most prominent character and describe it so it stays IDENTICAL across shots. It may be a human being, or an animal (wildlife documentary, pet, mascot). FIRST set "kind": "human" for a human being, "animal" for any animal. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. If kind is "human", answer ONLY with JSON {"kind":"human","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "animal", answer ONLY with JSON {"kind":"animal","species":"exact species, sex, age and body plan, e.g. adult male African lion, four-legged big cat","head":"...","coat":"...","markings":"...","palette":"..."}. For an animal, describe a real undressed wild animal: never mention clothing, outfit, accessories, human hair or a human face, and never make it stand or behave like a human.`,
           scene);
-        const fields = {};
-        for (const k of CHAR_FIELD_KEYS) fields[k] = fieldText(out[k]);
+        const fields = { kind: out.kind === "animal" ? "animal" : "human" };
+        for (const k of charFieldKeys(fields)) fields[k] = fieldText(out[k]);
         if (charDescFromFields(fields)) { addEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
         throw new Error("format inattendu");
       } catch (e) {
@@ -4153,7 +4168,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       let shots;
       try {
         const out = await gemmaJSON(
-          `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character, costume and setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one person in frame) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
+          `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character's appearance and the setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one subject in frame, a person or an animal) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
           scene);
         shots = normalizeShotList(out.shots, n, scene);
         addEvent("OK", `${n} plans Scene DNA (caméra/lumière/action) générés par ${OLLAMA_MODEL}.`, "ok");
@@ -4236,12 +4251,21 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Planche personnage multi-vues (ancre d'apparence, image 1 des keyframes duales).
     // Format 16:9 large obligatoire (layout prouvé au Lot 1), indépendant du ratio UI.
-    function buildCharsheetGraph(charDesc, negText, seed, width, height, loraName) {
+    // Deux gabarits : « one single person », les quatre poses debout et la grappe de détails de
+    // costume fabriquaient un lion anthropomorphe habillé sur un brief animalier — le sujet animal
+    // a donc son propre gabarit (anatomie animale, aucun vêtement, vues rapprochées de la tête et
+    // du pelage). charFields porte `kind` ; une fiche sans `kind` reste humaine.
+    const CHARSHEET_HUMAN = charDesc => `A professional photorealistic character reference sheet of one single person, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. Arranged neatly, the sheet shows a full-body turnaround of the same person in four standing poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a neutral relaxed stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the face. A row of several smaller close-up headshots of the face showing different facial expressions: neutral, smiling, surprised, determined. A cluster of detailed close-up photographs of costume details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the outfit and hair. Every view shows the exact same single person with identical face, hair and costume, consistent character design. `;
+    const CHARSHEET_ANIMAL = charDesc => `A professional photorealistic wildlife reference sheet of one single real animal, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. The subject is a real wild animal photographed exactly as it exists in nature: true animal anatomy and true animal proportions, bare natural fur or skin, its whole body carried in its natural animal posture with all of its legs on the ground and its head level with its body. Arranged neatly, the sheet shows a full-body turnaround of the same animal in four natural poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in the same natural stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the head. A row of several smaller close-up photographs of the head seen from different angles. A cluster of detailed close-up photographs of the coat, paws, tail and other natural body details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the animal coat. Every view shows the exact same single animal with identical head, coat and markings, consistent animal design, filmed like the subject of a nature documentary. `;
+
+    function buildCharsheetGraph(charFields, negText, seed, width, height, loraName) {
       const { g, add } = makeGraphBuilder();
       const kx = addKrea2Shared(add, loraName);
       const styleText = currentStyleText();
+      const charDesc = charDescFromFields(charFields);
+      const layout = charKindOf(charFields) === "animal" ? CHARSHEET_ANIMAL : CHARSHEET_HUMAN;
       const dec = addKrea2Shot(add, kx,
-        `A professional photorealistic character reference sheet of one single person, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. Arranged neatly, the sheet shows a full-body turnaround of the same person in four standing poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a neutral relaxed stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the face. A row of several smaller close-up headshots of the face showing different facial expressions: neutral, smiling, surprised, determined. A cluster of detailed close-up photographs of costume details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the outfit and hair. Every view shows the exact same single person with identical face, hair and costume, consistent character design. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
+        `${layout(charDesc)}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
         seed, 1920, 1088, 1);
       add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/charsheet" });
       return g;
@@ -4281,8 +4305,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Mêmes graphes/prompts que l'ancienne implémentation monolithique, juste sortis
     // en fonctions réutilisables pour que le mode Réalisateur puisse s'arrêter entre
     // chaque étape sans dupliquer la logique de construction de graphe.
-    async function submitCharsheetJob(charDesc, negText, seed, width, height, wf) {
-      return submitGraph(buildCharsheetGraph(charDesc, negText, seed, width, height, $("sheetLoraSelect").value),
+    async function submitCharsheetJob(charFields, negText, seed, width, height, wf) {
+      return submitGraph(buildCharsheetGraph(charFields, negText, seed, width, height, $("sheetLoraSelect").value),
         "Storyboard · fiche personnage", `${wf.model} · charsheet · seed ${seed}`);
     }
     async function submitLocsheetJob(locDesc, negText, seed, width, height, wf) {
@@ -4343,12 +4367,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       // 3 appels gemma distincts : fiche personnage + fiche décor (objets de champs,
       // compilés en chaînes par les helpers) + liste de N plans Scene DNA.
       addEvent("REQ", `Fiche personnage + fiche décor + ${n} plans via ${OLLAMA_MODEL}…`, "req");
-      const charDesc = charDescFromFields(await characterSheetFromBrief());
+      const charFields = await characterSheetFromBrief();
+      const charDesc = charDescFromFields(charFields);
       const locDesc = locDescFromFields(await locationSheetFromBrief());
       const shots = await shotListFromBrief(n);
 
       // (a) Planches personnage + décor (Krea 2) → attendre → ré-uploader comme ancres.
-      const csId = await submitCharsheetJob(charDesc, negText, seed, width, height, wf);
+      const csId = await submitCharsheetJob(charFields, negText, seed, width, height, wf);
       const lsId = await submitLocsheetJob(locDesc, negText, seed + 101, width, height, wf);
       const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
       const charName = charRef.name, locName = locRef.name;
@@ -4451,12 +4476,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       }
 
       addEvent("REQ", `Fiche personnage + fiche décor via ${OLLAMA_MODEL}…`, "req");
-      const charDesc = charDescFromFields(await characterSheetFromBrief());
+      const charFields = await characterSheetFromBrief();
+      const charDesc = charDescFromFields(charFields);
       const locDesc = locDescFromFields(await locationSheetFromBrief());
 
       // Mêmes planches Krea 2 que storyboard_v2 : elles servent ici directement de
       // ref_image_0/ref_image_1 (personnage / décor) du template Minimax H3 r2v.
-      const csId = await submitCharsheetJob(charDesc, negText, seed, width, height, wf);
+      const csId = await submitCharsheetJob(charFields, negText, seed, width, height, wf);
       const lsId = await submitLocsheetJob(locDesc, negText, seed + 101, width, height, wf);
       const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
       setSoulAnchors(charRef, locRef); // affichage seul (pastille d'identité)
@@ -4579,7 +4605,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const locFields = await locationSheetFromBrief();
       // Les deux planches partent en génération tout de suite (pendant que gemma découpe les plans).
       const csSeed = seed, lsSeed = seed + 101;
-      const csId = await submitCharsheetJob(charDescFromFields(charFields), negText, csSeed, width, height, wf);
+      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf);
       const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf);
       const shots = await shotListFromBrief(n);
 
@@ -4638,7 +4664,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const charFields = await characterSheetFromBrief();
       const locFields = await locationSheetFromBrief();
       const csSeed = seed, lsSeed = seed + 101;
-      const csId = await submitCharsheetJob(charDescFromFields(charFields), negText, csSeed, width, height, wf);
+      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf);
       const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf);
 
       resetDirectorZone();
@@ -4697,9 +4723,37 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // ── Menus Personnage / Décor : champs éditables + historique de variantes + import ──
     function sheetSection(kind) { return $(kind === "char" ? "studioCharacter" : "studioLocation"); }
 
+    // Étiquettes des champs de fiche personnage (clés FR = clés I18N).
+    const CHAR_FIELD_LABELS = {
+      face: "Visage", hair: "Cheveux", outfit: "Tenue", accessories: "Accessoires",
+      species: "Espèce", head: "Tête", coat: "Pelage", markings: "Marques", palette: "Palette"
+    };
+
+    // Le menu Personnage suit le squelette du sujet : un lion n'a ni tenue ni accessoires, il a
+    // une espèce, une tête, un pelage et des marques. Les <label> sont recréés (nœuds texte neufs,
+    // sans __orig mémorisé par translateTree) puis traduits ; l'édition passe par un écouteur
+    // délégué sur la section, donc les champs reconstruits restent câblés.
+    function renderCharFields(keys) {
+      const stack = $("studioCharacter").querySelector(".form-stack");
+      const shown = [...stack.querySelectorAll("[data-field]")].map(i => i.dataset.field);
+      if (shown.join() === keys.join()) return;
+      const actions = stack.querySelector(".sheet-actions");
+      stack.querySelectorAll("label").forEach(l => l.remove());
+      for (const k of keys) {
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "text";
+        input.dataset.field = k;
+        label.append(CHAR_FIELD_LABELS[k], input);
+        stack.insertBefore(label, actions);
+      }
+      translateTree(stack);
+    }
+
     function renderSheetMenu(kind) {
       const isChar = kind === "char";
       const fields = director ? (isChar ? director.charFields : director.locFields) : null;
+      if (isChar) renderCharFields(charFieldKeys(fields));
       sheetSection(kind).querySelectorAll("[data-field]").forEach(input => {
         input.value = fields ? (fields[input.dataset.field] || "") : "";
         input.disabled = !fields;
@@ -4781,7 +4835,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       refreshSheetUI(kind);
       try {
         const promptId = isChar
-          ? await submitCharsheetJob(desc, director.negText, seed, director.width, director.height, director.wf)
+          ? await submitCharsheetJob(director.charFields, director.negText, seed, director.width, director.height, director.wf)
           : await submitLocsheetJob(desc, director.negText, seed, director.width, director.height, director.wf);
         await resolveVariantJob(kind, variant, promptId);
       } catch (err) {
@@ -4814,11 +4868,11 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     for (const kind of ["char", "loc"]) {
       const isChar = kind === "char";
       const section = sheetSection(kind);
-      section.querySelectorAll("[data-field]").forEach(input =>
-        input.addEventListener("change", () => {
-          if (!director) return;
-          (isChar ? director.charFields : director.locFields)[input.dataset.field] = input.value.trim();
-        }));
+      section.addEventListener("change", e => {
+        const input = e.target.closest("[data-field]");
+        if (!input || !director) return;
+        (isChar ? director.charFields : director.locFields)[input.dataset.field] = input.value.trim();
+      });
       section.querySelector(".sheet-regen").addEventListener("click", () => regenerateSheet(kind));
       const fileInput = section.querySelector(".sheet-import-input");
       section.querySelector(".sheet-import").addEventListener("click", () => fileInput.click());
