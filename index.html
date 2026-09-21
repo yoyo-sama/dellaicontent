@@ -804,6 +804,20 @@
       padding: 12px;
       background: var(--card-2);
     }
+    /* La keyframe se lit en face des champs du plan qu'elle illustre. Tant qu'elle
+       n'est pas générée, la colonne de droite n'existe pas (:empty) : les champs
+       gardent toute la largeur au lieu de laisser un vide réservé. */
+    .shot-edit-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+    .shot-edit-body:has(.shot-kf > *) { grid-template-columns: minmax(0, 1fr) auto; }
+    .shot-edit-fields { display: grid; gap: 8px; min-width: 0; }
+    .shot-kf { width: 280px; }
+    .shot-kf:empty { display: none; }
+    /* Le titre de la carte répéterait celui du plan juste à côté : seul le statut reste. */
+    .shot-kf .asset .meta strong { display: none; }
+    @media screen and (max-width: 900px) {
+      .shot-edit-body:has(.shot-kf > *) { grid-template-columns: minmax(0, 1fr); }
+      .shot-kf { width: auto; }
+    }
 
     .asset .asset-actions button.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
     .asset.locked img, .asset.locked video { outline: 3px solid var(--highlight); outline-offset: -3px; }
@@ -1913,9 +1927,6 @@
             <p class="hint">Étape 1 : ajustez les plans générés, puis lancez les keyframes. Étape 2 : régénérez ou verrouillez chaque case. Étape 3 : lancez l'animatic une fois toutes les cases prêtes.</p>
             <div class="shot-edit-list" id="shotEditList" style="display:none"></div>
             <button type="button" class="secondary-btn" id="directorKeyframesBtn" style="display:none">Générer les keyframes</button>
-            <div id="directorStep2" style="display:none; margin-top:10px">
-              <div class="gallery" id="keyframeGrid"></div>
-            </div>
           </div>
         </section>
 
@@ -2421,7 +2432,7 @@
       renderSheetTemplateOptions();
       renderLoraSelect();
       refreshSoulId();
-      if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderAllKeyframeCards(); renderMontage(); renderFooterTimeline(); }
+      if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); }
     });
 
     // ── Events log ─────────────────────────────────────────────────
@@ -4849,10 +4860,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       director = null;
       soulAnchors = null;
       exitStudio();
-      $("directorStep2").style.display = "none";
       $("shotEditList").innerHTML = "";
       $("shotEditList").style.display = "none";
-      $("keyframeGrid").innerHTML = "";
       $("directorKeyframesBtn").style.display = "none";
       $("directorKeyframesBtn").disabled = false;
       $("directorLaunchBtn").disabled = true;
@@ -5346,7 +5355,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Le plafond (MAX_SHOT_SUBJECTS) vient des entrées image du nœud Qwen-Edit, décor compris :
     // au-delà, les pastilles éteintes sont DÉSACTIVÉES avec la raison affichée, plutôt que de
     // laisser cliquer un 3e sujet qui ne serait jamais envoyé au graphe.
-    function renderShotSubjects(item, shot) {
+    function renderShotSubjects(fields, shot) {
       if (!director || director.chars.length < 2) return;
       const sel = shotSubjectIdx(shot);
       const full = sel.length >= MAX_SHOT_SUBJECTS;
@@ -5374,7 +5383,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         });
         row.appendChild(chip);
       });
-      item.insertBefore(row, item.children[1]);
+      fields.insertBefore(row, fields.firstChild);
     }
 
     function renderShotDNAList() {
@@ -5385,19 +5394,24 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const item = document.createElement("div");
         item.className = "shot-edit-item";
         item.innerHTML = `<strong></strong>
-          <div class="two-cols">
-            <label><span class="lbl-cam"></span><select data-field="camera">${libOptions(CAMERA_LIB, shot.camera)}</select></label>
-            <label><span class="lbl-light"></span><select data-field="lighting">${libOptions(LIGHTING_LIB, shot.lighting)}</select></label>
-          </div>
-          <label><span class="lbl-action"></span><textarea class="small" data-field="action"></textarea></label>
-          <div class="two-cols">
-            <label><span class="lbl-emotion"></span><input type="text" data-field="emotion" /></label>
-            <label><span class="lbl-duration"></span><input type="number" min="1" max="8" data-field="duration" /></label>
-          </div>
-          <label><span class="lbl-extra"></span><input type="text" data-field="extra" /></label>
-          <p class="hint lbl-durhint"></p>`;
+          <div class="shot-edit-body">
+            <div class="shot-edit-fields">
+              <div class="two-cols">
+                <label><span class="lbl-cam"></span><select data-field="camera">${libOptions(CAMERA_LIB, shot.camera)}</select></label>
+                <label><span class="lbl-light"></span><select data-field="lighting">${libOptions(LIGHTING_LIB, shot.lighting)}</select></label>
+              </div>
+              <label><span class="lbl-action"></span><textarea class="small" data-field="action"></textarea></label>
+              <div class="two-cols">
+                <label><span class="lbl-emotion"></span><input type="text" data-field="emotion" /></label>
+                <label><span class="lbl-duration"></span><input type="number" min="1" max="8" data-field="duration" /></label>
+              </div>
+              <label><span class="lbl-extra"></span><input type="text" data-field="extra" /></label>
+              <p class="hint lbl-durhint"></p>
+            </div>
+            <div class="shot-kf" id="kfSlot_${i}"></div>
+          </div>`;
         item.querySelector("strong").textContent = dyn("shotLabel", i + 1, director.n);
-        renderShotSubjects(item, shot);
+        renderShotSubjects(item.querySelector(".shot-edit-fields"), shot);
         item.querySelector(".lbl-cam").textContent = tr("Caméra");
         item.querySelector(".lbl-light").textContent = tr("Lumière");
         item.querySelector(".lbl-action").textContent = tr("Action");
@@ -5421,6 +5435,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         extraEl.addEventListener("change", () => { shot.extra = extraEl.value.trim(); saveProject(); });
         list.appendChild(item);
       });
+      // Les emplacements keyframes viennent d'être recréés : on y redessine les cartes,
+      // sans quoi tout rappel de cette fonction (taggage, langue, nouveau sujet) les perdrait.
+      renderAllKeyframeCards();
     }
 
     // Étape 2 : 1 job Qwen-Edit par case, cartes régénérables/verrouillables.
@@ -5439,9 +5456,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       director.keyframes = director.shots.map(() => ({ status: "pending", locked: false, seed: 0, name: null, file: null, blob: null, url: null }));
       // Nouvelles keyframes → l'ancien montage (cuts/animatic) est obsolète : on le repart de zéro.
       director.cutPlan = null; director.cuts = null; director.order = null; director.animatic = null;
-      $("keyframeGrid").innerHTML = "";
+      renderShotDNAList();   // recrée les emplacements (et efface les cartes d'un run précédent)
       $("montageList").innerHTML = ""; $("montagePlayer").innerHTML = ""; $("studioTimeline").innerHTML = "";
-      $("directorStep2").style.display = "";
       updateGateState();
       updateMontageButtons();
       const ids = [];
@@ -5469,7 +5485,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Carte keyframe : miniature + 🔄 régénérer (seed+1, sauf verrouillée) + 🔒 verrouiller.
     function renderKeyframeCard(i) {
       const kf = director.keyframes[i];
-      let card = document.getElementById(`kfCard_${i}`);
+      const slot = $(`kfSlot_${i}`);
+      if (!slot) return;   // liste de plans pas (encore) rendue
+      let card = slot.querySelector(".asset");
       if (!card) {
         card = document.createElement("div");
         card.className = "asset fade-in";
@@ -5478,7 +5496,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
           <div class="asset-actions"><button type="button" class="kf-regen"></button><button type="button" class="kf-lock"></button></div>`;
         card.querySelector(".kf-regen").addEventListener("click", () => regenerateKeyframe(i));
         card.querySelector(".kf-lock").addEventListener("click", () => toggleLockKeyframe(i));
-        $("keyframeGrid").appendChild(card);
+        slot.appendChild(card);
       }
       card.classList.toggle("locked", kf.locked);
       card.querySelector("strong").textContent = dyn("shotLabel", i + 1, director.n);
@@ -5875,8 +5893,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       selectStudioSection("character");
       renderSheetMenu("char"); renderSheetMenu("loc");
       updateValidateButtonState();
-      renderShotDNAList();
-      if (director.keyframes) { $("directorStep2").style.display = ""; renderAllKeyframeCards(); }
+      renderShotDNAList();   // redessine aussi les keyframes déjà rendues
       renderMontage(); renderFooterTimeline(); renderMontagePlayer();
       updateMontageButtons();
       updateGateState();
