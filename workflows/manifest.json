@@ -61,7 +61,6 @@
       "label": "Storyboard + Animatic (charsheet + keyframes + cuts)",
       "scenario": "storyboard",
       "controls": [
-        "mode",
         "shots",
         "duration",
         "hold",
@@ -80,7 +79,6 @@
       "label": "Personnage + Décor cohérents (Minimax H3 reference2video)",
       "scenario": "storyboard",
       "controls": [
-        "mode",
         "duration",
         "ratio",
         "audio",

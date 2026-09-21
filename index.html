@@ -794,20 +794,6 @@
 
     .secondary-btn.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
 
-    .mode-toggle { display: flex; gap: 4px; margin: 6px 0; padding: 4px; border: 1px solid var(--border-light); border-radius: var(--pill); background: var(--card-2); }
-    .mode-btn {
-      flex: 1;
-      border: 0;
-      background: transparent;
-      color: var(--text-2);
-      border-radius: var(--pill);
-      padding: 9px 16px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      letter-spacing: 0.01em;
-    }
-    .mode-btn.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
 
     .shot-edit-list { display: grid; gap: 12px; }
     .shot-edit-item {
@@ -1743,14 +1729,8 @@
             </div>
 
             <div class="generate-row">
-              <div class="gb-field gb-wide" id="modeWrap" style="display:none">
-                <label>Mode de génération</label>
-                <div class="mode-toggle" id="modeToggle">
-                  <button type="button" class="mode-btn active" id="modeAutoBtn" data-mode="auto">Auto</button>
-                  <button type="button" class="mode-btn" id="modeDirectorBtn" data-mode="director">Réalisateur</button>
-                </div>
-                <p class="hint">Auto : chaîne complète en un clic. Réalisateur : validez chaque étape (plans, keyframes, animatic).</p>
-                <button type="button" class="secondary-btn" id="resumeProjectBtn" style="display:none; margin-top:8px">Reprendre le projet</button>
+              <div class="gb-field gb-wide" id="resumeWrap" style="display:none">
+                <button type="button" class="secondary-btn" id="resumeProjectBtn" style="display:none">Reprendre le projet</button>
               </div>
 
               <div class="gb-field gb-wide" id="marketsWrap" style="display:none">
@@ -2052,9 +2032,9 @@
       { id: "text2video", label: "Text2Video", controls: ["duration", "ratio", "audio", "turbo", "mp", "turboSteps", "lora"] },
       { id: "sequence2video", label: "Animatic (FLF2V)", scenario: "storyboard", controls: ["seq", "audio"] },
       { id: "storyboard_v2", label: "Storyboard + Animatic (charsheet + keyframes + cuts)", scenario: "storyboard",
-        controls: ["mode", "shots", "duration", "hold", "ratio", "style", "audio", "sheetLora", "sheetTemplate"], defaults: { duration: 2 } },
+        controls: ["shots", "duration", "hold", "ratio", "style", "audio", "sheetLora", "sheetTemplate"], defaults: { duration: 2 } },
       { id: "reference2video", label: "Personnage + Décor cohérents (Minimax H3 reference2video)", scenario: "storyboard",
-        controls: ["mode", "duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "sheetTemplate", "skipSheets", "style"], defaults: { duration: 2 } },
+        controls: ["duration", "ratio", "audio", "turbo", "mp", "lora", "refs", "sheetLora", "sheetTemplate", "skipSheets", "style"], defaults: { duration: 2 } },
       { id: "campaign_full", label: "Campagne complète (posters + thumbnails + teaser)", scenario: "campaign",
         controls: ["duration", "variants", "audio", "style"], defaults: { duration: 5 } }
     ];
@@ -2232,16 +2212,11 @@
       "fin": { en: "end", es: "fin", de: "Ende" },
       "Seed": {}, "Pipeline": {}, "Node Monitor": {}, "ComfyUI Console": {}, "100% Local (GB10)": {},
       // ── Mode Réalisateur (storyboard_v2) ──
-      "Mode de génération": { en: "Generation mode", es: "Modo de generación", de: "Generierungsmodus" },
       "Options avancées": { en: "Advanced options", es: "Opciones avanzadas", de: "Erweiterte Optionen" },
       "Identité ancrée": { en: "Identity anchored", es: "Identidad anclada", de: "Identität verankert" },
       "Identité à valider": { en: "Identity to validate", es: "Identidad por validar", de: "Identität zu bestätigen" },
       "Auto": {},
       "Réalisateur": { en: "Director", es: "Director", de: "Regisseur" },
-      "Auto : chaîne complète en un clic. Réalisateur : validez chaque étape (plans, keyframes, animatic).":
-        { en: "Auto: full chain in one click. Director: validate each step (shots, keyframes, animatic).",
-          es: "Auto: cadena completa en un clic. Director: valide cada etapa (planos, keyframes, animatic).",
-          de: "Auto: vollständige Kette mit einem Klick. Regisseur: jeden Schritt bestätigen (Einstellungen, Keyframes, Animatic)." },
       "Mode Réalisateur": { en: "Director mode", es: "Modo Director", de: "Regisseur-Modus" },
       "Étape 1 : ajustez les plans générés, puis lancez les keyframes. Étape 2 : régénérez ou verrouillez chaque case. Étape 3 : lancez l'animatic une fois toutes les cases prêtes.":
         { en: "Step 1: adjust the generated shots, then launch the keyframes. Step 2: regenerate or lock each panel. Step 3: launch the animatic once every panel is ready.",
@@ -2483,7 +2458,7 @@
     const CONTROL_WRAPS = {
       image: "imageInputWrap", duration: "durationWrap", markets: "marketsWrap",
       seq: "seqWrap", shots: "shotCountWrap", hold: "holdWrap",
-      variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap", mode: "modeWrap",
+      variants: "variantsWrap", ratio: "ratioWrap", audio: "audioWrap",
       style: "styleWrap", turbo: "turboWrap", mp: "mpWrap", turboSteps: "turboStepsWrap",
       lora: "loraStyleWrap", refs: "refExtrasWrap", sheetLora: "sheetLoraWrap",
       sheetTemplate: "sheetTemplateWrap", skipSheets: "skipSheetsWrap"
@@ -2501,7 +2476,6 @@
       if (p !== updateModelOptions.lastPipeline) {
         if (def?.defaults?.duration) $("videoDuration").value = def.defaults.duration;
         resetDirectorZone(); // changement de pipeline = fin de la session Réalisateur en cours
-        if (p === "reference2video") setDirectorMode(true); // Réalisateur par défaut pour r2v
       }
       updateModelOptions.lastPipeline = p;
       updateModelLabel();
@@ -3020,18 +2994,17 @@
     // builder = une fonction (seed, width, height) + une entrée ici.
     const BUILDERS = {
       flf2v: (seed) => generateSequence(seed),
-      // Mode Réalisateur : Generate ne lance que l'étape 1 (fiches + planches) et ouvre le
-      // studio plein écran ; la suite se déroule via les menus du studio. Mode Auto : chaîne complète.
-      storyboard_v2: (seed, width, height) => directorMode
-        ? directorStep1(seed, width, height)
-        : generateStoryboardV2(seed, width, height),
+      // Generate ne lance que l'étape 1 (fiches + planches) et ouvre le studio plein écran ;
+      // la suite se déroule via les menus du studio. C'est le SEUL chemin depuis que le
+      // sélecteur Auto/Réalisateur a été retiré (demande utilisateur du 2026-09-21).
+      storyboard_v2: (seed, width, height) => directorStep1(seed, width, height),
       campaign_full: (seed) => generateCampaignFull(seed),
-      // Bypass fiches (#skipSheetsToggle) prime sur le mode : rien à revoir si rien n'est
-      // auto-généré, donc bypass coché ⇒ toujours le chemin Auto (qui gère le bypass en
-      // interne), Réalisateur ou pas. Bypass décoché : Auto ou Réalisateur comme avant.
+      // Bypass fiches (#skipSheetsToggle) : rien à revoir si rien n'est auto-généré, donc la
+      // revue est court-circuitée et le job vidéo part directement (generateReference2Video
+      // gère le bypass en interne). Décoché : revue des planches dans le studio.
       reference2video: (seed, width, height) => $("skipSheetsToggle").checked
         ? generateReference2Video(seed, width, height)
-        : (directorMode ? directorStepR2V1(seed, width, height) : generateReference2Video(seed, width, height))
+        : directorStepR2V1(seed, width, height)
     };
 
     async function uploadInputImage() {
@@ -4710,57 +4683,6 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         `${cutNames.length} cuts francs · ${withAudio ? "audio" : "muet"} · fps 24 · seed ${seed}`);
     }
 
-    // charsheet → N keyframes ancrées Qwen-Edit → grille → 1 cut i2v/keyframe → assemblage (mode Auto).
-    async function generateStoryboardV2(seed, width, height) {
-      if (!brief.value.trim()) throw new Error("Décrivez la scène dans le brief avant de générer le storyboard.");
-      const wf = currentWorkflow();
-      const n = Math.min(16, Math.max(4, parseInt($("shotCount").value, 10) || 4));
-      const holdDur = Math.min(8, Math.max(0, parseInt($("holdDuration").value, 10) || 0));
-      const negText = negative.value.trim(), withAudio = $("audioToggle").checked;
-
-      // 3 appels gemma distincts : fiche personnage + fiche décor (objets de champs,
-      // compilés en chaînes par les helpers) + liste de N plans Scene DNA.
-      addEvent("REQ", `Fiche personnage + fiche décor + ${n} plans via ${OLLAMA_MODEL}…`, "req");
-      const charFields = await characterSheetFromBrief();
-      const charDesc = charDescFromFields(charFields);
-      const locDesc = locDescFromFields(await locationSheetFromBrief());
-      const shots = await shotListFromBrief(n);
-
-      // (a) Planches personnage + décor (Krea 2) → attendre → ré-uploader comme ancres.
-      const csId = await submitCharsheetJob(charFields, negText, seed, width, height, wf);
-      const lsId = await submitLocsheetJob(locDesc, negText, seed + 101, width, height, wf);
-      const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
-      const charName = charRef.name, locName = locRef.name;
-      setSoulAnchors(charRef, locRef); // affichage seul (pastille d'identité)
-
-      // (c) 1 job Qwen-Edit dual par case : personnage (ancre 1) DANS le décor (ancre 2).
-      const anchorRaw = await getTemplate(wf.anchor);
-      const keyIds = [];
-      for (let i = 0; i < n; i++)
-        keyIds.push(await submitKeyframeJob(anchorRaw, shots[i], [{ desc: charDesc, name: charName }], negText, locName, seed + 11 + i, width, height, i, n));
-      const keyEntries = await waitForJobs(keyIds);
-      const keys = [];
-      for (const id of keyIds) keys.push(await reupload(outputFiles(keyEntries[id], ".png")[0]));
-
-      // (d) Grille contact-sheet adaptative.
-      await submitGridJob(keys);
-
-      // (e) 1 cut i2v par plan (durée par plan issue du DNA) + tenue du plan final optionnelle.
-      const i2vRaw = await getTemplate("api/ltx25_i2v.json");
-      const plan = shots.map((shot, k) => ({ keyObj: keys[k], shot, dur: shot.duration, holdMotion: null }));
-      if (holdDur > 0)
-        plan.push({ keyObj: keys[keys.length - 1], shot: shots[shots.length - 1], dur: holdDur, holdMotion: HOLD_MOTION });
-      const cutIds = [];
-      for (let k = 0; k < plan.length; k++)
-        cutIds.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, charDesc, locDesc, negText, seed + 31 + k, k, plan.length, plan[k].dur, plan[k].holdMotion));
-      const cutEntries = await waitForJobs(cutIds);
-      const cutNames = [];
-      for (const id of cutIds) cutNames.push((await reupload(outputFiles(cutEntries[id], ".mp4")[0])).name);
-
-      // (f) Assemblage par cuts francs + audio.
-      await submitAnimaticJob(cutNames, withAudio, seed);
-    }
-
     // ── Reference2Video (Minimax H3 r2v, LOT 1) : réutilise la génération charsheet/locsheet
     // existante (Krea 2) comme les deux références de MiniMaxH3ReferenceToVideo — personnage
     // ET décor cohérents en un seul clip, sans passer par les keyframes/cuts du storyboard_v2.
@@ -4868,17 +4790,10 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     $("directorR2VLaunchBtn").addEventListener("click", generateReference2VideoFromDirector);
 
     // ── Mode Réalisateur (storyboard_v2) : studio plein écran ────────────────────
-    let directorMode = false; // état non persisté (défaut : Auto)
+    // Il n'y a plus de bascule : la revue étape par étape est le seul mode. Le sélecteur
+    // Auto/Réalisateur et la chaîne `generateStoryboardV2` qu'il lançait ont été retirés
+    // le 2026-09-21 sur demande de l'utilisateur.
     let director = null;      // session Réalisateur en cours
-
-    function setDirectorMode(on) {
-      directorMode = on;
-      $("modeAutoBtn").classList.toggle("active", !on);
-      $("modeDirectorBtn").classList.toggle("active", on);
-      resetDirectorZone();
-    }
-    $("modeAutoBtn").addEventListener("click", () => setDirectorMode(false));
-    $("modeDirectorBtn").addEventListener("click", () => setDirectorMode(true));
 
     // Coquille studio : bascule vue classique ↔ studio (le header reste visible).
     function enterStudio() { document.body.dataset.studio = "1"; }
@@ -5834,11 +5749,17 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       return p;
     }
 
-    // Bouton « Reprendre le projet » : visible dans modeWrap quand le pipeline
-    // storyboard_v2 est sélectionné et qu'un projet valide est en stock.
+    // Bouton « Reprendre le projet » : visible quand le pipeline storyboard_v2 est
+    // sélectionné et qu'un projet valide est en stock. Son conteneur n'est plus piloté par
+    // les `controls` du manifest (il ne portait le bouton que parce qu'il portait le
+    // sélecteur de mode, retiré) : cette fonction décide des deux, sinon un cadre vide
+    // resterait dans le formulaire quand il n'y a rien à reprendre.
     function updateResumeButton() {
       const b = $("resumeProjectBtn");
-      if (b) b.style.display = savedProjectCache && pipelineSelect.value === "storyboard_v2" ? "" : "none";
+      if (!b) return;
+      const show = !!savedProjectCache && pipelineSelect.value === "storyboard_v2";
+      b.style.display = show ? "" : "none";
+      $("resumeWrap").style.display = show ? "" : "none";
     }
 
     // Re-résout une référence fichier persistée : /view (pattern reupload) → blob +
@@ -5858,7 +5779,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const p = loadSavedProject();
       if (!p) { updateResumeButton(); return; }
       const wf = manifest.workflows.find(w => w.id === p.wfId);
-      // Sélection scénario + pipeline + mode Réalisateur (mêmes chemins que l'UI).
+      // Sélection scénario + pipeline (mêmes chemins que l'UI).
       if (activeScenario !== "storyboard")
         document.querySelector('.scenario-tab[data-scenario="storyboard"]')?.click();
       if (pipelineSelect.value !== "storyboard_v2" &&
@@ -5867,7 +5788,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         updateModelOptions();
       }
       if ([...modelSelect.options].some(o => o.value === p.wfId)) { modelSelect.value = p.wfId; updateModelLabel(); }
-      setDirectorMode(true); // resetDirectorZone inclus — ne touche pas à la clé persistée
+      resetDirectorZone(); // ne touche pas à la clé persistée
       // Formulaire ré-aligné sur le projet.
       brief.value = p.brief || brief.value;
       negative.value = p.negText ?? negative.value;
