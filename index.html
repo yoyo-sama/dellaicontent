@@ -1317,7 +1317,9 @@
     .tpl-card[aria-pressed="true"] .tpl-name { color: var(--text); }
 
     /* ── Sujets multiples : onglets du menu Personnage + pastilles de l'éditeur de plans ── */
-    .subject-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .subject-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .kind-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+    .subject-tab[aria-pressed="true"] { border-color: var(--highlight); color: var(--highlight); }
     .subject-tab, .subj-chip {
       flex: 0 0 auto;
       padding: 6px 12px;
@@ -1857,6 +1859,11 @@
           <h3 class="section-title">Planche personnage</h3>
           <p class="hint">Modifiez les champs puis régénérez pour créer une nouvelle variante ; cliquez une vignette pour choisir la planche active.</p>
           <div class="subject-tabs" id="subjectTabs" hidden></div>
+          <div class="subject-tabs" id="charKindToggle" hidden>
+            <span class="kind-label">Type de sujet</span>
+            <button type="button" class="subject-tab" data-kind="human">Humain</button>
+            <button type="button" class="subject-tab" data-kind="other">Autre (animal, créature, robot, objet…)</button>
+          </div>
           <div class="sheet-layout">
             <div class="form-stack">
               <label>Visage<input type="text" data-field="face" /></label>
@@ -2242,6 +2249,11 @@
       "+ Ajouter un sujet": { en: "+ Add a subject", es: "+ Añadir un sujeto", de: "+ Motiv hinzufügen" },
       "Retirer ce sujet": { en: "Remove this subject", es: "Quitar este sujeto", de: "Dieses Motiv entfernen" },
       "Sujets du plan": { en: "Subjects in this shot", es: "Sujetos del plano", de: "Motive dieser Einstellung" },
+      "Type de sujet": { en: "Subject type", es: "Tipo de sujeto", de: "Motivart" },
+      "Humain": { en: "Human", es: "Humano", de: "Mensch" },
+      "Autre (animal, créature, robot, objet…)":
+        { en: "Other (animal, creature, robot, object…)", es: "Otro (animal, criatura, robot, objeto…)",
+          de: "Anderes (Tier, Wesen, Roboter, Objekt…)" },
       // ── Studio plein écran (coquille + menus Personnage/Décor) ──
       "Personnage": { en: "Character", es: "Personaje", de: "Figur" },
       "Décor": { en: "Location", es: "Decorado", de: "Schauplatz" },
@@ -4306,7 +4318,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const scene = brief.value.trim();
       const skip = exclude.filter(Boolean);
       const more = skip.length
-        ? ` The scene contains SEVERAL subjects. These ones are already described and must be IGNORED: ${skip.map(d => `"${d}"`).join("; ")}. Take the most prominent subject that is NOT one of those.`
+        ? ` The scene contains SEVERAL subjects. These ones are already described and must be IGNORED: ${skip.map(d => `"${d}"`).join("; ")}. Take the most prominent subject that is NOT one of those. That next subject is just as likely to be an animal, a creature, a machine or an object as a human being: decide its "kind" from the scene alone, never default to "human".`
         : "";
       try {
         const out = await gemmaJSON(
@@ -5049,6 +5061,37 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         tab(" del", tr("Retirer ce sujet"), () => removeSubject(director.charIdx), busy);
     }
 
+    // Bascule humain / autre du sujet affiché. gemma tranche à la création, mais il se trompe
+    // (et, sur un brief à un seul sujet, il INVENTE le second, humain par défaut) : sans ce
+    // contrôle le squelette de champs était figé pour la session et le gabarit de planche
+    // avec lui. Les deux jeux de clés étant disjoints, ils cohabitent dans le même objet —
+    // rebasculer ne perd donc rien de ce qui a été saisi.
+    function renderCharKind() {
+      const wrap = $("charKindToggle");
+      wrap.hidden = !director;
+      if (wrap.hidden) return;
+      const kind = charKindOf(director.charFields);
+      wrap.querySelectorAll("[data-kind]")
+        .forEach(b => b.setAttribute("aria-pressed", String(b.dataset.kind === kind)));
+    }
+    $("charKindToggle").addEventListener("click", e => {
+      const btn = e.target.closest("[data-kind]");
+      if (!btn || !director || charKindOf(director.charFields) === btn.dataset.kind) return;
+      const f = director.charFields;
+      // `palette` est la seule clé commune aux deux jeux : elle reste en place et ne doit pas
+      // être reversée, sinon elle se retrouverait deux fois dans la description compilée.
+      const before = stripPromptPadding(charFieldKeys(f)
+        .filter(k => k !== "palette").map(k => fieldText(f[k])).filter(Boolean).join(", "));
+      f.kind = btn.dataset.kind;
+      // Bascule vers un jeu de champs encore vide (cas normal : gemma n'avait rempli que
+      // l'autre) → la description déjà là est reversée dans le 1er champ du nouveau jeu,
+      // sinon régénérer la planche partirait sur un prompt vide.
+      const keys = charFieldKeys(f);
+      if (before && !keys.some(k => k !== "palette" && fieldText(f[k]))) f[keys[0]] = before;
+      renderSheetMenu("char");   // squelette de champs, étiquettes et onglets suivent
+      saveProject();
+    });
+
     function selectSubject(i) {
       if (!director || i === director.charIdx || !director.chars[i]) return;
       director.charIdx = i;
@@ -5106,7 +5149,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     function renderSheetMenu(kind) {
       const isChar = kind === "char";
       const fields = director ? (isChar ? director.charFields : director.locFields) : null;
-      if (isChar) { renderSubjectTabs(); renderCharFields(charFieldKeys(fields)); }
+      if (isChar) { renderSubjectTabs(); renderCharKind(); renderCharFields(charFieldKeys(fields)); }
       sheetSection(kind).querySelectorAll("[data-field]").forEach(input => {
         input.value = fields ? (fields[input.dataset.field] || "") : "";
         input.disabled = !fields;
