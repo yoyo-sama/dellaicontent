@@ -1330,6 +1330,27 @@
     .tpl-card[aria-pressed="true"] { border-color: var(--highlight); color: var(--highlight); }
     .tpl-card[aria-pressed="true"] .tpl-name { color: var(--text); }
 
+    /* ── Sujets multiples : onglets du menu Personnage + pastilles de l'éditeur de plans ── */
+    .subject-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .subject-tab, .subj-chip {
+      flex: 0 0 auto;
+      padding: 6px 12px;
+      border: 1px solid var(--border-light);
+      border-radius: 999px;
+      background: var(--card-2);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .subject-tab.active { border-color: var(--highlight); color: var(--highlight); }
+    .subject-tab.add { border-style: dashed; }
+    .subject-tab.del { color: var(--text-3, var(--text-2)); }
+    .subject-tab:disabled, .subj-chip:disabled { opacity: .45; cursor: not-allowed; }
+    .shot-subjects { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .shot-subjects .shot-subjects-lbl { margin: 0; }
+    .subj-chip.on { border-color: var(--highlight); color: var(--highlight); }
+
     /* ── Montage (menu + timeline) ── */
     .montage-list { display: grid; gap: 12px; margin: 12px 0; }
     .montage-clip {
@@ -1855,6 +1876,7 @@
         <section id="studioCharacter" class="studio-section">
           <h3 class="section-title">Planche personnage</h3>
           <p class="hint">Modifiez les champs puis régénérez pour créer une nouvelle variante ; cliquez une vignette pour choisir la planche active.</p>
+          <div class="subject-tabs" id="subjectTabs" hidden></div>
           <div class="sheet-layout">
             <div class="form-stack">
               <label>Visage<input type="text" data-field="face" /></label>
@@ -2241,6 +2263,10 @@
       "Planche décor": { en: "Location sheet", es: "Lámina de decorado", de: "Schauplatzbogen" },
       "Valider les planches": { en: "Validate the sheets", es: "Validar las láminas", de: "Bögen bestätigen" },
       "Planches validées ✓": { en: "Sheets validated ✓", es: "Láminas validadas ✓", de: "Bögen bestätigt ✓" },
+      // ── Sujets multiples (onglets du menu Personnage, taggage des plans) ──
+      "+ Ajouter un sujet": { en: "+ Add a subject", es: "+ Añadir un sujeto", de: "+ Motiv hinzufügen" },
+      "Retirer ce sujet": { en: "Remove this subject", es: "Quitar este sujeto", de: "Dieses Motiv entfernen" },
+      "Sujets du plan": { en: "Subjects in this shot", es: "Sujetos del plano", de: "Motive dieser Einstellung" },
       // ── Studio plein écran (coquille + menus Personnage/Décor) ──
       "Personnage": { en: "Character", es: "Personaje", de: "Figur" },
       "Décor": { en: "Location", es: "Decorado", de: "Schauplatz" },
@@ -2361,6 +2387,14 @@
       shotLabel: {
         fr: (i, n) => `Plan ${i}/${n}`, en: (i, n) => `Shot ${i}/${n}`,
         es: (i, n) => `Plano ${i}/${n}`, de: (i, n) => `Einstellung ${i}/${n}` },
+      subjectN: {
+        fr: i => `Sujet ${i}`, en: i => `Subject ${i}`,
+        es: i => `Sujeto ${i}`, de: i => `Motiv ${i}` },
+      subjectsCap: {
+        fr: n => `Sujets du plan — ${n} au maximum par plan`,
+        en: n => `Subjects in this shot — ${n} per shot at most`,
+        es: n => `Sujetos del plano — ${n} como máximo por plano`,
+        de: n => `Motive dieser Einstellung — höchstens ${n} pro Einstellung` },
       studioJobs: {
         fr: n => `${n} job(s) en cours`, en: n => `${n} job(s) running`,
         es: n => `${n} trabajo(s) en curso`, de: n => `${n} Job(s) aktiv` }
@@ -4035,28 +4069,57 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       saveProject();
     });
 
-    function compileKeyframePrompt(shot, charDesc) {
+    // `descs` = description(s) du/des sujet(s) du plan, dans l'ordre des entrées image.
+    // La branche À UN SUJET est la formulation qualifiée en rendu réel (LOT 4/7) : elle est
+    // reproduite au caractère près, ne la reformuler sous aucun prétexte. La branche à deux
+    // sujets décale le décor sur la 3e entrée image (cf. submitKeyframeJob). Qwen-Edit tourne
+    // à cfg 1 : tout est formulé POSITIVEMENT, le négatif n'est jamais encodé.
+    function compileKeyframePrompt(shot, descs) {
+      const list = (Array.isArray(descs) ? descs : [descs]).filter(Boolean);
+      const charDesc = list[0] || "";
       const cam = CAMERA_LIB[shot.camera] || CAMERA_LIB.medium;
       const light = LIGHTING_LIB[shot.lighting] || LIGHTING_LIB.golden_hour;
       const styleText = currentStyleText();
       const emotion = (shot.emotion || "").trim();
       const extra = (shot.extra || "").trim();
-      let s = "Use the first reference image only as the appearance guide for one single character, "
-        + charDesc
-        + ", and use the second reference image only as the guide for the environment. "
-        + "Create one brand-new photorealistic cinematic film still that places exactly one single "
-        + "instance of that character inside the environment of the second reference image: "
-        + shot.action + ". Frame it as " + cam.frame + ".";
-      if (emotion) s += " The character's expression and body language convey " + emotion + ".";
-      s += " " + light.text;
-      s += " The character is fully integrated into the scene, present in that location with correct "
-        + "perspective and scale. Do not place the two references side by side, do not create a "
-        + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
-        + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
-        + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
-        + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
-        + "body plan, head, surface, materials, markings, clothing if any and colors identical to the "
-        + "first reference image.";
+      let s;
+      if (list.length > 1) {
+        s = "Use the first reference image only as the appearance guide for one single character, "
+          + list[0]
+          + ", use the second reference image only as the appearance guide for one single other "
+          + "character, " + list[1]
+          + ", and use the third reference image only as the guide for the environment. "
+          + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+          + "instance of each of those two characters together inside the environment of the third "
+          + "reference image: " + shot.action + ". Frame it as " + cam.frame + ".";
+        if (emotion) s += " The characters' expressions and body language convey " + emotion + ".";
+        s += " " + light.text;
+        s += " Both characters are fully integrated into the same scene, present together in that "
+          + "location with correct perspective and scale. Do not place the references side by side, "
+          + "do not create a split screen, diptych or collage, do not show any reference sheet, "
+          + "contact sheet, grid, thumbnails, multiple poses, color swatches, panels, borders, "
+          + "margins, black frame, caption or text anywhere. The whole picture is a single unified "
+          + "live-action movie frame, one continuous scene that extends all the way to all four "
+          + "edges. Keep each character's anatomy, body plan, head, surface, materials, markings, "
+          + "clothing if any and colors identical to its own reference image.";
+      } else {
+        s = "Use the first reference image only as the appearance guide for one single character, "
+          + charDesc
+          + ", and use the second reference image only as the guide for the environment. "
+          + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+          + "instance of that character inside the environment of the second reference image: "
+          + shot.action + ". Frame it as " + cam.frame + ".";
+        if (emotion) s += " The character's expression and body language convey " + emotion + ".";
+        s += " " + light.text;
+        s += " The character is fully integrated into the scene, present in that location with correct "
+          + "perspective and scale. Do not place the two references side by side, do not create a "
+          + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
+          + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
+          + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
+          + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
+          + "body plan, head, surface, materials, markings, clothing if any and colors identical to the "
+          + "first reference image.";
+      }
       if (extra) s += " " + extra;
       if (styleText) s += " " + styleText;
       return s;
@@ -4198,16 +4261,79 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       return stripPromptPadding(LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
     }
 
+    // ── Plusieurs sujets : liste de planches personnage ────────────────────
+    // Le nœud Qwen-Edit du gabarit d'ancrage (TextEncodeQwenImageEditPlus) n'expose que
+    // trois entrées image : une keyframe porte donc AU PLUS 2 sujets, la troisième entrée
+    // étant le décor. La LISTE de planches n'est pas bornée (une série animalière peut
+    // avoir lion, zèbre et gazelle) ; c'est le taggage plan par plan qui l'est, et
+    // l'éditeur de plans refuse le 3e sujet plutôt que de laisser croire qu'il passera.
+    const MAX_SHOT_SUBJECTS = 2;
+    const newCharSlot = (fields, variants, active = 0) => ({ fields, variants, active });
+
+    // `director.chars` est la liste ; charFields/charVariants/charActive restent les noms
+    // utilisés PARTOUT ailleurs (menus, régénération, import, gate) et pointent sur le sujet
+    // en cours d'édition (`charIdx`). Accesseurs partagés par les 3 constructeurs de session
+    // (Auto/Réalisateur/restauration) plutôt que recopiés dans chaque littéral.
+    const SHEET_ACCESSORS = {
+      charFields: { get() { return this.chars[this.charIdx].fields; },
+                    set(v) { this.chars[this.charIdx].fields = v; } },
+      charVariants: { get() { return this.chars[this.charIdx].variants; } },
+      charActive: { get() { return this.chars[this.charIdx].active; },
+                    set(v) { this.chars[this.charIdx].active = v; } },
+      charName: { get() { return this.charVariants[this.charActive]?.inputName || null; } },
+      locName: { get() { return this.locVariants[this.locActive]?.inputName || null; } },
+      charDesc: { get() { return charDescFromFields(this.charFields); } },
+      locDesc: { get() { return locDescFromFields(this.locFields); } }
+    };
+    const attachSheetAccessors = d => Object.defineProperties(d, SHEET_ACCESSORS);
+
+    // Indices de sujets d'un plan : bornés à la liste courante, dédoublonnés, plafonnés, et
+    // jamais vides (un plan sans sujet n'a rien à ancrer). Un plan d'avant la fonctionnalité
+    // n'a pas de `subjects` → sujet 1, soit exactement l'ancien comportement.
+    function shotSubjectIdx(shot) {
+      const n = director?.chars?.length || 1;
+      const out = [];
+      for (const i of (Array.isArray(shot?.subjects) ? shot.subjects : [0]))
+        if (Number.isInteger(i) && i >= 0 && i < n && !out.includes(i)) out.push(i);
+      return out.length ? out.slice(0, MAX_SHOT_SUBJECTS) : [0];
+    }
+    // Sujets d'un plan résolus en {desc, name} (description compilée + ancre ComfyUI active).
+    function shotSubjects(shot) {
+      return shotSubjectIdx(shot).map(i => {
+        const c = director.chars[i];
+        return { desc: charDescFromFields(c.fields), name: c.variants[c.active]?.inputName || null };
+      });
+    }
+    // Identité personnage du prompt de cut (LTX) : les sujets du plan, dans l'ordre.
+    const shotCharDesc = shot => shotSubjects(shot).map(s => s.desc).filter(Boolean).join(". ");
+
+    // Étiquette courte d'un sujet (onglets du menu Personnage, pastilles de l'éditeur de
+    // plans) : numéro attribué par l'app + les premiers mots du 1er champ descriptif rempli.
+    function subjectLabel(i) {
+      const f = director?.chars?.[i]?.fields;
+      const head = (charFieldKeys(f).map(k => fieldText(f?.[k])).find(Boolean) || "")
+        .split(/[,;.]/)[0].trim().split(/\s+/).slice(0, 4).join(" ");
+      return head ? `${dyn("subjectN", i + 1)} · ${head}` : dyn("subjectN", i + 1);
+    }
+
     // Fiche personnage figée : OBJET de champs structurés gemma, {face,hair,outfit,accessories,
     // palette} pour un sujet humain, {subject,form,surface,details,palette} pour tout le reste
     // (éditable dans le menu Personnage du studio) ; charDescFromFields le compile en une chaîne.
     // `kind` commande aussi le gabarit de planche (buildCharsheetGraph) et les étiquettes du menu.
     // Fallback sans LLM : brief dans le 1er champ, autres vides.
-    async function characterSheetFromBrief() {
+    // `exclude` = descriptions des sujets DÉJÀ décrits (bouton « + Ajouter un sujet ») : gemma
+    // doit alors prendre le sujet suivant du brief. Le repli « brief tel quel » n'a de sens que
+    // pour le 1er sujet ; pour un sujet supplémentaire on remonte l'erreur plutôt que de
+    // fabriquer un doublon du premier.
+    async function characterSheetFromBrief(exclude = []) {
       const scene = brief.value.trim();
+      const skip = exclude.filter(Boolean);
+      const more = skip.length
+        ? ` The scene contains SEVERAL subjects. These ones are already described and must be IGNORED: ${skip.map(d => `"${d}"`).join("; ")}. Take the most prominent subject that is NOT one of those.`
+        : "";
       try {
         const out = await gemmaJSON(
-          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. If kind is "human", answer ONLY with JSON {"kind":"human","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.`,
+          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. If kind is "human", answer ONLY with JSON {"kind":"human","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.${more}`,
           scene);
         // Le squelette se décide sur les champs que gemma a REMPLIS, pas sur l'étiquette
         // `kind` qu'il annonce : il décrit régulièrement un lion dans {subject, form, surface}
@@ -4228,6 +4354,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         if (filledCount(charFieldKeys(fields))) { addEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
         throw new Error("aucun champ descriptif rempli");
       } catch (e) {
+        if (skip.length) throw new Error(`fiche du sujet supplémentaire indisponible (${e.message})`);
         addEvent("WARN", `Fiche personnage LLM indisponible (${e.message}) — brief utilisé tel quel.`, "warn");
         return { face: scene, hair: "", outfit: "", accessories: "", palette: "" };
       }
@@ -4528,11 +4655,27 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const up = await reupload(file);
       return { ...up, file };
     }
-    async function submitKeyframeJob(anchorRaw, shot, charDesc, negText, charName, locName, seed, width, height, idx, n) {
+    // 3e entrée image du nœud Qwen-Edit (image3, optionnelle) : ajoutée À LA VOLÉE pour un
+    // plan à deux sujets, le gabarit `qwen_edit_dual.json` qualifié à un sujet reste intouché
+    // (une entrée LoadImage de plus dans le fichier voudrait un nom d'image à chaque rendu).
+    // Piège n°10 : seule image1 alimente VAEEncode (géométrie de départ = 1er sujet) ;
+    // image2/image3 ne font que du conditioning.
+    function addKeyframeThirdRef(g, imageName) {
+      g["sbv2:ref3"] = { class_type: "LoadImage", inputs: { image: imageName } };
+      g["sbv2:ref3s"] = { class_type: "FluxKontextImageScale", inputs: { image: ["sbv2:ref3", 0] } };
+      for (const node of Object.values(g))
+        if (node.class_type === "TextEncodeQwenImageEditPlus") node.inputs.image3 = ["sbv2:ref3s", 0];
+    }
+    // `subjects` = [{desc, name}] du plan (1 ou 2). À un sujet : image1 = planche perso,
+    // image2 = décor — exactement l'ancien câblage. À deux : image1/image2 = les deux
+    // planches perso, le décor passe sur image3.
+    async function submitKeyframeJob(anchorRaw, shot, subjects, negText, locName, seed, width, height, idx, n) {
+      const refs = (Array.isArray(subjects) ? subjects : [subjects]).filter(Boolean);
       const g = buildGraph(anchorRaw, {
-        prompt: compileKeyframePrompt(shot, charDesc), negative: negText,
-        seed, image: charName, image2: locName, width, height, batch: 1
+        prompt: compileKeyframePrompt(shot, refs.map(r => r.desc)), negative: negText,
+        seed, image: refs[0]?.name, image2: refs[1] ? refs[1].name : locName, width, height, batch: 1
       });
+      if (refs[1]) addKeyframeThirdRef(g, locName);
       for (const node of Object.values(g))
         if (node.class_type === "SaveImage") node.inputs.filename_prefix = `studio/story/key_${String(idx + 1).padStart(2, "0")}`;
       return submitGraph(g, `Storyboard · keyframe ${idx + 1}/${n}`, `Qwen-Edit ancré · seed ${seed}`);
@@ -4589,7 +4732,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const anchorRaw = await getTemplate(wf.anchor);
       const keyIds = [];
       for (let i = 0; i < n; i++)
-        keyIds.push(await submitKeyframeJob(anchorRaw, shots[i], charDesc, negText, charName, locName, seed + 11 + i, width, height, i, n));
+        keyIds.push(await submitKeyframeJob(anchorRaw, shots[i], [{ desc: charDesc, name: charName }], negText, locName, seed + 11 + i, width, height, i, n));
       const keyEntries = await waitForJobs(keyIds);
       const keys = [];
       for (const id of keyIds) keys.push(await reupload(outputFiles(keyEntries[id], ".png")[0]));
@@ -4823,19 +4966,19 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         sheetTemplate: $("sheetTemplateSelect").value,  // gabarit de planche figé de même
         cutPlan: null, cuts: null, order: null, animatic: null,  // état Montage
         // Fiches structurées éditables (menus Personnage/Décor) + historiques de variantes.
-        charFields, locFields,
-        charVariants: [{ file: null, inputName: null, seed: csSeed, source: "generated",
-                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }],
+        // `chars` = liste de sujets (un seul à l'ouverture, « + Ajouter un sujet » en ajoute) ;
+        // `charIdx` = celui qu'édite le menu Personnage.
+        locFields,
+        chars: [newCharSlot(charFields, [{ file: null, inputName: null, seed: csSeed, source: "generated",
+                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }])],
+        charIdx: 0,
         locVariants: [{ file: null, inputName: null, seed: lsSeed, source: "generated",
                         prompt: locDescFromFields(locFields), status: "pending", blob: null, url: null }],
-        charActive: 0, locActive: 0, validated: false,
-        // Compat directorStep2/3 + regenerateKeyframe : mêmes noms qu'avant, recalculés
-        // depuis la variante active / les champs édités.
-        get charName() { return this.charVariants[this.charActive]?.inputName || null; },
-        get locName() { return this.locVariants[this.locActive]?.inputName || null; },
-        get charDesc() { return charDescFromFields(this.charFields); },
-        get locDesc() { return locDescFromFields(this.locFields); }
+        locActive: 0, validated: false
       };
+      // Compat directorStep2/3 + regenerateKeyframe : charFields/charVariants/charActive/
+      // charName/charDesc gardent leurs noms et pointent sur le sujet en cours d'édition.
+      attachSheetAccessors(director);
       updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
@@ -4878,17 +5021,15 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       director = {
         pipeline: "reference2video",
         seed, width, height, wf, negText, duration, turboOn, loraName,
-        charFields, locFields,
-        charVariants: [{ file: null, inputName: null, seed: csSeed, source: "generated",
-                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }],
+        locFields,
+        chars: [newCharSlot(charFields, [{ file: null, inputName: null, seed: csSeed, source: "generated",
+                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }])],
+        charIdx: 0,
         locVariants: [{ file: null, inputName: null, seed: lsSeed, source: "generated",
                         prompt: locDescFromFields(locFields), status: "pending", blob: null, url: null }],
-        charActive: 0, locActive: 0, validated: false,
-        get charName() { return this.charVariants[this.charActive]?.inputName || null; },
-        get locName() { return this.locVariants[this.locActive]?.inputName || null; },
-        get charDesc() { return charDescFromFields(this.charFields); },
-        get locDesc() { return locDescFromFields(this.locFields); }
+        locActive: 0, validated: false
       };
+      attachSheetAccessors(director);
       updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
@@ -4914,16 +5055,19 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       variant.blob = uploaded.blob;
       variant.url = URL.createObjectURL(uploaded.blob);
       variant.status = "ready";
-      const arr = kind === "char" ? director?.charVariants : director?.locVariants;
+      // Le job résolu peut appartenir à un sujet que le menu n'affiche pas : on cherche la
+      // variante dans TOUS les sujets, sinon une planche de sujet 2 resterait « Génération… ».
+      const arr = kind === "char" ? director?.chars?.flatMap(c => c.variants) : director?.locVariants;
       if (!arr || !arr.includes(variant)) return; // session remplacée entre-temps
       refreshSheetUI(kind);
       saveProject();
     }
 
-    // Prêt = la variante ACTIVE de chaque planche est prête (générée ou importée).
+    // Prêt = la planche ACTIVE de CHAQUE sujet + celle du décor (une keyframe à deux sujets
+    // ne peut pas partir si la 2e planche n'est pas rendue).
     function anchorsReady() {
       return !!director
-        && director.charVariants[director.charActive]?.status === "ready"
+        && director.chars.every(c => c.variants[c.active]?.status === "ready")
         && director.locVariants[director.locActive]?.status === "ready";
     }
 
@@ -4957,10 +5101,90 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       translateTree(stack);
     }
 
+    // ── Sujets multiples : onglets du menu Personnage ─────────────────────
+    // Le menu Personnage édite UN sujet à la fois (`director.charIdx`) ; les onglets
+    // choisissent lequel, ajoutent un sujet ou retirent celui affiché. Réservé au
+    // storyboard_v2 : reference2video n'a qu'un couple personnage/décor.
+    function renderSubjectTabs() {
+      const wrap = $("subjectTabs");
+      wrap.hidden = !director || director.pipeline !== "storyboard_v2";
+      if (wrap.hidden) return;
+      const busy = director.chars.some(c => c.variants.some(v => v.status === "pending"));
+      wrap.innerHTML = "";
+      const tab = (cls, text, onClick, disabled) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "subject-tab" + cls;
+        b.textContent = text;
+        b.disabled = !!disabled;
+        b.addEventListener("click", onClick);
+        wrap.appendChild(b);
+      };
+      director.chars.forEach((c, i) =>
+        tab(i === director.charIdx ? " active" : "", subjectLabel(i), () => selectSubject(i)));
+      tab(" add", tr("+ Ajouter un sujet"), addSubject, busy);
+      if (director.chars.length > 1)
+        tab(" del", tr("Retirer ce sujet"), () => removeSubject(director.charIdx), busy);
+    }
+
+    function selectSubject(i) {
+      if (!director || i === director.charIdx || !director.chars[i]) return;
+      director.charIdx = i;
+      renderSheetMenu("char");
+      saveProject();
+    }
+
+    // Nouveau sujet : gemma décrit le sujet suivant du brief (en excluant ceux déjà décrits),
+    // puis sa planche part en génération comme la première. La liste de plans N'EST PAS
+    // regénérée (elle porte les éditions de l'utilisateur) : le taggage des plans est manuel.
+    async function addSubject() {
+      if (!director || director.pipeline !== "storyboard_v2") return;
+      addEvent("REQ", `Sujet supplémentaire : fiche via ${OLLAMA_MODEL}…`, "req");
+      let fields;
+      try { fields = await characterSheetFromBrief(director.chars.map(c => charDescFromFields(c.fields))); }
+      catch (err) { addEvent("WARN", err.message, "warn"); return; }
+      const seed = director.seed + 211 + director.chars.length;
+      const variant = { file: null, inputName: null, seed, source: "generated",
+                        prompt: charDescFromFields(fields), status: "pending", blob: null, url: null };
+      director.chars.push(newCharSlot(fields, [variant]));
+      director.charIdx = director.chars.length - 1;
+      director.validated = false;   // une planche de plus à valider avant les keyframes
+      renderSheetMenu("char");
+      refreshSheetUI("char");
+      renderShotDNAList();          // les pastilles de taggage apparaissent dès le 2e sujet
+      saveProject();
+      try {
+        await resolveVariantJob("char", variant,
+          await submitCharsheetJob(fields, director.negText, seed, director.width, director.height, director.wf));
+      } catch (err) {
+        variant.status = "error";
+        refreshSheetUI("char");
+        addEvent("WARN", err.message, "warn");
+        saveProject();
+      }
+    }
+
+    // Retrait d'un sujet : les plans le désignent PAR INDICE, il faut donc décaler les leurs
+    // (calculé avant le splice). Un plan qui n'aurait plus aucun sujet retombe sur le sujet 1.
+    function removeSubject(i) {
+      if (!director || director.chars.length < 2 || !director.chars[i]) return;
+      if (director.chars.some(c => c.variants.some(v => v.status === "pending"))) return;
+      const shots = director.shots || [];
+      const remap = shots.map(shot => shotSubjectIdx(shot).filter(x => x !== i).map(x => (x > i ? x - 1 : x)));
+      director.chars.splice(i, 1);
+      shots.forEach((shot, k) => { shot.subjects = remap[k].length ? remap[k] : [0]; });
+      director.charIdx = Math.min(director.charIdx, director.chars.length - 1);
+      director.validated = false;
+      renderSheetMenu("char");
+      refreshSheetUI("char");
+      renderShotDNAList();
+      saveProject();
+    }
+
     function renderSheetMenu(kind) {
       const isChar = kind === "char";
       const fields = director ? (isChar ? director.charFields : director.locFields) : null;
-      if (isChar) renderCharFields(charFieldKeys(fields));
+      if (isChar) { renderSubjectTabs(); renderCharFields(charFieldKeys(fields)); }
       sheetSection(kind).querySelectorAll("[data-field]").forEach(input => {
         input.value = fields ? (fields[input.dataset.field] || "") : "";
         input.disabled = !fields;
@@ -5081,6 +5305,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const input = e.target.closest("[data-field]");
         if (!input || !director) return;
         (isChar ? director.charFields : director.locFields)[input.dataset.field] = input.value.trim();
+        // L'étiquette d'un sujet est tirée de son 1er champ rempli : onglets et pastilles
+        // de plan la suivent (édition validée au blur, jamais à la frappe).
+        if (isChar && director.chars.length > 1) { renderSubjectTabs(); renderShotDNAList(); }
       });
       section.querySelector(".sheet-regen").addEventListener("click", () => regenerateSheet(kind));
       const fileInput = section.querySelector(".sheet-import-input");
@@ -5146,7 +5373,43 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       return Object.entries(lib)
         .map(([id, v]) => `<option value="${id}"${id === selected ? " selected" : ""}>${tr(v.label)}</option>`).join("");
     }
+    // Taggage des sujets d'un plan : une pastille par sujet, allumée = présent dans le plan.
+    // Le plafond (MAX_SHOT_SUBJECTS) vient des entrées image du nœud Qwen-Edit, décor compris :
+    // au-delà, les pastilles éteintes sont DÉSACTIVÉES avec la raison affichée, plutôt que de
+    // laisser cliquer un 3e sujet qui ne serait jamais envoyé au graphe.
+    function renderShotSubjects(item, shot) {
+      if (!director || director.chars.length < 2) return;
+      const sel = shotSubjectIdx(shot);
+      const full = sel.length >= MAX_SHOT_SUBJECTS;
+      const row = document.createElement("div");
+      row.className = "shot-subjects";
+      const lbl = document.createElement("p");
+      lbl.className = "hint shot-subjects-lbl";
+      lbl.textContent = full ? dyn("subjectsCap", MAX_SHOT_SUBJECTS) : tr("Sujets du plan");
+      row.appendChild(lbl);
+      director.chars.forEach((c, si) => {
+        const on = sel.includes(si);
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "subj-chip" + (on ? " on" : "");
+        chip.textContent = subjectLabel(si);
+        // Seul le 3e sujet est GRISÉ (il ne passerait pas dans le graphe). La pastille
+        // allumée d'un plan à un seul sujet reste allumée — la griser la ferait lire comme
+        // « pas dans le plan » alors qu'elle y est —, son clic ne fait simplement rien.
+        chip.disabled = !on && full;
+        chip.addEventListener("click", () => {
+          if (on && sel.length === 1) return;   // un plan garde au moins un sujet
+          shot.subjects = on ? sel.filter(x => x !== si) : [...sel, si];
+          renderShotDNAList();
+          saveProject();
+        });
+        row.appendChild(chip);
+      });
+      item.insertBefore(row, item.children[1]);
+    }
+
     function renderShotDNAList() {
+      if (!director?.shots) return;   // session reference2video : pas de liste de plans
       const list = $("shotEditList");
       list.innerHTML = "";
       director.shots.forEach((shot, i) => {
@@ -5165,6 +5428,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
           <label><span class="lbl-extra"></span><input type="text" data-field="extra" /></label>
           <p class="hint lbl-durhint"></p>`;
         item.querySelector("strong").textContent = dyn("shotLabel", i + 1, director.n);
+        renderShotSubjects(item, shot);
         item.querySelector(".lbl-cam").textContent = tr("Caméra");
         item.querySelector(".lbl-light").textContent = tr("Lumière");
         item.querySelector(".lbl-action").textContent = tr("Action");
@@ -5216,8 +5480,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const seed = director.seed + 11 + i;
         director.keyframes[i].seed = seed;
         renderKeyframeCard(i);
-        ids.push(await submitKeyframeJob(director.anchorRaw, director.shots[i], director.charDesc, director.negText,
-          director.charName, director.locName, seed, director.width, director.height, i, director.n));
+        ids.push(await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
+          director.locName, seed, director.width, director.height, i, director.n));
       }
       await Promise.all(ids.map((id, i) => trackKeyframeCompletion(i, id)));
     }
@@ -5276,8 +5540,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       renderKeyframeCard(i);
       updateLaunchButtonState();
       try {
-        const promptId = await submitKeyframeJob(director.anchorRaw, director.shots[i], director.charDesc, director.negText,
-          director.charName, director.locName, kf.seed, director.width, director.height, i, director.n);
+        const promptId = await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
+          director.locName, kf.seed, director.width, director.height, i, director.n);
         await trackKeyframeCompletion(i, promptId);
       } catch (err) {
         kf.status = "error";
@@ -5326,7 +5590,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     async function generateCuts() {
       if (!director || !keyframesAllReady()) return;
       $("directorLaunchBtn").disabled = true;
-      const { negText, seed, charDesc, locDesc } = director;
+      const { negText, seed, locDesc } = director;
       try {
         addEvent("REQ", "Montage : grille + cuts i2v (1 par plan)…", "req");
         await submitGridJob(director.keyframes); // fire-and-forget (non attendu)
@@ -5337,14 +5601,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         director.order = plan.map((_, k) => k);
         const ids = [];
         for (let k = 0; k < plan.length; k++)
-          ids.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, charDesc, locDesc, negText,
+          ids.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, shotCharDesc(plan[k].shot), locDesc, negText,
             seed + 31 + k, k, plan.length, plan[k].duration, plan[k].holdMotion));
         const entries = await waitForJobs(ids);
         for (let k = 0; k < ids.length; k++) {
           const f = outputFiles(entries[ids[k]], ".mp4")[0];
           const up = await reupload(f);
           director.cuts[k] = { file: f, inputName: up.name, seed: seed + 31 + k, duration: plan[k].duration,
-            status: "ready", prompt: compileCutPrompt(plan[k].shot, charDesc, locDesc, plan[k].holdMotion) };
+            status: "ready", prompt: compileCutPrompt(plan[k].shot, shotCharDesc(plan[k].shot), locDesc, plan[k].holdMotion) };
         }
         addEvent("OK", `${plan.length} cuts générés — réordonnez puis assemblez.`, "ok");
       } catch (err) { addEvent("WARN", err.message, "warn"); }
@@ -5362,13 +5626,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       renderMontage(); renderFooterTimeline(); updateMontageButtons();
       try {
         const i2vRaw = await getTemplate("api/ltx25_i2v.json");
-        const id = await submitCutJob(i2vRaw, p.keyObj, p.shot, director.charDesc, director.locDesc, director.negText,
+        const id = await submitCutJob(i2vRaw, p.keyObj, p.shot, shotCharDesc(p.shot), director.locDesc, director.negText,
           cut.seed, k, director.cutPlan.length, cut.duration, p.holdMotion);
         const entry = (await waitForJobs([id]))[id];
         const f = outputFiles(entry, ".mp4")[0];
         const up = await reupload(f);
         cut.file = f; cut.inputName = up.name; cut.status = "ready";
-        cut.prompt = compileCutPrompt(p.shot, director.charDesc, director.locDesc, p.holdMotion);
+        cut.prompt = compileCutPrompt(p.shot, shotCharDesc(p.shot), director.locDesc, p.holdMotion);
       } catch (err) { cut.status = "error"; addEvent("WARN", err.message, "warn"); }
       renderMontage(); renderFooterTimeline(); updateMontageButtons();
       saveProject();
@@ -5528,8 +5792,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         seed: director.seed, width: director.width, height: director.height,
         n: director.n, segDur: director.segDur, holdDur: director.holdDur,
         withAudio: director.withAudio, validated: director.validated,
-        charFields: director.charFields, locFields: director.locFields,
-        charVariants: director.charVariants, charActive: director.charActive,
+        locFields: director.locFields,
+        chars: director.chars, charIdx: director.charIdx,
         locVariants: director.locVariants, locActive: director.locActive,
         shots: director.shots, keyframes: director.keyframes,
         cuts: director.cuts, order: director.order, animatic: director.animatic
@@ -5614,17 +5878,19 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         withAudio: !!p.withAudio, n: p.n, segDur: p.segDur, holdDur: p.holdDur,
         shots: p.shots, style: p.style, sheetTemplate: $("sheetTemplateSelect").value,
         validated: !!p.validated,
-        charFields: p.charFields, locFields: p.locFields,
-        charVariants: (p.charVariants || []).map(revive), charActive: p.charActive ?? 0,
+        locFields: p.locFields,
+        // Projet d'avant les sujets multiples : charFields/charVariants/charActive à plat
+        // → un seul sujet, soit exactement ce qu'il contenait.
+        chars: (p.chars || [{ fields: p.charFields, variants: p.charVariants, active: p.charActive }])
+          .map(c => newCharSlot(c.fields, (c.variants || []).map(revive), c.active ?? 0)),
+        charIdx: 0,
         locVariants: (p.locVariants || []).map(revive), locActive: p.locActive ?? 0,
         keyframes: p.keyframes ? p.keyframes.map(revive) : null,
         cutPlan: null, cuts: p.cuts ? p.cuts.map(revive) : null,
-        order: p.order || null, animatic: p.animatic || null,
-        get charName() { return this.charVariants[this.charActive]?.inputName || null; },
-        get locName() { return this.locVariants[this.locActive]?.inputName || null; },
-        get charDesc() { return charDescFromFields(this.charFields); },
-        get locDesc() { return locDescFromFields(this.locFields); }
+        order: p.order || null, animatic: p.animatic || null
       };
+      attachSheetAccessors(director);
+      director.charIdx = Math.min(Math.max(0, p.charIdx ?? 0), director.chars.length - 1);
       if (director.keyframes) {
         director.anchorRaw = await getTemplate(wf.anchor); // régénérations possibles d'emblée
         if (director.cuts) director.cutPlan = buildCutPlan();
@@ -5642,17 +5908,20 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       addEvent("OK", `Projet restauré (sauvé le ${p.savedAt}) — re-résolution des fichiers…`, "ok");
       // Re-résolutions async : try/catch PAR ITEM, jamais bloquant (pattern preloadGallery).
       const tasks = [];
-      for (const kind of ["char", "loc"]) {
-        const arr = kind === "char" ? director.charVariants : director.locVariants;
-        const v = arr[kind === "char" ? director.charActive : director.locActive];
-        if (v?.status === "ready" && v.file) tasks.push((async () => {
+      // Chaque sujet a sa propre planche active à re-résoudre, pas seulement celui affiché :
+      // une keyframe à deux sujets a besoin des deux ancres.
+      const reresolveActive = (v, kind) => {
+        if (v?.status !== "ready" || !v.file) return;
+        tasks.push((async () => {
           try {
             const r = await resolveFileRef(v.file);
             v.inputName = r.name; v.blob = r.blob; v.url = r.url;
           } catch { v.status = "missing"; }
           refreshSheetUI(kind);
         })());
-      }
+      };
+      director.chars.forEach(c => reresolveActive(c.variants[c.active], "char"));
+      reresolveActive(director.locVariants[director.locActive], "loc");
       (director.keyframes || []).forEach((kf, i) => {
         if (kf.status !== "ready" || !kf.file) { return; }
         tasks.push((async () => {
@@ -5677,7 +5946,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       })());
       await Promise.allSettled(tasks);
       renderMontage(); renderFooterTimeline(); updateMontageButtons(); updateGateState();
-      const missing = [...(director.charVariants || []), ...(director.locVariants || []),
+      const missing = [...director.chars.flatMap(c => c.variants), ...(director.locVariants || []),
         ...(director.keyframes || []), ...(director.cuts || [])].filter(x => x?.status === "missing").length;
       addEvent(missing ? "WARN" : "OK",
         missing ? `Projet restauré : ${missing} fichier(s) manquant(s) — régénérez-les.` : "Projet restauré : tous les fichiers re-résolus.",
