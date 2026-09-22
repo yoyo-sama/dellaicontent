@@ -810,6 +810,8 @@
     .shot-edit-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
     .shot-edit-body:has(.shot-kf > *) { grid-template-columns: minmax(0, 1fr) auto; }
     .shot-edit-fields { display: grid; gap: 8px; min-width: 0; }
+    /* Le bouton d'enrichissement de l'action se range sous son champ, à sa largeur de texte. */
+    .shot-action-btn { justify-self: start; padding: 5px 10px; font-size: .78rem; margin-top: -2px; }
     .shot-kf { width: 280px; }
     .shot-kf:empty { display: none; }
     /* Le titre de la carte répéterait celui du plan juste à côté : seul le statut reste. */
@@ -2437,7 +2439,6 @@
       // ── Sujets multiples (onglets du menu Personnage, taggage des plans) ──
       "+ Ajouter un sujet": { en: "+ Add a subject", es: "+ Añadir un sujeto", de: "+ Motiv hinzufügen" },
       "Retirer ce sujet": { en: "Remove this subject", es: "Quitar este sujeto", de: "Dieses Motiv entfernen" },
-      "Sujets du plan": { en: "Subjects in this shot", es: "Sujetos del plano", de: "Motive dieser Einstellung" },
       "Type de sujet": { en: "Subject type", es: "Tipo de sujeto", de: "Motivart" },
       "Humain": { en: "Human", es: "Humano", de: "Mensch" },
       "Autre (animal, créature, robot, objet…)":
@@ -2457,6 +2458,11 @@
           es: "Edite los campos y regenere para crear una nueva variante; haga clic en una miniatura para elegir la lámina activa.",
           de: "Felder bearbeiten und neu generieren, um eine neue Variante zu erzeugen; auf eine Miniatur klicken, um den aktiven Bogen zu wählen." },
       "🔄 Régénérer la planche": { en: "🔄 Regenerate the sheet", es: "🔄 Regenerar la lámina", de: "🔄 Bogen neu generieren" },
+      "Générer la planche": { en: "Generate the sheet", es: "Generar la lámina", de: "Bogen generieren" },
+      "Aucune planche : décrivez le sujet (ou ✎ Prompt) puis générez.":
+        { en: "No sheet yet: describe the subject (or ✎ Prompt), then generate.",
+          es: "Sin lámina: describa el sujeto (o ✎ Prompt) y luego genere.",
+          de: "Noch kein Bogen: Motiv beschreiben (oder ✎ Prompt) und dann generieren." },
       "📥 Importer une image": { en: "📥 Import an image", es: "📥 Importar una imagen", de: "📥 Bild importieren" },
       "Visage": { en: "Face", es: "Rostro", de: "Gesicht" },
       "Cheveux": { en: "Hair", es: "Cabello", de: "Haar" },
@@ -2534,10 +2540,17 @@
       "↩ Prompt d'origine": { en: "↩ Original prompt", es: "↩ Prompt original", de: "↩ Ursprünglicher Prompt" },
       "Annuler": { en: "Cancel", es: "Cancelar", de: "Abbrechen" },
       "Appliquer et régénérer": { en: "Apply and regenerate", es: "Aplicar y regenerar", de: "Übernehmen und neu generieren" },
+      "Appliquer au plan": { en: "Apply to the shot", es: "Aplicar al plano", de: "Auf die Einstellung anwenden" },
       "Enrichissement…": { en: "Enriching…", es: "Enriqueciendo…", de: "Anreicherung…" },
       "Prompt de la planche personnage": { en: "Character sheet prompt", es: "Prompt de la lámina de personaje", de: "Prompt des Charakterbogens" },
       "Prompt de la planche décor": { en: "Location sheet prompt", es: "Prompt de la lámina de decorado", de: "Prompt des Kulissenbogens" },
       "Prompt de la keyframe": { en: "Keyframe prompt", es: "Prompt del fotograma clave", de: "Keyframe-Prompt" },
+      "✎ Prompt de l'action": { en: "✎ Action prompt", es: "✎ Prompt de la acción", de: "✎ Aktions-Prompt" },
+      "Prompt de l'action du plan": { en: "Shot action prompt", es: "Prompt de la acción del plano", de: "Aktions-Prompt der Einstellung" },
+      "Ce texte décrit ce qui se passe dans le plan. Il est repris tel quel dans la keyframe puis dans le cut ; le cadrage, la lumière et le style sont ajoutés par l'app.":
+        { en: "This text describes what happens in the shot. It is carried as is into the keyframe then into the cut; framing, lighting and style are added by the app.",
+          es: "Este texto describe lo que ocurre en el plano. Se traslada tal cual al fotograma clave y luego al corte; el encuadre, la luz y el estilo los añade la app.",
+          de: "Dieser Text beschreibt, was in der Einstellung geschieht. Er wird unverändert in den Keyframe und dann in den Cut übernommen; Bildausschnitt, Licht und Stil ergänzt die App." },
       "Prompt du cut": { en: "Cut prompt", es: "Prompt del corte", de: "Cut-Prompt" },
       "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement.":
         { en: "Krea 2 encodes no negative prompt: phrase every constraint positively.",
@@ -2633,6 +2646,11 @@
       subjectN: {
         fr: i => `Sujet ${i}`, en: i => `Subject ${i}`,
         es: i => `Sujeto ${i}`, de: i => `Motiv ${i}` },
+      subjectsPick: {
+        fr: n => `Sujets du plan — cliquez pour en ancrer jusqu'à ${n}`,
+        en: n => `Subjects in this shot — click to anchor up to ${n}`,
+        es: n => `Sujetos del plano — haga clic para anclar hasta ${n}`,
+        de: n => `Motive dieser Einstellung — bis zu ${n} per Klick verankern` },
       subjectsCap: {
         fr: n => `Sujets du plan — ${n} au maximum par plan`,
         en: n => `Subjects in this shot — ${n} per shot at most`,
@@ -3056,6 +3074,9 @@
       $("promptModalTitle").textContent = tr(cfg.title);
       $("promptModalHint").textContent = tr(cfg.hint || "");
       $("promptModalText").value = cfg.text || "";
+      // Le bouton d'application dit ce qu'il fait : l'éditeur du champ Action d'un plan écrit
+      // dans le plan, il ne relance aucun rendu (il n'y a parfois même pas encore de keyframe).
+      $("promptModalApply").textContent = tr(cfg.applyLabel || "Appliquer et régénérer");
       $("promptModalEnrich").disabled = false;
       $("promptModal").hidden = false;
       translateTree($("promptModal"));
@@ -3513,7 +3534,10 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // rôles d'images explicites, pas de remplissage, longueur bornée), plus nos deux pièges
     // maison : cfg 1 donc aucun négatif encodé (tout est formulé positivement) et interdiction
     // du vocabulaire « storyboard/keyframe/planche » qui fait dessiner une planche annotée.
-    const QWEN_EDIT_ENRICH_SYSTEM = `You are an image-edit instruction architect for Qwen-Image-Edit-2509, an editing model that composes one new cinematic film still out of reference images.
+    // `nSubjects` : un plan à deux sujets a DEUX phrases de rôle personnage (1re et 2e image de
+    // référence) plus celle du décor (3e). gemma en perd une sans cette consigne explicite, et
+    // le 2e personnage disparaît du rendu sans qu'aucun statut ne le signale (piège n°14).
+    const QWEN_EDIT_ENRICH_SYSTEM = nSubjects => `You are an image-edit instruction architect for Qwen-Image-Edit-2509, an editing model that composes one new cinematic film still out of reference images.
 Rewrite the user's instruction into ONE precise English edit instruction.
 Rules:
 - Qwen-Image-Edit-2509 must be told WHAT TO CHANGE and WHAT TO PRESERVE. Never turn a local edit into a global restyle.
@@ -3525,6 +3549,9 @@ Rules:
 - Enrich only the moment itself: action, expression, framing, lighting, materials, texture, atmosphere.
 - Under 120 words. Every phrase must add visual information; delete filler.
 - Never write "masterpiece", "best quality", "8k", "ultra detailed" or "award winning".
+${nSubjects > 1
+  ? `- This shot has TWO characters. The instruction assigns the FIRST reference image to one character, the SECOND reference image to the other character, and the THIRD reference image to the environment: keep all THREE of those role sentences, each with its own image number, and keep both characters acting together in the same scene.`
+  : `- This shot has ONE character. The instruction assigns the FIRST reference image to that character and the SECOND reference image to the environment: keep both of those role sentences, each with its own image number.`}
 Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Filet déterministe : gemma4:e4b n'honore PAS de façon fiable une interdiction de
@@ -3824,13 +3851,21 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const stripped = stripKeyframeAnchor(editedText);
       let txt = "";
       try {
-        const out = await gemmaJSON(QWEN_EDIT_ENRICH_SYSTEM, stripped);
+        const out = await gemmaJSON(QWEN_EDIT_ENRICH_SYSTEM(dual ? 2 : 1), stripped);
         txt = fieldText(out.prompt || out.Rewritten || out.rewritten || out.positive_prompt);
       } catch (err) {
         addEvent("WARN", `Enrichissement Qwen-Edit indisponible (${err.message}) — prompt édité conservé.`, "warn");
         return stripped + " " + anchorBlock;
       }
-      if (!txt || txt.length < 20 || !/reference image/i.test(txt)) {
+      // Filet n°1, élargi au plan à deux sujets : il lui faut TROIS phrases de rôle (1er
+      // personnage, 2e personnage, décor). gemma en fond régulièrement deux en une, ce qui
+      // fait disparaître un personnage du rendu — on garde alors le texte édité tel quel.
+      const roles = (txt.match(/(first|second|third) reference image/gi) || [])
+        .map(m => m.split(" ")[0].toLowerCase());
+      const missingRole = dual
+        ? !(roles.includes("first") && roles.includes("second") && roles.includes("third"))
+        : !/reference image/i.test(txt);
+      if (!txt || txt.length < 20 || missingRole) {
         addEvent("WARN", "Enrichissement Qwen-Edit écarté : les rôles des images de référence avaient disparu de la sortie de gemma.", "warn");
         return stripped + " " + anchorBlock;
       }
@@ -3849,6 +3884,32 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         return stripPromptPadding(txt);
       } catch (err) {
         addEvent("WARN", `Enrichissement Krea 2 indisponible (${err.message}) — prompt édité conservé.`, "warn");
+        return editedText;
+      }
+    }
+
+    // Consigne d'enrichissement du champ « Action » d'un plan. Ce champ n'est PAS un prompt de
+    // moteur : il est réinjecté tel quel dans le prompt de keyframe (compileKeyframePrompt) et
+    // dans celui du cut (compileCutPrompt), qui apposent eux-mêmes caméra, lumière, style et
+    // ancrage. gemma ne doit donc y toucher qu'au moment décrit — d'où l'interdiction de
+    // cadrage/lumière/couleur, sinon la même information arrive deux fois et se contredit.
+    // `descs` = descriptions des sujets TAGGÉS sur ce plan : à deux sujets, les deux doivent
+    // agir dans la phrase, sans que leur description y soit recopiée (le prompt de keyframe
+    // la porte déjà).
+    const SHOT_ACTION_ENRICH_SYSTEM = descs => `You are a storyboard cinematographer. Rewrite the user's shot action into ONE English sentence of 12 to 25 words describing ONLY what happens in this single shot: what the subjects do, and with what body language. STRICT RULES: keep the same moment, the same place and the same intent; invent no new character and no new object; ${
+      descs.length > 1
+        ? `this shot has EXACTLY TWO subjects and BOTH must act in the sentence, together in the same place: (1) ${descs[0]}; (2) ${descs[1]}`
+        : `this shot has EXACTLY ONE subject and it is the only character present: ${descs[0] || "the main subject of the scene"}`}; name each subject in two or three plain words, never copy its full description into the sentence; describe no camera angle, no shot size, no lens, no lighting and no color, they are set elsewhere; use ONLY positive phrasing (never "no", "without", "avoid"); never write "storyboard", "keyframe", "panel", "frame", "masterpiece", "best quality", "8k" or "ultra detailed". Answer ONLY with JSON: {"action": "..."}`;
+
+    async function enrichShotAction(editedText, descs) {
+      try {
+        const out = await gemmaJSON(SHOT_ACTION_ENRICH_SYSTEM(descs), editedText);
+        const txt = fieldText(out.action || out.prompt);
+        if (!txt || txt.length < 10) return editedText;
+        addEvent("OK", `Action de plan enrichie par ${OLLAMA_MODEL} (${descs.length} sujet(s) pris en compte).`, "ok");
+        return stripPromptPadding(txt);
+      } catch (err) {
+        addEvent("WARN", `Enrichissement de l'action indisponible (${err.message}) — texte conservé.`, "warn");
         return editedText;
       }
     }
@@ -4861,19 +4922,15 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // (éditable dans le menu Personnage du studio) ; charDescFromFields le compile en une chaîne.
     // `kind` commande aussi le gabarit de planche (buildCharsheetGraph) et les étiquettes du menu.
     // Fallback sans LLM : brief dans le 1er champ, autres vides.
-    // `exclude` = descriptions des sujets DÉJÀ décrits (bouton « + Ajouter un sujet ») : gemma
-    // doit alors prendre le sujet suivant du brief. Le repli « brief tel quel » n'a de sens que
-    // pour le 1er sujet ; pour un sujet supplémentaire on remonte l'erreur plutôt que de
-    // fabriquer un doublon du premier.
-    async function characterSheetFromBrief(exclude = []) {
+    // Un seul appelant, l'ouverture de session : c'est le sujet PRINCIPAL du brief. Les sujets
+    // supplémentaires ne passent plus par gemma (« + Ajouter un sujet » pose un emplacement vide
+    // que l'utilisateur décrit lui-même), parce que sur un brief à un seul sujet gemma en
+    // inventait un second, humain par défaut.
+    async function characterSheetFromBrief() {
       const scene = brief.value.trim();
-      const skip = exclude.filter(Boolean);
-      const more = skip.length
-        ? ` The scene contains SEVERAL subjects. These ones are already described and must be IGNORED: ${skip.map(d => `"${d}"`).join("; ")}. Take the most prominent subject that is NOT one of those. That next subject is just as likely to be an animal, a creature, a machine or an object as a human being: decide its "kind" from the scene alone, never default to "human".`
-        : "";
       try {
         const out = await gemmaJSON(
-          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. Also set "label": a plain 2-to-4-word name for this subject that tells it apart from other subjects of the same scene, e.g. "weary detective", "young farmhand", "adult male lion", "six-legged mining robot". If kind is "human", answer ONLY with JSON {"kind":"human","label":"...","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","label":"...","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.${more}`,
+          `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. Also set "label": a plain 2-to-4-word name for this subject that tells it apart from other subjects of the same scene, e.g. "weary detective", "young farmhand", "adult male lion", "six-legged mining robot". If kind is "human", answer ONLY with JSON {"kind":"human","label":"...","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","label":"...","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.`,
           scene);
         // Le squelette se décide sur les champs que gemma a REMPLIS, pas sur l'étiquette
         // `kind` qu'il annonce : il décrit régulièrement un lion dans {subject, form, surface}
@@ -4895,7 +4952,6 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         if (filledCount(charFieldKeys(fields))) { addEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
         throw new Error("aucun champ descriptif rempli");
       } catch (e) {
-        if (skip.length) throw new Error(`fiche du sujet supplémentaire indisponible (${e.message})`);
         addEvent("WARN", `Fiche personnage LLM indisponible (${e.message}) — brief utilisé tel quel.`, "warn");
         return { face: scene, hair: "", outfit: "", accessories: "", palette: "" };
       }
@@ -5102,8 +5158,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Gabarit actif : id figé sur la session Réalisateur (director.sheetTemplate) sinon lu au
     // sélecteur, même repli que currentStyleText. "auto" = turnaround, c'est-à-dire le
     // comportement d'avant l'ajout du menu.
-    function currentSheetLayout() {
-      const id = director?.sheetTemplate ?? $("sheetTemplateSelect")?.value ?? "auto";
+    // `templateId` explicite : ouverture de session, où `director` porte encore le gabarit de
+    // la session PRÉCÉDENTE (il n'est remplacé qu'après la soumission des 2 planches).
+    function currentSheetLayout(templateId) {
+      const id = templateId ?? director?.sheetTemplate ?? $("sheetTemplateSelect")?.value ?? "auto";
       return SHEET_TEMPLATES[id] ? SHEET_TEMPLATES[id] : SHEET_TEMPLATES.turnaround;
     }
     // Le <select> reste la source de vérité (figeage de session, persistance, restauration
@@ -5138,10 +5196,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Le prompt est compilé À PART du graphe : c'est le texte que l'éditeur de prompt montre
     // et, quand l'utilisateur l'a modifié, celui qui remplace la compilation (`promptOverride`).
-    function compileCharsheetPrompt(charFields) {
+    function compileCharsheetPrompt(charFields, templateId) {
       const styleText = currentStyleText();
       const kind = charKindOf(charFields);
-      const layout = currentSheetLayout();
+      const layout = currentSheetLayout(templateId);
       return `${layout.build(charDescFromFields(charFields), sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
     }
     function buildCharsheetGraph(charFields, negText, seed, width, height, loraName, promptOverride) {
@@ -5728,9 +5786,16 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const charFields = await characterSheetFromBrief();
       const locFields = await locationSheetFromBrief();
       // Les deux planches partent en génération tout de suite (pendant que gemma découpe les plans).
+      // Le prompt est compilé ICI, une seule fois, et c'est LUI qui part dans le graphe ET qui est
+      // rangé sur la variante : la variante porte donc le prompt RÉELLEMENT envoyé, gabarit compris.
+      // Y ranger la simple description (ce que faisait ce code) faisait rouvrir l'éditeur de prompt
+      // sur une description nue ; l'appliquer régénérait la planche SANS son gabarit, d'où des
+      // planches à vues identiques (LESSONS piège n°24).
       const csSeed = seed, lsSeed = seed + 101;
-      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf);
-      const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf);
+      const csPrompt = compileCharsheetPrompt(charFields, $("sheetTemplateSelect").value);
+      const lsPrompt = compileLocsheetPrompt(locDescFromFields(locFields));
+      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf, csPrompt);
+      const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf, lsPrompt);
       const shots = await shotListFromBrief(n);
 
       resetDirectorZone();
@@ -5746,10 +5811,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         // `charIdx` = celui qu'édite le menu Personnage.
         locFields,
         chars: [newCharSlot(charFields, [{ file: null, inputName: null, seed: csSeed, source: "generated",
-                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }])],
+                         prompt: csPrompt, status: "pending", blob: null, url: null }])],
         charIdx: 0,
         locVariants: [{ file: null, inputName: null, seed: lsSeed, source: "generated",
-                        prompt: locDescFromFields(locFields), status: "pending", blob: null, url: null }],
+                        prompt: lsPrompt, status: "pending", blob: null, url: null }],
         locActive: 0, validated: false
       };
       // Compat directorStep2/3 + regenerateKeyframe : charFields/charVariants/charActive/
@@ -5794,8 +5859,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const charFields = await characterSheetFromBrief();
       const locFields = await locationSheetFromBrief();
       const csSeed = seed, lsSeed = seed + 101;
-      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf);
-      const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf);
+      const csPrompt = compileCharsheetPrompt(charFields, $("sheetTemplateSelect").value);  // cf. directorStep1
+      const lsPrompt = compileLocsheetPrompt(locDescFromFields(locFields));
+      const csId = await submitCharsheetJob(charFields, negText, csSeed, width, height, wf, csPrompt);
+      const lsId = await submitLocsheetJob(locDescFromFields(locFields), negText, lsSeed, width, height, wf, lsPrompt);
 
       resetDirectorZone();
       director = {
@@ -5803,10 +5870,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         seed, width, height, wf, negText, duration, turboOn, loraName,
         locFields,
         chars: [newCharSlot(charFields, [{ file: null, inputName: null, seed: csSeed, source: "generated",
-                         prompt: charDescFromFields(charFields), status: "pending", blob: null, url: null }])],
+                         prompt: csPrompt, status: "pending", blob: null, url: null }])],
         charIdx: 0,
         locVariants: [{ file: null, inputName: null, seed: lsSeed, source: "generated",
-                        prompt: locDescFromFields(locFields), status: "pending", blob: null, url: null }],
+                        prompt: lsPrompt, status: "pending", blob: null, url: null }],
         locActive: 0, validated: false
       };
       attachSheetAccessors(director);
@@ -5947,34 +6014,26 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       saveProject();
     }
 
-    // Nouveau sujet : gemma décrit le sujet suivant du brief (en excluant ceux déjà décrits),
-    // puis sa planche part en génération comme la première. La liste de plans N'EST PAS
-    // regénérée (elle porte les éditions de l'utilisateur) : le taggage des plans est manuel.
-    async function addSubject() {
+    // Nouveau sujet : un emplacement VIDE, et RIEN d'autre — aucun appel gemma, aucun job.
+    // C'est l'utilisateur qui décrit le sujet (champs du menu, ou « ✎ Prompt ») puis lance
+    // « Générer la planche ». Avant, le bouton faisait décrire le sujet suivant par gemma et
+    // partir sa planche aussitôt : sur un brief à UN seul sujet, gemma en inventait un second,
+    // humain par défaut, et la planche partait en rendu sans que personne l'ait demandée.
+    // Le `kind` du sujet affiché est repris (un second animal après un premier animal est le
+    // cas courant) ; la bascule « Type de sujet » le corrige en un clic. La liste de plans
+    // N'EST PAS regénérée (elle porte les éditions de l'utilisateur) : le taggage reste manuel.
+    function addSubject() {
       if (!director || director.pipeline !== "storyboard_v2") return;
-      addEvent("REQ", `Sujet supplémentaire : fiche via ${OLLAMA_MODEL}…`, "req");
-      let fields;
-      try { fields = await characterSheetFromBrief(director.chars.map(c => charDescFromFields(c.fields))); }
-      catch (err) { addEvent("WARN", err.message, "warn"); return; }
-      const seed = director.seed + 211 + director.chars.length;
-      const variant = { file: null, inputName: null, seed, source: "generated",
-                        prompt: charDescFromFields(fields), status: "pending", blob: null, url: null };
-      director.chars.push(newCharSlot(fields, [variant]));
+      const fields = { kind: charKindOf(director.charFields), label: "" };
+      for (const k of charFieldKeys(fields)) fields[k] = "";
+      director.chars.push(newCharSlot(fields, []));
       director.charIdx = director.chars.length - 1;
       director.validated = false;   // une planche de plus à valider avant les keyframes
       renderSheetMenu("char");
       refreshSheetUI("char");
       renderShotDNAList();          // les pastilles de taggage apparaissent dès le 2e sujet
       saveProject();
-      try {
-        await resolveVariantJob("char", variant,
-          await submitCharsheetJob(fields, director.negText, seed, director.width, director.height, director.wf));
-      } catch (err) {
-        variant.status = "error";
-        refreshSheetUI("char");
-        addEvent("WARN", err.message, "warn");
-        saveProject();
-      }
+      addEvent("SYS", `Sujet ${director.chars.length} ajouté (vide) — décrivez-le puis générez sa planche.`, "sys");
     }
 
     // Retrait d'un sujet : les plans le désignent PAR INDICE, il faut donc décaler les leurs
@@ -6040,9 +6099,14 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       else { img.removeAttribute("src"); img.style.display = "none"; }
       const word = !av ? "" : av.status === "pending" ? "Génération…" : av.status === "error" ? "Erreur"
         : av.status === "missing" ? "Manquant" : "Prêt";
-      section.querySelector(".sheet-status").textContent =
-        !word ? "" : variants.length > 1 ? `${tr(word)} · ${dyn("activeSheet", active + 1, variants.length)}` : tr(word);
-      section.querySelector(".sheet-regen").disabled = !director || variants.some(v => v.status === "pending");
+      // Sujet ajouté à la main : la liste de variantes est vide et RIEN ne part tout seul —
+      // le statut dit donc quoi faire, et le bouton s'appelle « Générer », pas « Régénérer ».
+      section.querySelector(".sheet-status").textContent = !word
+        ? (director && isChar && !variants.length ? tr("Aucune planche : décrivez le sujet (ou ✎ Prompt) puis générez.") : "")
+        : variants.length > 1 ? `${tr(word)} · ${dyn("activeSheet", active + 1, variants.length)}` : tr(word);
+      const regen = section.querySelector(".sheet-regen");
+      regen.textContent = tr(variants.length ? "🔄 Régénérer la planche" : "Générer la planche");
+      regen.disabled = !director || variants.some(v => v.status === "pending");
       section.querySelector(".sheet-prompt").disabled = !director || variants.some(v => v.status === "pending");
       section.querySelector(".sheet-import").disabled = !director;
     }
@@ -6080,7 +6144,13 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const variants = isChar ? director.charVariants : director.locVariants;
       if (variants.some(v => v.status === "pending")) return;
       const lastGen = [...variants].reverse().find(v => v.source === "generated");
-      const seed = (lastGen ? lastGen.seed : director.seed + (isChar ? 0 : 101)) + 1;
+      // Sujet ajouté à la main : aucune variante, donc aucune seed d'où repartir. On en
+      // dérive une propre au sujet (211 + son indice), sinon deux sujets générés de zéro
+      // partiraient de la même seed que le sujet 1 et se ressembleraient.
+      const baseSeed = isChar
+        ? director.seed + (director.charIdx ? 211 + director.charIdx : 0)
+        : director.seed + 101;
+      const seed = (lastGen ? lastGen.seed : baseSeed) + 1;
       const desc = isChar ? charDescFromFields(director.charFields) : locDescFromFields(director.locFields);
       const prompt = promptOverride || (isChar ? compileCharsheetPrompt(director.charFields) : compileLocsheetPrompt(desc));
       const variant = { file: null, inputName: null, seed, source: "generated", prompt,
@@ -6231,14 +6301,19 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       row.className = "shot-subjects";
       const lbl = document.createElement("p");
       lbl.className = "hint shot-subjects-lbl";
-      lbl.textContent = full ? dyn("subjectsCap", MAX_SHOT_SUBJECTS) : tr("Sujets du plan");
+      // Les pastilles se lisaient comme un choix unique (une allumée, les autres éteintes) :
+      // l'utilisateur ne voyait pas qu'un plan peut en ancrer DEUX. D'où la coche/le plus sur
+      // chaque pastille, `aria-pressed`, et un libellé qui annonce le plafond.
+      lbl.textContent = full ? dyn("subjectsCap", MAX_SHOT_SUBJECTS)
+                             : dyn("subjectsPick", MAX_SHOT_SUBJECTS);
       row.appendChild(lbl);
       director.chars.forEach((c, si) => {
         const on = sel.includes(si);
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "subj-chip" + (on ? " on" : "");
-        chip.textContent = subjectLabel(si);
+        chip.setAttribute("aria-pressed", String(on));
+        chip.textContent = `${on ? "✓" : "+"} ${subjectLabel(si)}`;
         // Seul le 3e sujet est GRISÉ (il ne passerait pas dans le graphe). La pastille
         // allumée d'un plan à un seul sujet reste allumée — la griser la ferait lire comme
         // « pas dans le plan » alors qu'elle y est —, son clic ne fait simplement rien.
@@ -6269,6 +6344,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
                 <label><span class="lbl-light"></span><select data-field="lighting">${libOptions(LIGHTING_LIB, shot.lighting)}</select></label>
               </div>
               <label><span class="lbl-action"></span><textarea class="small" data-field="action"></textarea></label>
+              <button type="button" class="secondary-btn shot-action-btn"></button>
               <div class="two-cols">
                 <label><span class="lbl-emotion"></span><input type="text" data-field="emotion" /></label>
                 <label><span class="lbl-duration"></span><input type="number" min="1" max="8" data-field="duration" /></label>
@@ -6293,6 +6369,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         const emotionEl = item.querySelector('[data-field="emotion"]');
         const durEl = item.querySelector('[data-field="duration"]');
         const extraEl = item.querySelector('[data-field="extra"]');
+        const actionBtn = item.querySelector(".shot-action-btn");
+        actionBtn.textContent = tr("✎ Prompt de l'action");
+        actionBtn.addEventListener("click", () => openShotActionPrompt(i));
         actionEl.value = shot.action; emotionEl.value = shot.emotion;
         durEl.value = shot.duration; extraEl.value = shot.extra;
         camEl.addEventListener("change", () => { shot.camera = camEl.value; saveProject(); });
@@ -6306,6 +6385,32 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // Les emplacements keyframes viennent d'être recréés : on y redessine les cartes,
       // sans quoi tout rappel de cette fonction (taggage, langue, nouveau sujet) les perdrait.
       renderAllKeyframeCards();
+    }
+
+    // Éditeur du champ « Action » d'un plan, disponible dès l'étape 1 — donc AVANT toute
+    // keyframe. Même modale que les planches, les keyframes et les cuts ; ce qui est appliqué
+    // remplace le champ Action tel quel, et c'est ce texte-là qui part ensuite dans le prompt
+    // de keyframe puis dans celui du cut. Les sujets taggés sur le plan sont passés à
+    // l'enrichissement : à deux sujets, gemma doit les faire agir tous les deux.
+    function openShotActionPrompt(i) {
+      const shot = director?.shots?.[i];
+      if (!shot) return;
+      const descs = shotSubjects(shot).map(r => r.desc).filter(Boolean);
+      openPromptEditor({
+        title: "Prompt de l'action du plan",
+        applyLabel: "Appliquer au plan",
+        hint: "Ce texte décrit ce qui se passe dans le plan. Il est repris tel quel dans la keyframe puis dans le cut ; le cadrage, la lumière et le style sont ajoutés par l'app.",
+        text: shot.action,
+        enrich: text => enrichShotAction(text, descs),
+        apply: text => {
+          shot.action = text;
+          // Une keyframe déjà rendue depuis l'ancienne action reste à l'écran : son prompt
+          // suivra à la régénération (regenerateKeyframe recompile tant qu'il n'a pas été
+          // édité à la main).
+          renderShotDNAList();
+          saveProject();
+        }
+      });
     }
 
     // Étape 2 : 1 job Qwen-Edit par case, cartes régénérables/verrouillables.
@@ -6400,7 +6505,13 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       if (kf.locked || kf.status === "pending") return;
       kf.seed += 1;
       kf.status = "pending";
+      // « Prompt éditable, prompt verbatim » vaut pour un prompt que l'utilisateur a édité :
+      // celui-là n'est jamais recompilé par-dessus. Tant qu'il ne l'a pas été, la keyframe
+      // suit les champs du plan — sinon éditer l'action ou tagger un 2e sujet n'avait aucun
+      // effet sur la régénération, le prompt restant celui compilé à l'étape 2.
       if (promptOverride) { kf.prompt = promptOverride; kf.edited = true; }
+      else if (!kf.edited)
+        kf.prompt = compileKeyframePrompt(director.shots[i], shotSubjects(director.shots[i]).map(r => r.desc));
       renderKeyframeCard(i);
       updateLaunchButtonState();
       try {

@@ -1,5 +1,35 @@
 # Tour de contrôle — changelog
 
+## 2026-09-22 — Retours de la première session de test sur GB10
+
+Sept points remontés par l'utilisateur après sa première vraie session de bout en bout. Six sont traités ici, le septième était une question.
+
+### Une seule cause derrière trois des points
+
+Les planches « à vues identiques », la génération qui partait toute seule à l'ajout d'un sujet et le gabarit qui n'était pas repris venaient du même endroit. La variante de planche rangeait `charDescFromFields(...)` — la description des champs — là où l'app attend le prompt réellement soumis, qui est cette description **enrobée du gabarit** (turnaround, expressions, bandeau de palette, `SHEET_CLEAN`). Invisible au premier rendu ; visible dès qu'on ouvre « ✎ Prompt », qui rouvrait la description nue, et qu'on applique : le prompt part verbatim, donc sans gabarit, et Krea 2 rend cinq fois la même pose. Corrigé en compilant le prompt une fois, au point de soumission, et en rangeant **celui-là**. Détail et règle générale : `docs/LESSONS.md`, piège n°24.
+
+### Ajout d'un sujet : plus rien ne part tout seul
+
+« + Ajouter un sujet » demandait à gemma le sujet suivant du brief puis lançait sa planche. Sur un brief à un seul sujet, gemma n'a rien à trouver : il invente, humain par défaut (un panda roux est ressorti en Superman). Le bouton pose maintenant un emplacement **vide** — ni appel LLM, ni job. L'utilisateur décrit le sujet dans les champs ou dans « ✎ Prompt », puis lance « Générer la planche », qui reprend le gabarit figé de la session et une seed propre au sujet. La porte des keyframes reste fermée tant que la planche manque. Piège n°25.
+
+### Deux planches d'ancrage pour un plan
+
+C'était déjà possible mais illisible : les pastilles de sujets se lisaient comme un choix unique. Elles portent maintenant une coche ou un plus, `aria-pressed`, et le libellé annonce le plafond (« cliquez pour en ancrer jusqu'à 2 », puis « 2 au maximum par plan »). Le plafond lui-même ne bouge pas : il vient des trois entrées image du nœud d'ancrage, décor compris.
+
+### Le champ Action est enrichissable avant les keyframes
+
+Chaque carte de plan porte « ✎ Prompt de l'action », disponible dès l'étape 1. Même modale que le reste ; ce qui est appliqué remplace le champ Action. La consigne interdit à gemma d'y écrire caméra, lumière ou couleur — l'app les appose plus tard — et lui passe les descriptions des sujets **taggés sur ce plan** : à deux sujets, les deux doivent agir dans la phrase. Même exigence sur le prompt de keyframe, dont l'enrichissement réclame les trois phrases de rôle (deux personnages + décor) et écarte une sortie gemma qui en a perdu une.
+
+Corollaire : une keyframe **jamais éditée à la main** recompile son prompt à la régénération, sinon éditer l'action ou tagger un second sujet ne changeait rien. Une keyframe dont le prompt a été édité n'est jamais recompilée par-dessus.
+
+### La question (point 7)
+
+« Générer les keyframes » soumet un job Qwen-Edit ancré par plan et affiche chaque case en face de son plan — aucune grille n'est produite à cette étape. Le contact-sheet n'apparaît qu'au Montage, avec les cuts. Vérifié en headless : 6 plans → 6 jobs, aucun autre.
+
+### Vérification
+
+49 assertions headless (Chromium, ComfyUI et Ollama bouchonnés) : prompt de planche rangé = prompt envoyé, gabarit repris par le sujet 2, ajout sans job ni appel LLM, persistance d'un sujet sans planche, double ancrage jusqu'au graphe soumis (3e entrée image), enrichissement de l'action à deux sujets, prompt édité jamais recompilé. Captures clair/sombre à 390, 768, 1250 et 1440 px. **Rien n'est vérifié en rendu réel** — ni ComfyUI ni Ollama en session distante.
+
 ## 2026-09-21 (suite 6) — Prompt Relay, prompts éditables, composer H3 sur les cuts
 
 Trois demandes de l'utilisateur, posées ensemble parce qu'elles touchent le même code de studio, et deux documents de référence fournis par lui : l'ontologie de styles et le system prompt Qwen-Image-Edit-2509.
