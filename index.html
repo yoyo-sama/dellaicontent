@@ -4733,15 +4733,25 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // l'ancrage avec elle : le prompt part sans sa contrainte la plus importante, et le
     // rendu redevient une planche annotée. Texte reproduit AU CARACTÈRE PRÈS depuis la
     // formulation qualifiée en rendu réel (LOT 4/7) — ne pas le reformuler.
+    // Le bloc DUAL n'a jamais été qualifié en rendu (seul le chemin à UN sujet l'a été) et son
+    // premier run réel, le 2026-09-22, portait une chaussure et une raquette : il les appelait
+    // « characters » dont il fallait préserver « anatomy, body plan, head, clothing ». Du
+    // vocabulaire d'être vivant pour deux objets. La raquette est sortie éclatée en morceaux
+    // éparpillés sur un plan, absente sur un autre. Deux ajouts ici : une identité formulée
+    // pour n'importe quelle nature de sujet, et l'exigence d'un exemplaire COMPLET et entier —
+    // le bloc interdisait la mise en planche, jamais l'éparpillement en pièces détachées.
     const KEYFRAME_ANCHOR_DUAL =
-      "Both characters are fully integrated into the same scene, present together in that "
-      + "location with correct perspective and scale. Do not place the references side by side, "
+      "Both subjects are fully integrated into the same scene, present together in that "
+      + "location with correct perspective and scale. Each of them appears exactly once, as one "
+      + "single complete and intact whole, assembled in one piece, never broken up, never taken "
+      + "apart, never scattered as separate fragments. Do not place the references side by side, "
       + "do not create a split screen, diptych or collage, do not show any reference sheet, "
       + "contact sheet, grid, thumbnails, multiple poses, color swatches, panels, borders, "
       + "margins, black frame, caption or text anywhere. The whole picture is a single unified "
       + "live-action movie frame, one continuous scene that extends all the way to all four "
-      + "edges. Keep each character's anatomy, body plan, head, surface, materials, markings, "
-      + "clothing if any and colors identical to its own reference image.";
+      + "edges. Keep each subject exactly as its own reference image shows it: same shape, "
+      + "structure, proportions, surface, materials, markings and colors, and, for a living "
+      + "character, the same anatomy, body plan, head and clothing.";
     const KEYFRAME_ANCHOR_SOLO =
       "The character is fully integrated into the scene, present in that location with correct "
       + "perspective and scale. Do not place the two references side by side, do not create a "
@@ -4775,16 +4785,26 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const extra = (shot.extra || "").trim();
       let s;
       if (list.length > 1) {
-        s = "Use the first reference image only as the appearance guide for one single character, "
+        // Le sujet 2 n'existe QUE dans le conditioning : ni le latent ni la géométrie de départ
+        // ne le portent (piège n°10). Il faut donc que le texte le tienne — dire sa nature, dire
+        // que sa planche est une planche (plusieurs vues d'UNE chose, pas plusieurs choses) et
+        // exiger qu'il soit visible. Sans ça il ressortait éparpillé, ou pas du tout.
+        const kinds = shotSubjectIdx(shot).map(i => charKindOf(director?.chars?.[i]?.fields));
+        const noun = k => (k === "other" ? "subject" : "character");
+        s = "Use the first reference image only as the appearance guide for one single " + noun(kinds[0]) + ", "
           + list[0]
           + ", use the second reference image only as the appearance guide for one single other "
-          + "character, " + list[1]
+          + noun(kinds[1]) + ", " + list[1]
           + ", and use the third reference image only as the guide for the environment"
           + (loc ? ", " + loc : "") + ". "
+          + "The first two reference images are multi-view reference sheets, each one showing the "
+          + "same single thing from several angles: read them only to learn what that one thing "
+          + "looks like. "
           + "Create one brand-new photorealistic cinematic film still that places exactly one single "
-          + "instance of each of those two characters together inside the environment of the third "
-          + "reference image: " + shot.action + ". Frame it as " + cam.frame + "." + locHere;
-        if (emotion) s += " The characters' expressions and body language convey " + emotion + ".";
+          + "complete instance of each of those two subjects together inside the environment of the "
+          + "third reference image, both of them whole and clearly visible in the frame: "
+          + shot.action + ". Frame it as " + cam.frame + "." + locHere;
+        if (emotion) s += " The subjects' expressions and body language convey " + emotion + ".";
         s += " " + light.text;
         s += " " + KEYFRAME_ANCHOR_DUAL;
       } else {
