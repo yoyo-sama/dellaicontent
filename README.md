@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — Media & Entertainment demo on GB10
 
-**Current version: 1.0.8** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
+**Current version: 1.1.0** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
 
 **Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from a small `updater` backend service that handles in-app updates — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
 
@@ -249,6 +249,36 @@ didn't exist yet on this deployment.
 A **role-based navigation** layer (Director/Storyboard artist, Art director/Motion designer,
 Social media/Marketing, Editor/Post-production) preselects scenario + pipeline without
 changing the routing above.
+
+### The storyboard studio
+
+`storyboard_v2` and `reference2video` always run through a **step-by-step review** in a
+full-screen studio — there is no auto mode, and nothing is ever sent to render without a click.
+
+- **Subject and location sheets.** Two structured sheets are written by the local LLM, then
+  rendered by Krea 2 as multi-view reference sheets. Every field stays editable, every sheet
+  keeps a history of variants you can switch between, and a sheet can be replaced by an image
+  of your own. The LLM decides whether a subject is a person or something else (animal,
+  creature, robot, object), which you can correct in one click; the sheet's vocabulary and its
+  anti-anthropomorphic guard follow that choice.
+- **Sheet layout picker.** Five layouts (turnaround + expressions + costume, expression column
+  + props, large portrait + head row, large portrait + garment flats, action poses + gear),
+  chosen from thumbnails that draw their own box layout.
+- **Several subjects per storyboard.** Subjects are added one at a time as empty slots you
+  describe yourself. Each shot tags which subjects it anchors — at most two plus the location,
+  a hard ceiling set by the three image inputs of the anchoring node.
+- **Editable shot list.** Camera, light, action, emotion, duration and free details per shot,
+  with the keyframe rendered next to the shot it illustrates, regenerable and lockable.
+- **Editable prompts everywhere.** Both sheets, every keyframe, every cut and every shot action
+  open the same editor showing the text actually sent to the graph. What you apply goes in
+  **verbatim** and is kept with the project; re-enrichment by the local LLM never touches the
+  structural parts of the prompt, which the app restores itself.
+- **Cut engine.** LTX 2.5 by default, or Minimax H3 with its structured prompt grammar, stored
+  per cut.
+- **Prompt Relay.** One to ten chained segments, linked either continuously (the previous
+  segment's exact frame carries over) or as a cut. On the H3 engine a scenario composer splits
+  a screenplay across the segments; any segment can be re-rendered on its own, its transition
+  frame picked among the last five, and given an end frame (FL2VA).
 
 Generic pipelines available everywhere: text2image (Krea 2 Turbo), image2image (Qwen-Edit
 2509), text2video and image2video (LTX 2.5 and Minimax H3, selectable in the Model menu;

@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — démo Media & Entertainment sur GB10
 
-**Version actuelle : 1.0.8** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
+**Version actuelle : 1.1.0** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
 Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception d'un petit service `updater` dédié aux mises à jour, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 
@@ -252,6 +252,36 @@ qui n'existait pas encore sur ce déploiement.
 Une couche de **navigation par profils métiers** (Réalisateur/Storyboard artist, DA/Motion designer,
 Social media/Marketing, Monteur/Post-production) présélectionne scénario + pipeline sans changer le
 routing ci-dessus.
+
+### Le studio storyboard
+
+`storyboard_v2` et `reference2video` passent toujours par une **revue étape par étape** dans un
+studio plein écran — il n'y a pas de mode auto, et rien ne part jamais en rendu sans un clic.
+
+- **Planches sujet et décor.** Deux fiches structurées sont écrites par le LLM local, puis rendues
+  par Krea 2 en planches de référence multi-vues. Chaque champ reste éditable, chaque planche garde
+  un historique de variantes entre lesquelles basculer, et une planche peut être remplacée par une
+  image à vous. Le LLM tranche si un sujet est une personne ou autre chose (animal, créature, robot,
+  objet), ce qui se corrige en un clic ; le vocabulaire de la planche et sa clause anti-anthropomorphe
+  suivent ce choix.
+- **Choix du gabarit de planche.** Cinq compositions (turnaround + expressions + costume, colonne
+  d'expressions + accessoires, grand portrait + rangée de têtes, grand portrait + vêtements à plat,
+  poses d'action + équipement), choisies sur des vignettes qui dessinent leur propre disposition.
+- **Plusieurs sujets par storyboard.** Les sujets s'ajoutent un par un, en emplacements vides que
+  vous décrivez vous-même. Chaque plan désigne les sujets qu'il ancre — deux au maximum plus le
+  décor, un plafond dur imposé par les trois entrées image du nœud d'ancrage.
+- **Liste de plans éditable.** Caméra, lumière, action, émotion, durée et détails libres par plan,
+  avec la keyframe affichée en face du plan qu'elle illustre, régénérable et verrouillable.
+- **Prompts éditables partout.** Les deux planches, chaque keyframe, chaque cut et l'action de chaque
+  plan ouvrent le même éditeur, qui montre le texte réellement envoyé au graphe. Ce que vous appliquez
+  part **verbatim** et reste rangé avec le projet ; un ré-enrichissement par le LLM local ne touche
+  jamais aux parties structurelles du prompt, que l'app remet elle-même.
+- **Moteur des cuts.** LTX 2.5 par défaut, ou Minimax H3 avec sa grammaire de prompt structurée,
+  rangé sur chaque cut.
+- **Prompt Relay.** Un à dix segments enchaînés, liés soit en continu (la frame exacte du segment
+  précédent enchaîne), soit en coupure. Sur le moteur H3, un composer de scénario répartit un récit
+  entre les segments ; n'importe quel segment se re-rend seul, avec son image de transition au choix
+  parmi les cinq dernières frames, et une image de fin possible (FL2VA).
 
 Pipelines génériques disponibles partout : text2image (Krea 2 Turbo), image2image (Qwen-Edit 2509),
 text2video et image2video (LTX 2.5 et Minimax H3, au choix dans le menu Modèle ; audio natif

@@ -1,5 +1,68 @@
 # Tour de contrôle — changelog
 
+## 2026-09-22 (suite) — v1.1.0 — Le studio storyboard, de la planche à l'animatic
+
+Première version numérotée depuis la v1.0.8 (2026-09-09), qui ne couvrait que le déploiement. Tout ce qui a été fait depuis porte sur l'application elle-même, et principalement sur le studio storyboard. C'est aussi la première fois que des pièces de ce chantier sont **constatées en rendu réel** chez l'utilisateur, et non seulement en headless.
+
+### Ce que la v1.1.0 apporte depuis la v1.0.8
+
+- **Qualité Krea 2** : consigne d'enrichissement dédiée, bibliothèque de 14 styles curés sur la taxonomie Krea 2, retrait déterministe du remplissage dans les prompts, couverture de tous les points où Krea 2 rend une image, et plus aucun titre incrusté demandé aux modèles.
+- **Grammaire de prompt Minimax H3** portée du composer de référence, description des sources par vision, et **FL2VA** (première et dernière image) sur le même nœud que l'i2v.
+- **Fiches de sujet qui suivent le sujet** : gemma tranche humain ou non, une bascule le corrige par sujet, et le gabarit de planche se choisit parmi cinq compositions sur un sélecteur visuel.
+- **Plusieurs sujets par storyboard**, taggés plan par plan, deux au maximum plus le décor.
+- **Plus de mode Auto** : la revue étape par étape est le seul chemin, et rien ne part en rendu sans un clic.
+- **Keyframes en face de leur plan**, régénérables et verrouillables.
+- **Prompts éditables partout**, appliqués verbatim et rangés avec le projet.
+- **Moteur des cuts au choix**, LTX 2.5 ou Minimax H3.
+- **Prompt Relay** : jusqu'à dix segments enchaînés, liaison continue ou coupure.
+- **Annuler le projet**, et un montage dont les clips sont numérotés d'après les plans.
+
+### Annuler le projet
+
+Une session lancée ne pouvait qu'aller à son terme. Deux boutons « Annuler le projet » (formulaire et studio) vident la session et le projet en stock. Le point non évident est ailleurs : les attentes `waitForJobs` déjà lancées continuaient de résoudre après coup et réécrivaient dans une session disparue. Un compteur d'annulation, relu par chaque attente, les fait abandonner.
+
+### Le clip de tenue n'est plus compté comme un plan de plus
+
+La « tenue du plan final » ajoute un cut supplémentaire sur la dernière keyframe. Le montage le numérotait comme un plan, donc six plans donnaient sept clips numérotés jusqu'à « Plan 7/6 ». Il porte maintenant son propre libellé, « Tenue du plan 6 », et la numérotation des plans s'arrête à six.
+
+### Prompt Relay : composer de scénario, re-rendu par segment, transition au choix, image de fin
+
+Quatre compléments, aucun ne lançant de génération de lui-même.
+
+Un **composer de scénario** (moteur H3 seul) découpe un récit saisi en N segments dans la structure attendue par H3. La légende des sujets envoyée à gemma est construite depuis la fonction qui les numérote réellement, pour qu'elle ne puisse pas mentir sur la numérotation.
+
+Le **re-rendu d'un segment seul** : chaque segment range son image de départ, ce qui rend un re-rendu possible sans relancer toute la chaîne. Les segments suivants sont marqués « à re-générer » et attendent un clic.
+
+L'**image de transition au choix** : cinq candidates sont extraites en fin de segment (la dernière frame et les quatre qui la précèdent, par pas de trois) et proposées en vignettes cliquables. L'index visé est **positif** et calculé en JS depuis la durée : un index négatif vise une tranche vide dans l'implémentation de référence du nœud, donc son comportement dépend de la version installée (piège n°27).
+
+Une **image de fin** par segment (H3 seulement) bascule le cut en FL2VA. Masquée sur LTX 2.5, dont le template n'a pas d'équivalent.
+
+Correctif au passage : les jetons `<Subject N>` partaient tels quels à l'enrichissement et revenaient déformés. Ils sont désormais remplacés par un mot nu avant l'appel et remis après ; le normaliseur de secours ne s'applique qu'à la sortie de gemma, jamais au texte de l'utilisateur (piège n°26).
+
+### Le décor n'était nommé nulle part
+
+Première vraie session de storyboard sur GB10 : la planche de décor était un court de tennis en terre battue, trois keyframes sur quatre se passaient dans un désert. Le prompt ne désignait le lieu que par « the second reference image ». Or cette entrée ne touche jamais le latent — seule l'image 1 alimente le `VAEEncode` — et Qwen-Edit tourne à cfg 1, donc le texte fait loi : le modèle ne gardait de la planche que sa dominante ocre et inventait le reste. Le lieu est maintenant écrit en toutes lettres, dans la phrase de rôle **et** après l'action. C'est l'ancrage double déjà en place sur les cuts depuis le piège n°9, qui manquait au seul endroit qui en avait le plus besoin. Confirmé en rendu par l'utilisateur. Piège n°28.
+
+### Une planche qui redevenait une photo
+
+Un sujet ajouté à la main puis décrit dans « ✎ Prompt » ne rendait plus de planche, seulement une belle photo de scène. L'enrichissement envoyait le prompt **entier** à gemma sous la consigne d'image unique de Krea 2, qui emportait la composition multi-vues avec elle. Le « strip-then-reappend » s'applique désormais aussi aux planches — le squelette est retiré avant l'appel et remis après — et gemma reçoit une consigne dédiée qui ne décrit que ce que le sujet ou le lieu **est**, ni fond, ni cadrage, ni lumière, le gabarit posant déjà tout cela. Pièges n°29 et n°30.
+
+Au passage : une description saisie uniquement dans la modale laissait les champs du sujet vides, et ce sont eux que lisent les keyframes et les cuts — le plan partait donc avec une identité vide. Elle est maintenant reversée dans le premier champ quand il n'y en a aucune. Le prompt, lui, part toujours verbatim.
+
+### Un prompt de keyframe sans son ancrage
+
+Un plan rendait un collage : la planche produit, sa grille de vignettes et son bandeau de palette recollés dans l'image. Son prompt avait été remplacé à la main par la seule phrase d'action, et il est parti verbatim — donc sans les phrases de rôle des images et sans le bloc d'ancrage, qui est précisément ce qui interdit de recopier une planche. Le bloc est désormais remis sur **tout** prompt appliqué qui ne le porte plus, comme il l'était déjà après un ré-enrichissement. « Verbatim » porte sur les mots de l'utilisateur, pas sur les invariants que le graphe exige. La légende de la modale distingue maintenant le prompt du moteur de la description du plan, qui a son propre bouton. Piège n°31.
+
+### Deux sujets : un objet n'est pas un personnage
+
+Premier run réel du chemin à deux sujets — il n'avait jamais été qualifié, contrairement à celui à un sujet. Une chaussure et une raquette de tennis : la raquette est sortie éclatée en morceaux éparpillés sur un plan, absente sur un autre. Le câblage était correct. Deux défauts de texte : le prompt appelait les deux sujets « characters » dont il fallait préserver « anatomy, body plan, head, clothing », et rien n'interdisait l'éparpillement en pièces détachées ni n'exigeait que chaque sujet soit visible. Le nom du sujet suit maintenant sa nature, comme le vocabulaire des planches le fait déjà, les deux planches sont annoncées comme des planches multi-vues d'une seule chose, et un exemplaire complet, entier et visible est exigé de chacun. La branche à un sujet reste inchangée au caractère près. Piège n°32.
+
+Correctif voisin, plus tôt dans la journée : un cut à deux sujets les décrivait tous deux comme « the main character », ce qui les faisait fusionner.
+
+### Vérification
+
+Headless uniquement pour l'essentiel : le banc bouchonne ComfyUI et Ollama, sert l'application telle quelle et vérifie les prompts compilés, le câblage des graphes soumis, la persistance et le rendu de l'interface (clair/sombre, 390/768/1250/1440 px). Ni ComfyUI ni Ollama ne tournent en session distante. Trois points sont en revanche **constatés en image** par l'utilisateur sur son GB10 : le décor tenu par les keyframes, la disparition du collage, et deux sujets entiers dans un même plan.
+
 ## 2026-09-22 — Retours de la première session de test sur GB10
 
 Sept points remontés par l'utilisateur après sa première vraie session de bout en bout. Six sont traités ici, le septième était une question.
