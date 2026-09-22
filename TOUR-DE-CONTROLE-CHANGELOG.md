@@ -1,5 +1,207 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite 6) — Prompt Relay, prompts éditables, composer H3 sur les cuts
+
+Trois demandes de l'utilisateur, posées ensemble parce qu'elles touchent le même code de studio, et deux documents de référence fournis par lui : l'ontologie de styles et le system prompt Qwen-Image-Edit-2509.
+
+### 1. Prompts éditables partout, ré-enrichissement par moteur
+
+Un bouton « ✎ Prompt » sur les deux planches, sur chaque keyframe et sur chaque cut ouvre une modale montrant le texte réellement envoyé au graphe. Le texte appliqué part **verbatim** — l'app ne recompile rien par-dessus — et il est rangé sur l'objet (variante, keyframe, cut), donc il survit à la persistance et une régénération ultérieure ne ramène pas la compilation d'origine.
+
+Trois consignes, une par moteur : planches → `KREA2_ENRICH_SYSTEM` (existante), keyframes → `QWEN_EDIT_ENRICH_SYSTEM` (nouvelle, tirée du document fourni : dire quoi changer et quoi préserver, rôles d'images explicites, identité non réinventée, formulation positive puisque cfg 1, interdiction du vocabulaire « storyboard/planche »), cuts → consigne dépendante du moteur ciblé.
+
+L'invariant d'ancrage des keyframes sort en constantes et n'est jamais soumis à gemma : détail et règle générale dans `docs/LESSONS.md`, piège n°21.
+
+### 2. Moteur des cuts : LTX 2.5 ou Minimax H3
+
+Le menu Montage expose un sélecteur. LTX 2.5 reste le défaut, prompt inchangé au caractère près (formulation qualifiée au LOT 4, piège n°9). Minimax H3 réutilise la grammaire du Prompt Composer déjà portée pour le `reference2video`, avec **une seule adaptation** : un cut n'a qu'une image d'entrée, la keyframe, où personnage et décor sont déjà composés ensemble — tous les sujets se définissent donc sur `<Picture 1>` et seule la numérotation des `<Subject>` varie. La phrase d'alignement dit au modèle que la keyframe est l'instant 0 du clip ; le graphe part en turbo 8 steps, sans `last_frame`.
+
+Le moteur est rangé **sur chaque cut** : re-rendre un plan ne change jamais son moteur, même si le sélecteur a bougé depuis, sinon un montage finirait mi-LTX mi-H3 sans que rien ne le dise. La grille 17n+5 est annoncée avant le lancement et rappelée sur chaque clip, qui a sa propre durée.
+
+### 3. Prompt Relay
+
+Porté depuis la piste « Cinema Studio » (`yoyo-sama/cinema-ai-studio`), où la chaîne a été qualifiée en rendu réel. Nouvelle section du studio, ouverte dès les planches validées (elle n'a pas besoin des keyframes du storyboard, elle compose les siennes). De 1 à 10 segments, chacun avec son prompt, sa durée, son enrichissement et sa **liaison** : 🔗 continu (la dernière frame du segment précédent est ré-uploadée telle quelle) ou 🎞 coupure (keyframe composée). L'assemblage réutilise les cuts francs de l'animatic.
+
+Pourquoi deux liaisons plutôt qu'une : `docs/LESSONS.md`, piège n°22 — repasser la frame de transition par Qwen-Edit produit une coupure visible, c'est l'inverse de l'effet recherché.
+
+### Vérification
+
+75 assertions headless (Chromium, ComfyUI et Ollama bouchonnés) : invariant d'ancrage et ses trois replis d'enrichissement, grammaire H3 des cuts, câblage réel des graphes soumis, éditeur de prompt, chaîne relay complète (suite de jobs `key,cut,frame,cut,frame,key,cut` sur trois segments en liaisons coupure/continu/coupure), persistance. Captures clair et sombre à 1440 et 390 px.
+
+**Rien n'est vérifié en pixels** : ni ComfyUI ni Ollama ne tournent dans une session distante. Restent à constater sur le GB10 : la tenue d'un cut H3 par rapport au même plan en LTX, et la continuité réelle d'un raccord 🔗.
+
+## 2026-09-21 (suite 5) — FL2VA Minimax H3
+
+L'utilisateur signale que le nœud `MiniMaxH3ImageToVideo` couvre trois modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, `first_frame` + `last_frame` = FL2VA. Capture de son ComfyUI à l'appui, les deux entrées y figurant comme facultatives.
+
+Vérifié dans le dépôt : nos templates `minimax_h3_t2v.json` et `minimax_h3_i2v.json` utilisent **déjà le même nœud**, à la seule présence de `first_frame` près. Le FL2VA H3 ne coûtait donc qu'une entrée `last_frame` et son `LoadImage` — ce que la note précédente annonçait comme « presque gratuit », confirmé.
+
+### Ce qui change
+
+- `api/minimax_h3_i2v.json` câble `last_frame` sur un `LoadImage` alimenté par `{{IMAGE2}}`. Aucune dernière image fournie ⇒ `applyMinimaxLastFrame` retire la clé et le nœud orphelin, et le graphe redevient **identique à l'ancien** (23 nœuds, aucun lien pendant — vérifié).
+- Un champ « dernière image (facultatif — FL2VA) » apparaît, piloté par le **modèle** sélectionné et non par `pipelines[].controls` : la capacité appartient au workflow, et le champ n'a aucun sens sur `ltx25_i2v`, qui partage pourtant le pipeline `image2video`. Vérifié affiché sur `minimax_h3_i2v`, masqué sur `ltx25_i2v` et hors pipeline image.
+- La phrase d'alignement temporel prend sa forme FL2VA quand les deux images sont là, et son repère de fin est la durée **réellement rendue** — pas celle demandée. H3 se cale sur la grille 17n+5 : annoncer « à 5,00 s » sur un clip qui en rend 5,17 placerait la dernière image avant la fin.
+
+### Un piège rencontré en chemin
+
+Transcrire la formule 17n+5 en JavaScript ne marche pas telle quelle : le `%` de `ComfyMathExpression` est un modulo à la Python, positif sur une valeur négative, là où celui de JS garde le signe. La version naïve rendait **22 frames** pour une demande de 1 s au lieu des 39 mesurées en rendu réel — 40 % d'écart, silencieux. Détail dans `docs/LESSONS.md`, piège n°20.
+
+Autre rappel, refait malgré sa présence dans le dépôt : `.gb-field` est un `<label>` en `text-transform:uppercase`, une phrase d'aide y devient illisible. Constaté en capture, corrigé en `title`.
+
+### Vérifications
+
+JS validé, graphes construits hors navigateur dans les deux modes (i2v inchangé, FL2VA câblé, aucun lien orphelin), `h3VideoFrames(1) = 39` recoupé avec la mesure en rendu réel du piège n°11, UI capturée en clair/sombre à 1440 et 390 px avec la visibilité du champ vérifiée sur les trois cas. **Aucun rendu réel** — ComfyUI tourne sur la machine de l'utilisateur.
+
+---
+
+## 2026-09-21 (suite 6) — Rebase derrière les fiches personnage
+
+La branche `claude/fiches-personnage-animaux-np87b7` ayant été fusionnée en premier (PR #1, `812499c`), le travail des suites 4 et 5 a été rebasé derrière elle. Trois conflits résolus à la main, aucun arbitrage silencieux :
+
+- `AGENTS.md`, deux fois : les deux branches réécrivaient le même paragraphe de repères JS puis la même puce Minimax H3. Les deux apports sont conservés, pas l'un à la place de l'autre.
+- `index.html` : `main` a supprimé `generateStoryboardV2` (le sélecteur Auto/Réalisateur a disparu, la revue est le seul mode) pendant que la suite 4 insérait ses sections juste après. Suppression conservée, sections conservées.
+
+Deux points d'intégration relevés en relisant plutôt qu'en se fiant au résumé :
+
+- `characterSheetFromBrief` renvoie désormais un objet de champs passé tel quel à `submitCharsheetJob` ; le chemin r2v reprend cette version, la couche vision n'y touchant pas (elle produit une chaîne, indépendante de ce schéma).
+- Le rebase avait introduit un **doublon de clé** dans `I18N` : `"Sujet"` existait des deux côtés, avec un allemand différent (`Subjekt` contre `Motiv`). La dernière écrasait silencieusement la première. L'entrée de `main` est conservée — les onglets de sujet et les puces d'insertion doivent dire le même mot — et l'allemand des libellés associés a été aligné sur `Motiv`.
+
+La frontière convenue avec l'autre fil tient et a été vérifiée dans le navigateur : les puces d'insertion n'apparaissent que sur `reference2video`, jamais sur `storyboard_v2`, donc aucun jeton `<Subject N>` ne peut fuiter dans le prompt Qwen-Edit via le brief.
+
+---
+
+## 2026-09-21 (suite 4) — Grammaire de prompt Minimax H3 et description des sources par vision
+
+Demande de l'utilisateur : intégrer la mécanique de `BMB12d3/minimax-h3-prompt-composer`, et pouvoir décrire les images sources par un modèle Ollama — nécessaire en Ref2VA pour les notions de `<Subject x>`.
+
+### Ce que fait le composer de référence
+
+Un seul fichier HTML (9 492 lignes), aucune dépendance, aucun appel réseau — même architecture que nous. Il **ne génère rien et n'appelle aucun modèle** : on remplit des champs, il assemble un prompt structuré, il le vérifie, on copie-colle dans ComfyUI. Sa valeur tient à la grammaire H3 et à son validateur ; le reste (planificateur de caméra 3D, extracteur de frames, assistants d'édition) est du cockpit, contraire à la raison d'être de cette démo, et n'a pas été repris.
+
+### Le mécanisme `<Subject x>`, et l'écart qu'il révélait
+
+Deux numérotations distinctes : `<Picture N>` est l'entrée physique ComfyUI 1-indexée (`ref_image_{N-1}`), `<Subject N>` une identité logique, la liaison tenant en une phrase de `subject_definitions`. Nos deux planches r2v **étaient** bien `ref_image_0`/`ref_image_1`, mais le prompt était la chaîne plate `charDesc. locDesc. brief` : rien ne disait au modèle laquelle des deux images était le personnage. Le job passait, l'image sortait — d'où un défaut invisible jusqu'ici. Détail dans `docs/LESSONS.md`, piège n°19.
+
+### Ce qui change
+
+- Ref2VA émet les 6 champs de la grammaire (`buildH3RefPrompt`), les chemins (revue des planches, bypass fiches) passant par le même point unique `submitReference2VideoGraph`.
+- I2VA reçoit la phrase d'alignement temporel (`H3_I2V_ALIGNMENT`), absente du template.
+- Plafond dur de 7 000 caractères appliqué (`capH3Prompt`), il ne l'était nulle part.
+- Les références fournies par l'utilisateur sont décrites par `gemma4:e4b` en vision (`describeRefImages`) — capacité confirmée par l'utilisateur en direct, et sondée au premier usage plutôt que supposée. C'est sur le chemin « Ignorer les fiches » que ça compte le plus : sans fiche générée, c'était la seule chose qui pouvait dire au modèle ce que contiennent ses images.
+- UI : attribution des numéros de sujet **par l'app**, jamais saisie (option « implicite », tranchée par l'utilisateur). Légende de slot sous chaque image de référence, et une rangée de puces d'insertion sous le brief pour les cas où plusieurs sujets agissent dans le même plan — « `<Subject 1>` tend la boîte à `<Subject 2>` » n'a aucune autre façon de s'exprimer en Ref2VA.
+
+### Vérifications
+
+JS validé (`node --check`), builder exercé hors navigateur sur cas nominal et cas limites (aucune description, brief sans ponctuation, description déjà ponctuée, troncature à 7 000). UI capturée en headless Chromium en clair et sombre à 1440 et 390 px : puces et légendes correctes, insertion au curseur fonctionnelle, aucun débordement horizontal, aucune erreur JS. Les 4 langues vérifiées. **Aucun rendu réel** : ComfyUI et Ollama tournent sur la machine de l'utilisateur, pas dans la session — l'effet en vidéo reste à constater par lui.
+
+---
+
+## 2026-09-21 (suite 3) — Couverture Krea 2 complète, plus de titre incrusté, et la vraie cause du « je ne vois pas les styles »
+
+Trois demandes de l'utilisateur après le second A/B.
+
+### 1. Pas de titre incrusté par défaut
+
+Arbitrage tranché : Krea 2 rend parfois un titre lisible (« LONE EXPLORER », run de qualification) et parfois du charabia (« TUMLILE », « FIWDE TIMLE », constatés aujourd'hui). Devant un client, le second cas coûte plus que le premier ne rapporte. Les trois suffixes de `buildCampaignFullGraph` demandent désormais une image **sans aucun lettrage**, l'affiche réservant son tiers supérieur à un titre ajouté après coup. Formulation calquée sur `SHEET_CLEAN`, la seule validée en rendu réel sur ce point. La note de `docs/LESSONS.md` qui vantait le titre lisible est marquée comme révisée plutôt que supprimée.
+
+### 2. Tous les chemins Krea 2 passent par le même système de prompt
+
+Audit des appelants de `addKrea2Shot`/`addKrea2Shared` — trois sites, pas un de plus :
+
+| Site | Prompt | Couverture |
+|---|---|---|
+| `krea2_t2i` (chemin générique) | brief + style | `enrichBrief` (consigne Krea 2 + filtre) |
+| `buildCampaignFullGraph` | brief + suffixe de format + style | idem, `campaign_full` est dans `KREA2_WORKFLOWS` |
+| `buildCharsheetGraph` / `buildLocsheetGraph` | `SHEET_CLEAN` + description gemma + style | **était le trou** |
+
+Les fiches personnage et décor sont bien rendues par Krea 2, mais leur description vient de `characterSheetFromBrief`/`locationSheetFromBrief` (consignes gemma distinctes, hors `enrichBrief`) : un « ultra-detailed skin, 8k » lâché dans un champ atterrissait tel quel dans le prompt Krea 2. Le filtre est donc appliqué dans `charDescFromFields`/`locDescFromFields`, **point de passage unique** de tous les appelants — mode Auto, mode Réalisateur, projet restauré et menus Personnage/Décor du studio. Une seule ligne par fonction, aucune autre à toucher.
+
+### 3. « Je ne vois pas les 14 styles » — c'était le cache navigateur
+
+Les 14 entrées sont bien présentes et le champ s'affiche : vérifié sur le HEAD courant (`Aucun / Éditorial / Argentique 35 mm / Documentaire / Cinématique / Film noir / Cinéma d'auteur / SF blockbuster / Luxe discret / Packshot produit / Anime / Sérigraphie / Peinture à l'huile / Onirique`). La cause est ailleurs : **`nginx.conf` n'envoyait aucun en-tête de cache**. Sans `Cache-Control`, le navigateur applique sa mise en cache heuristique et continue de servir l'ancien `index.html` après un `git pull` — d'où le `Ctrl+Shift+R` que la doc traîne depuis des mois comme une fatalité. `location /` envoie désormais `Cache-Control: no-cache` : revalidation à chaque requête, 304 si rien n'a changé. Ce n'est pas `no-store`, rien n'est retéléchargé inutilement.
+
+Conséquence : cette modification-ci est la seule du lot à exiger un redémarrage (`docker compose up -d`), `nginx.conf` étant monté dans le conteneur.
+
+### Vérification
+
+12 assertions headless : les 14 libellés dans le champ Style et le champ effectivement visible (display calculé, pas seulement l'attribut) ; `charDescFromFields`/`locDescFromFields` retirent le remplissage y compris la famille ArtStation, et une fiche vide reste vide (le test de truthiness qui pilote le repli sans LLM n'est pas cassé) ; les 3 visuels de campagne exigent une image sans lettrage, l'ancienne formulation a disparu, l'affiche réserve sa zone de titre, le sujet reste en tête et le style est toujours appliqué.
+
+**Non vérifié** : `nginx -t` n'a pas pu être exécuté, Docker n'étant pas disponible dans l'environnement de travail. La modification est d'une ligne dans un bloc existant, mais elle n'a pas été validée par nginx lui-même — à confirmer au redémarrage.
+
+## 2026-09-21 (suite 2) — Premier A/B en image, et élargissement du filtre aux « boosters »
+
+**Premier résultat visuel** (même brief `A red panda astronaut poster…`, 16:9, un rendu par condition — n=1, pas une qualification).
+
+- **Sans enrichissement** : cadrage très serré sur la tête, le panda remplit le cadre, fond noir avec bokeh. Le modèle a **dessiné du faux texte** dans le bas de l'image — « FIWDE TIMLE » — parce que le brief demande littéralement « space for title text ». Aucune place laissée pour un titre : l'affiche est inutilisable telle quelle.
+- **Avec enrichissement** : plan plus large, décor de nébuleuse conforme au brief, **aucun texte parasite**, et le tiers supérieur est effectivement libre. C'est la différence entre une image et une affiche exploitable.
+
+L'écart le plus net n'est donc pas la « beauté » mais la **composition** et l'absence de faux texte : l'enrichisseur a traduit « space for title text » en « leaving significant clean negative space at the top for title typography », ce que le modèle interprète comme *laisser de la place* et non *écrire un titre*.
+
+Réserve : la version enrichie a viré vers l'illustration 3D (combinaison argentée inventée, rendu lisse) là où la version brute était plus photographique. Cohérent avec la queue du prompt — `trending on ArtStation, Octane render`.
+
+**Élargissement du filtre.** Le §24 du document de référence n'était qu'un point de départ, pas un inventaire. gemma produit spontanément la famille « booster » héritée de Stable Diffusion, absente de ce §24 : `trending on ArtStation`, `Octane render`. `PROMPT_PADDING` les couvre désormais, avec `cgsociety`, `deviantart`, `pixiv`, `unreal engine`, `v-ray`, `redshift render`, `uhd`. Ajout aussi d'une règle de ponctuation : quand une phrase entière n'est que du remplissage, son retrait laissait un `..`.
+
+Un blocage par liste reste une liste — ajouter un terme est une ligne. C'est assumé : la contrainte est vérifiable en code, donc elle n'a rien à faire dans une consigne adressée à un modèle de 4 Md de paramètres.
+
+### Vérification
+
+9 assertions headless rejouant la sortie gemma réelle du jour : les quatre termes de remplissage disparaissent, le sujet et la consigne de composition restent, `highly reflective` (qui n'est pas du remplissage) survit, et le prompt se termine proprement sur `typography.`. Zéro régression sur `SHEET_CLEAN`, les 14 `STYLE_PACKS` et les formulations de la taxonomie (`high-end CGI render`, `architectural clay model`, `fine detail`, `epic cinematic scale`).
+
+**Reste ouvert** : l'effet du filtre sur l'image n'a pas encore été vu — l'A/B ci-dessus a été rendu avec les boosters encore présents.
+
+## 2026-09-21 (suite) — gemma n'obéit pas à l'interdiction de vocabulaire : filet déterministe
+
+Premier test en rendu réel sur le GB10, après bascule sur la branche. La consigne `KREA2_ENRICH_SYSTEM` porte sur deux points des trois visés, mais pas sur le troisième.
+
+Brief : `A red panda astronaut poster, cinematic lighting, poster composition with space for title text.`
+
+- **Avant** (consigne générique, `main`) : « A whimsical and detailed poster featuring a red panda dressed as an astronaut… vintage sci-fi poster… **Ultra-detailed, photorealistic, 8k**, deep space nebula background, volumetric lighting. » — le prompt s'ouvre sur « poster », et trois directions se disputent (*whimsical*, *vintage sci-fi poster*, *photorealistic*).
+- **Après** (nouvelle consigne) : « **A photorealistic red panda astronaut standing confidently**… Cinematic volumetric lighting… Poster composition, centered subject with ample negative space… science fiction aesthetic, **ultra-detailed, 8k, highly rendered**, epic scale. » — le sujet passe en tête, l'ordre sujet → environnement → lumière → composition → style est respecté, et les styles concurrents se réduisent à *photorealistic* + *science fiction*, compatibles.
+
+**Le remplissage, lui, survit.** `ultra-detailed`, `8k` et `highly rendered` traversent une interdiction pourtant explicite. C'est un comportement attendu d'un modèle local de cette taille : une consigne négative enfouie dans une liste de règles n'est pas fiable, surtout en `format: "json"`. Conclusion retenue : **ne pas compter sur le modèle pour une contrainte vérifiable en code**.
+
+`stripPromptPadding()` retire donc ces termes de la sortie de gemma, sur le chemin Krea 2 uniquement, avant que le prompt n'atteigne le graphe et le champ brief. La liste `PROMPT_PADDING` est volontairement étroite — seulement des termes sans direction visuelle (`masterpiece`, `best quality`, `award-winning`, `ultra/hyper/highly/extremely/insanely detailed`, `highly rendered`, `8k`/`4k`/`16k`/`32k`). Vérifié comme survivant intacts : `photorealistic`, `photorealistic CGI`, `fine detail`, `epic cinematic scale` et les mots-clés des 14 `STYLE_PACKS`. Garde-fou : un prompt intégralement composé de remplissage est renvoyé tel quel plutôt que vidé. Une ligne du journal indique le nombre de caractères retirés. La consigne gagne au passage une relecture finale explicite, sans qu'on compte dessus.
+
+### Vérification
+
+11 assertions headless supplémentaires, en rejouant **la sortie gemma réelle observée** comme réponse stubée : les trois termes disparaissent du `CLIPTextEncode` soumis, `epic scale` et la description de composition restent, la ponctuation ne casse pas, le champ brief montre à l'utilisateur le prompt nettoyé, et rien n'est retiré hors Krea 2 (où le négatif continue d'être réécrit normalement).
+
+**Toujours non vérifié** : l'effet sur l'image. Les prompts sont maintenant conformes à la grammaire du document, reste à confirmer que ça se voit au rendu.
+
+## 2026-09-21 — Qualité des contenus Krea 2 : consigne d'enrichissement dédiée + bibliothèque de styles
+
+Point de départ : deux documents fournis par l'utilisateur — une taxonomie des styles visuels Krea 2 (9 familles, 72 styles, séparation style / look / technique / lumière / caméra / composition / couleur / texture) et un system prompt « architecte de prompt Krea 2 » (ordre de construction, sujet d'abord, 40–100 mots, formulations bannies, résolution de conflits). Comparaison faite avec ce que le code fabriquait réellement, puis deux niveaux retenus sur trois proposés (la cible à quatre phases du document — moteur de compatibilité, panneau à dix champs — a été écartée : elle ajoute des réglages là où la démo existe pour en retirer).
+
+### Niveau 1 — l'enrichissement parlait à tous les moteurs et à aucun
+
+`ENRICH_SYSTEM` faisait trois lignes et demandait « un prompt de diffusion + un negative prompt correspondant », quel que soit le moteur ciblé. Sur Krea 2 ce négatif n'arrive nulle part : le `KSampler` reçoit un `ConditioningZeroOut` du positif (piège n°16) et `api/krea2_t2i.json` n'a même pas de placeholder `{{NEGATIVE_PROMPT}}`. Toute contrainte que gemma choisissait de formuler en négatif était donc perdue au lieu d'être reformulée en positif.
+
+- `KREA2_ENRICH_SYSTEM` ajouté : ordre sujet → action → environnement → style → lumière → optique → composition → couleur → matière → atmosphère, sujet nommé en premier, 40–100 mots, vocabulaire de remplissage explicitement banni (`masterpiece`, `8k`, `best quality`…), un seul style dominant, et **toute contrainte exprimée positivement** — la discipline déjà appliquée par `SHEET_CLEAN` aux planches perso/décor.
+- `enrichBrief(wf)` choisit la consigne via `isKrea2Workflow(wf)` (`krea2_t2i`, `campaign_full`) et **n'écrit plus jamais** dans le champ négatif pour ces workflows. Le style courant est transmis en ligne `PRIMARY_STYLE` pour que gemma compose autour de lui sans en inventer un concurrent ; il n'est pas réécrit dans le prompt, il est ajouté à la soumission (vérifié : une seule occurrence).
+- Champ « Negative prompt » désactivé, avec une note traduite, quand la cible est Krea 2 — plutôt que laissé actif, prérempli et sans effet.
+- `storyboard_v2` et `minimax_h3_r2v` passent à `"enrich": "builtin"` dans le manifest. L'auto-enrichissement s'exécutait avant le dispatch vers les builders et réécrivait le brief en y injectant caméra, lumière et composition, alors que `characterSheetFromBrief`/`locationSheetFromBrief` ont pour consigne explicite « no camera/scene/action wording ». Les deux se contredisaient.
+
+### Niveau 2 — 5 styles, et pas là où Krea 2 génère
+
+`STYLE_PACKS` comptait 5 entrées et n'était exposé que sur `storyboard_v2`. Les deux chemins où Krea 2 fabrique les images de la démo (`text2image`, `campaign_full`) n'avaient aucun vocabulaire de style.
+
+- 14 entrées curées sur les 9 familles de la taxonomie (PHOTO, CINE, FASH, CGI, ANIME, ILLU, PAINT, EXP), au format mots-clés + affinités lumière/optique/couleur/texture recommandé par le document, et non plus une phrase figée. Les 5 ids historiques (`none`, `cinematic`, `noir`, `documentary`, `anime`) sont conservés : un projet enregistré garde son style.
+- Contrôle `style` ajouté à `text2image`, `campaign_full` et `reference2video` dans `workflows/manifest.json` **et** dans `PIPELINES_FALLBACK` (miroir utilisé si le fetch du manifest échoue).
+- Le style est ajouté **en fin** de prompt sur le chemin générique et sur les 3 visuels + le teaser de la campagne : le sujet reste en tête, conformément à l'ordre de priorité sujet > style déjà appliqué par `compileKeyframePrompt`/`compileCutPrompt`.
+- Correctif au passage : `currentStyleText()` ne renvoie du texte que si le pipeline courant expose le contrôle `style`. Le `<select>` gardait sa valeur même masqué, si bien que les fiches perso/décor de `reference2video` recevaient « cinematic » sans que rien ne l'affiche. `reference2video` expose maintenant le champ.
+
+### Vérification
+
+`node --check` sur le JS extrait, `manifest.json` relu en JSON. 51 assertions passées dans trois harnais headless (Chromium `headless_shell`) qui pilotent la page réelle via ses propres fonctions et interceptent `fetch` :
+
+- **UI / câblage (25)** — 14 styles dont les 9 nouveaux et les 5 ids historiques ; champ Style visible sur `text2image`, `campaign_full`, `reference2video`, `storyboard_v2` et masqué sur `text2video` ; `currentStyleText()` vide sur un pipeline sans le contrôle (plus de fuite) ; champ négatif désactivé sur Krea 2 et réactivé ailleurs ; libellés et note traduits en EN.
+- **Prompts soumis (18)** — graphe `krea2_t2i` intercepté : un seul `CLIPTextEncode`, sujet en tête, style présent et placé après le sujet, aucun texte négatif dans le graphe ; style « Aucun » laisse le brief intact ; sous auto-enrichissement, consigne Krea 2 envoyée, `PRIMARY_STYLE` transmis, champ négatif non écrasé, style présent une seule fois ; hors Krea 2, consigne générique conservée et négatif bien réécrit.
+- **Campagne et storyboard (8)** — les 3 visuels Krea 2 et le teaser LTX portent le style, ordre sujet > format > style respecté ; `storyboard_v2` ne déclenche plus l'enrichissement générique.
+
+Captures headless clair et sombre à 390 / 768 / 1250 / 1440 px : le champ Style s'insère dans la barre de génération sans casser la mise en page, et la note du champ négatif se lit en casse normale (elle a été sortie du `<label>`, qui force `text-transform: uppercase`).
+
+**Non vérifié** : aucun rendu GPU réel n'a été fait (ni ComfyUI ni Ollama dans l'environnement de travail). La qualité visuelle effective des nouveaux prompts reste à confirmer par un rendu sur le GB10.
+
 ## 2026-09-10 (suite 6) — Guide de dépannage en anglais + réponse sur l'ordre de création du dossier de destination
 
 **Version anglaise.** `docs/TROUBLESHOOTING.md` est désormais en anglais (la langue par défaut du dépôt pour tout ce qui est opérationnel, comme les scripts et `README.md`), et la version française devient `docs/TROUBLESHOOTING.fr.md` — même convention que `README.md` / `README.fr.md`. Les liens sont ajustés partout : `README.md` pointe sur la version anglaise, `README.fr.md` sur la française, chaque arborescence liste les deux, et `AGENTS.md` mentionne les deux. Contrôle d'ancres sur les quatre fichiers : aucun renvoi cassé ; les 21 (GB10) et 23 (x86) blocs de commandes passent `bash -n`.

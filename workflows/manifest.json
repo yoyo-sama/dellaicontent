@@ -6,7 +6,8 @@
       "controls": [
         "variants",
         "ratio",
-        "lora"
+        "lora",
+        "style"
       ]
     },
     {
@@ -60,14 +61,14 @@
       "label": "Storyboard + Animatic (charsheet + keyframes + cuts)",
       "scenario": "storyboard",
       "controls": [
-        "mode",
         "shots",
         "duration",
         "hold",
         "ratio",
         "style",
         "audio",
-        "sheetLora"
+        "sheetLora",
+        "sheetTemplate"
       ],
       "defaults": {
         "duration": 2
@@ -78,7 +79,6 @@
       "label": "Personnage + Décor cohérents (Minimax H3 reference2video)",
       "scenario": "storyboard",
       "controls": [
-        "mode",
         "duration",
         "ratio",
         "audio",
@@ -87,7 +87,9 @@
         "lora",
         "refs",
         "sheetLora",
-        "skipSheets"
+        "sheetTemplate",
+        "skipSheets",
+        "style"
       ],
       "defaults": {
         "duration": 2
@@ -100,7 +102,8 @@
       "controls": [
         "duration",
         "variants",
-        "audio"
+        "audio",
+        "style"
       ],
       "defaults": {
         "duration": 5
@@ -158,7 +161,8 @@
       "pipeline": "reference2video",
       "model": "Krea 2 + Minimax H3",
       "file": "api/minimax_h3_r2v.json",
-      "builder": "reference2video"
+      "builder": "reference2video",
+      "enrich": "builtin"
     },
     {
       "id": "flf2v_chain",
@@ -175,7 +179,8 @@
       "model": "Krea 2 + Qwen-Edit 2509 + LTX 2.5 22B",
       "file": null,
       "builder": "storyboard_v2",
-      "anchor": "api/qwen_edit_dual.json"
+      "anchor": "api/qwen_edit_dual.json",
+      "enrich": "builtin"
     },
     {
       "id": "campaign_full",
