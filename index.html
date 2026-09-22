@@ -2611,10 +2611,10 @@
         { en: "Krea 2 encodes no negative prompt: phrase every constraint positively. A re-enrichment rewrites the subject description only — the sheet layout is always restored afterwards.",
           es: "Krea 2 no codifica ningún prompt negativo: formule cada restricción en positivo. Un reenriquecimiento solo reescribe la descripción del sujeto: la composición de la lámina siempre se restablece después.",
           de: "Krea 2 kodiert keinen negativen Prompt: Formulieren Sie jede Vorgabe positiv. Eine Neuanreicherung schreibt nur die Motivbeschreibung um — das Layout des Blatts wird danach immer wiederhergestellt." },
-      "Qwen-Edit tourne à cfg 1 : aucun négatif n'est encodé, tout se formule positivement. Le bloc d'ancrage final est toujours remis après un ré-enrichissement.":
-        { en: "Qwen-Edit runs at cfg 1: no negative is encoded, phrase everything positively. The closing anchor block is always restored after a re-enrichment.",
-          es: "Qwen-Edit funciona con cfg 1: no se codifica ningún negativo, formúlelo todo en positivo. El bloque de anclaje final siempre se restablece tras un reenriquecimiento.",
-          de: "Qwen-Edit läuft mit cfg 1: Es wird kein Negativ kodiert, alles positiv formulieren. Der abschließende Ankerblock wird nach einer Neuanreicherung immer wiederhergestellt." },
+      "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passez par « ✎ Prompt de l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.":
+        { en: "This text is the prompt sent to the engine, not a shot description: it must keep the sentences stating what each reference image is for. To describe the action only, use \"\u270e Prompt de l'action\" on the shot. \"\u21a9 Original prompt\" restores the compiled one, and the closing anchor block is always restored.",
+          es: "Este texto es el prompt enviado al motor, no una descripción del plano: debe conservar las frases que indican para qué sirve cada imagen de referencia. Para describir solo la acción, use «\u270e Prompt de l'action» en el plano. «\u21a9 Prompt original» restaura la compilación, y el bloque de anclaje final siempre se restablece.",
+          de: "Dieser Text ist der an die Engine gesendete Prompt, keine Einstellungsbeschreibung: Die Sätze, die den Zweck jedes Referenzbilds nennen, müssen erhalten bleiben. Für eine reine Handlungsbeschreibung „\u270e Prompt de l'action“ an der Einstellung verwenden. „\u21a9 Ursprünglicher Prompt“ stellt die Kompilierung wieder her, und der abschließende Ankerblock wird immer wiederhergestellt." },
       "Bloc à champs Minimax H3 : le ré-enrichissement ne réécrit que detailed_description, les définitions de sujets restent en place.":
         { en: "Minimax H3 field block: re-enrichment only rewrites detailed_description, the subject definitions stay in place.",
           es: "Bloque de campos Minimax H3: el reenriquecimiento solo reescribe detailed_description, las definiciones de sujetos permanecen.",
@@ -3922,6 +3922,19 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         .split(KEYFRAME_ANCHOR_DUAL).join(" ")
         .split(KEYFRAME_ANCHOR_SOLO).join(" ")
         .replace(/\s{2,}/g, " ").trim();
+    }
+    // Le pendant : le bloc d'ancrage est remis s'il ne figure plus dans le texte. Il l'était
+    // déjà après un ré-enrichissement ; il l'est maintenant aussi sur un prompt tapé à la
+    // main. Un prompt de keyframe amputé de son ancrage ne rend pas un plan : Qwen-Edit
+    // recompose les planches de référence en collage — constaté sur le plan 4 du run GB10 du
+    // 2026-09-22, où le prompt avait été remplacé par la seule phrase d'action.
+    // Le texte de l'utilisateur n'est jamais réécrit : on ajoute, on ne recompile pas.
+    function ensureKeyframeAnchor(text, dual) {
+      const anchor = dual ? KEYFRAME_ANCHOR_DUAL : KEYFRAME_ANCHOR_SOLO;
+      const t = String(text || "").trim();
+      if (!t || t.includes(anchor)) return t;
+      addEvent("SYS", "Bloc d'ancrage remis au prompt de keyframe (il en était absent).", "sys");
+      return t + " " + anchor;
     }
 
     // Ré-enrichit un prompt de keyframe édité à la main. `dual` = plan à deux sujets (choisit
@@ -6759,10 +6772,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const compiled = compileKeyframePrompt(shot, subs.map(r => r.desc));
       openPromptEditor({
         title: "Prompt de la keyframe",
-        hint: "Qwen-Edit tourne à cfg 1 : aucun négatif n'est encodé, tout se formule positivement. Le bloc d'ancrage final est toujours remis après un ré-enrichissement.",
+        hint: "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passez par « ✎ Prompt de l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.",
         text: kf.prompt || compiled,
         enrich: text => enrichKeyframeText(text, dual),
-        apply: text => regenerateKeyframe(i, text)
+        apply: text => regenerateKeyframe(i, ensureKeyframeAnchor(text, dual))
       });
     }
 
