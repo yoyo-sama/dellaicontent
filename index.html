@@ -4617,8 +4617,12 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const extra = (shot.extra || "").trim();
       const styleText = currentStyleText();
       const env = subjects.find(sub => sub.kind === "environment");
-      const char = subjects.find(sub => sub.kind === "character");
-      const lead = char && env ? `${char.label} is in ${env.label}. ` : "";
+      // Tous les personnages taggés sur le plan, pas seulement le premier : sinon le
+      // second n'existe que dans subject_definitions et n'est jamais placé dans la scène.
+      const chars = subjects.filter(sub => sub.kind === "character");
+      const lead = chars.length && env
+        ? `${chars.map(sub => sub.label).join(" and ")} ${chars.length > 1 ? "are" : "is"} in ${env.label}. `
+        : "";
       let s = lead + shot.action + (emotion ? ", conveying " + emotion : "") + ". " + light.text
         + " Camera motion: " + (holdMotion || cam.motion) + ".";
       if (extra) s += " " + extra;
@@ -5401,7 +5405,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // lumière de cette image ». Nos 3 natures sont toutes des références d'identité, donc
     // fully_preserved — le défaut du composer lui aussi.
     const H3_SUBJECT_KINDS = {
-      character:   { lead: "is the main character in",   note: "the complete defined identity, face, and body proportions are preserved." },
+      character:   { lead: "is the main character in", leadMulti: "is a character in", note: "the complete defined identity, face, and body proportions are preserved." },
       environment: { lead: "is the location as defined by", note: "the environment's defined architecture, layout, and spatial continuity are retained." },
       reference:   { lead: "is an additional reference in", note: "the defined shape, proportions, materials, colors, and distinguishing features are retained." }
     };
@@ -5433,10 +5437,16 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Assemble le bloc Ref2VA 6 champs. `subjects` sort de h3AssignSubjects.
     function buildH3RefPrompt({ subjects, summary, body }) {
+      // Deux personnages dans le même plan ne peuvent pas être tous deux « the main
+      // character » : le modèle reçoit alors deux revendications contradictoires. Dès
+      // qu'ils sont plusieurs, chacun devient « a character ». À un seul personnage —
+      // le seul cas qualifié — la phrase est inchangée au caractère près.
+      const multiChar = subjects.filter(sub => sub.kind === "character").length > 1;
       const defs = subjects.map(sub => {
         const kind = H3_SUBJECT_KINDS[sub.kind] || H3_SUBJECT_KINDS.reference;
         const desc = (sub.desc || "").trim().replace(/[.\s]+$/, "");
-        return `${sub.label} ${kind.lead} ${h3Picture(sub.picture)}${desc ? `, ${desc}` : ""}.`;
+        const lead = (multiChar && kind.leadMulti) || kind.lead;
+        return `${sub.label} ${lead} ${h3Picture(sub.picture)}${desc ? `, ${desc}` : ""}.`;
       }).join("\n");
       // Pas de parenthèse après le label : dans la grammaire du composer, cette position
       // porte un « où ça apparaît » (whereFor — « appears in [Shot 2] »), pas la liaison
