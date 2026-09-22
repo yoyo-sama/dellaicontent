@@ -1068,6 +1068,8 @@
     .relay-composer .hint { margin-top: 8px; }
     /* Bande de frames candidates : la retenue porte le liseré d'accent, les autres restent
        lisibles mais en retrait — c'est un choix, pas une galerie. */
+    .relay-endframe { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .relay-endframe img { width: 84px; height: 48px; object-fit: cover; border-radius: 4px; border: 2px solid var(--accent); display: block; }
     .relay-transitions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .relay-transitions .transitions-lbl { font-size: 12px; color: var(--text-2); margin-right: 4px; }
     .relay-thumb {
@@ -2642,6 +2644,10 @@
       "🔄 Re-générer": { en: "🔄 Re-generate", es: "🔄 Volver a generar", de: "🔄 Neu generieren" },
       "À re-générer": { en: "To re-generate", es: "Por volver a generar", de: "Neu zu generieren" },
       "Image de transition": { en: "Transition frame", es: "Imagen de transición", de: "Übergangsbild" },
+      "🎯 Image de fin": { en: "🎯 End frame", es: "🎯 Imagen final", de: "🎯 Endbild" },
+      "🎯 Changer l'image de fin": { en: "🎯 Change the end frame", es: "🎯 Cambiar la imagen final", de: "🎯 Endbild ändern" },
+      "✕ Retirer l'image de fin": { en: "✕ Remove the end frame", es: "✕ Quitar la imagen final", de: "✕ Endbild entfernen" },
+      "Image de fin": { en: "End frame", es: "Imagen final", de: "Endbild" },
       "Dernière frame": { en: "Last frame", es: "Último fotograma", de: "Letztes Bild" },
       // Composer de scénario (moteur H3)
       "Scénario": { en: "Screenplay", es: "Guion", de: "Drehbuch" },
@@ -4802,10 +4808,12 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Bloc complet d'un cut H3 : phrase d'alignement (la keyframe est l'instant 0 du clip)
     // puis les 6 champs. `bodyOverride` sert au ré-enrichissement, qui ne réécrit QUE le
     // corps narratif et laisse la structure intacte.
-    function buildH3CutPrompt(shot, locDesc, holdMotion, duration, bodyOverride) {
+    function buildH3CutPrompt(shot, locDesc, holdMotion, duration, bodyOverride, hasLast) {
       const subjects = h3CutSubjects(shot, locDesc);
       const body = bodyOverride || h3CutBodyText(shot, subjects, holdMotion);
-      return capH3Prompt(`${h3Alignment(false, duration)}\n\n` + buildH3RefPrompt({
+      // `hasLast` : une image de fin est fournie (FL2VA). La phrase d'alignement passe alors
+      // à sa forme à deux repères, dont celui de fin est la durée RÉELLEMENT rendue.
+      return capH3Prompt(`${h3Alignment(!!hasLast, duration)}\n\n` + buildH3RefPrompt({
         subjects, summary: h3Summary(shot.action), body
       }));
     }
@@ -4820,9 +4828,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Prompt d'un cut, moteur compris. LTX 2.5 garde EXACTEMENT compileCutPrompt (piège n°9,
     // formulation qualifiée au LOT 4) — le moteur H3 est un chemin à part, pas une refonte.
-    function compileCutPromptFor(shot, charDesc, locDesc, holdMotion, engine, duration) {
+    function compileCutPromptFor(shot, charDesc, locDesc, holdMotion, engine, duration, hasLast) {
       return engine === "minimax_h3"
-        ? buildH3CutPrompt(shot, locDesc, holdMotion, duration)
+        ? buildH3CutPrompt(shot, locDesc, holdMotion, duration, null, hasLast)
         : compileCutPrompt(shot, charDesc, locDesc, holdMotion);
     }
 
@@ -5392,9 +5400,14 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     }
     // `engine` : "ltx25" (défaut, chemin qualifié LOT 4) ou "minimax_h3". `promptOverride` :
     // prompt saisi dans l'éditeur, envoyé VERBATIM.
-    async function submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText, seed, idx, total, dur, holdMotion, engine, promptOverride) {
+    // `lastName` : entrée ComfyUI d'une image de FIN. `MiniMaxH3ImageToVideo` couvre le FL2VA
+    // avec le même nœud que l'i2v — `first_frame` seul contre les deux (piège n°11), et le
+    // template porte déjà `last_frame`. Sur tout autre moteur l'argument est ignoré :
+    // `api/ltx25_i2v.json` ne câble pas de dernière image.
+    async function submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText, seed, idx, total, dur, holdMotion, engine, promptOverride, lastName) {
       const sz = videoSizeFor(await imageSize(keyObj.blob));
       const isMM = engine === "minimax_h3";
+      const hasLast = isMM && !!lastName;
       // Piège n°9 : l'enhancer LTX (TextGenerateLTX2Prompt) n'a AUCUNE entrée image et,
       // à cfg 1, fait loi sur le rendu. Un prompt de mouvement seul le laisse inventer une
       // scène sans rapport avec la keyframe. compileCutPrompt l'ancre sur le contenu réel de
@@ -5402,20 +5415,21 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // H3 n'a pas d'enhancer : l'ancrage y passe par la grammaire à champs (buildH3CutPrompt),
       // qui nomme explicitement le personnage et le décor de la keyframe.
       const g = buildGraph(i2vRaw, {
-        prompt: promptOverride || compileCutPromptFor(shot, charDesc, locDesc, holdMotion, engine, dur),
-        negative: negText, seed, image: keyObj.name, width: sz.w, height: sz.h, batch: 1, duration: dur
+        prompt: promptOverride || compileCutPromptFor(shot, charDesc, locDesc, holdMotion, engine, dur, hasLast),
+        negative: negText, seed, image: keyObj.name, image2: lastName || "",
+        width: sz.w, height: sz.h, batch: 1, duration: dur
       });
       if (isMM) {
-        // i2v : première image seule, pas de FL2VA ici — on retire `last_frame` comme le
-        // fait le chemin générique. Turbo 8 steps = le réglage qualifié (LESSONS piège n°12,
+        // Sans image de fin on retire `last_frame` comme le fait le chemin générique, et le
+        // nœud redevient un i2v pur. Turbo 8 steps = le réglage qualifié (LESSONS piège n°12,
         // 4 steps casse la colorimétrie et n'est jamais exposé).
-        applyMinimaxLastFrame(g, false);
+        applyMinimaxLastFrame(g, hasLast);
         applyMinimaxTurbo(g, true, 8);
       }
       for (const node of Object.values(g))
         if (node.class_type === "SaveVideo") node.inputs.filename_prefix = `studio/story/cut_${String(idx + 1).padStart(2, "0")}`;
       return submitGraph(g, `Storyboard · cut ${idx + 1}/${total}`, isMM
-        ? `Minimax H3 i2v · turbo 8 steps · ${dur}s demandés → ${h3RealDuration(dur).toFixed(2)}s rendus · ${sz.w}x${sz.h} · seed ${seed}`
+        ? `Minimax H3 ${hasLast ? "FL2VA" : "i2v"} · turbo 8 steps · ${dur}s demandés → ${h3RealDuration(dur).toFixed(2)}s rendus · ${sz.w}x${sz.h} · seed ${seed}`
         : `LTX 2.5 i2v · ${dur}s · ${sz.w}x${sz.h} · seed ${seed}`);
     }
     async function submitAnimaticJob(cutNames, withAudio, seed) {
@@ -7086,7 +7100,18 @@ Answer ONLY with JSON: {"prompt": "..."}`;
                                      // possible sans relancer toute la chaîne.
                                      start: null,
                                      // Bande de frames candidates rendue à la fin du segment + celle retenue.
-                                     transitions: null, transitionIdx: 0 });
+                                     transitions: null, transitionIdx: 0,
+                                     // Image de FIN déposée par l'utilisateur : le segment rend alors en
+                                     // FL2VA, de son image de départ vers celle-là (moteur H3 seulement).
+                                     endImage: null });
+
+    // Référence de fichier d'une entrée ComfyUI, pour l'afficher en vignette : `/view` sert
+    // le dossier d'entrée avec `type=input`, donc une image téléversée se relit sans passer
+    // par un objectURL — qui, lui, ne survivrait pas à une reprise de projet.
+    function relayInputRef(name) {
+      const parts = String(name).split("/");
+      return { filename: parts.pop(), subfolder: parts.join("/"), type: "input" };
+    }
 
     function ensureRelay() {
       if (!director) return null;
@@ -7200,8 +7225,11 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
             <button type="button" class="secondary-btn seg-link"></button>
             <button type="button" class="secondary-btn seg-enrich"></button>
             <button type="button" class="secondary-btn seg-regen"></button>
+            <button type="button" class="secondary-btn seg-end" hidden></button>
             <button type="button" class="secondary-btn seg-del"></button>
+            <input type="file" class="seg-end-file" accept="image/*" hidden />
           </div>
+          <div class="relay-endframe" hidden></div>
           <video muted preload="metadata" hidden></video>
           <div class="relay-transitions" hidden></div>`;
         el.querySelector("strong").textContent = dyn("relaySegment", i + 1, r.segments.length);
@@ -7254,6 +7282,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         regen.textContent = tr("🔄 Re-générer");
         regen.disabled = busy || !["ready", "stale", "error"].includes(seg.status);
         regen.addEventListener("click", () => regenerateRelaySegment(i));
+        renderSegmentEndImage(el, i, seg, busy);
         const del = el.querySelector(".seg-del");
         del.textContent = tr("✕ Retirer");
         del.disabled = busy || r.segments.length < 2;
@@ -7268,6 +7297,53 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
       });
       translateTree(list);
       updateRelayButtons();
+    }
+
+    // Image de fin d'un segment (FL2VA). Réservée au moteur H3 : `MiniMaxH3ImageToVideo`
+    // porte `last_frame` dans le template, `api/ltx25_i2v.json` n'a pas d'équivalent — le
+    // contrôle est donc masqué sur LTX 2.5 plutôt que présent et sans effet.
+    function renderSegmentEndImage(el, i, seg, busy) {
+      const btn = el.querySelector(".seg-end");
+      const wrap = el.querySelector(".relay-endframe");
+      if (relayEngine() !== "minimax_h3") return;
+      btn.hidden = false;
+      btn.textContent = seg.endImage ? tr("🎯 Changer l'image de fin") : tr("🎯 Image de fin");
+      btn.disabled = busy;
+      const input = el.querySelector(".seg-end-file");
+      btn.addEventListener("click", () => input.click());
+      input.addEventListener("change", async () => {
+        const f = input.files[0];
+        input.value = "";
+        if (f) await setSegmentEndImage(i, f);
+      });
+      if (!seg.endImage) return;
+      wrap.hidden = false;
+      const lbl = document.createElement("span");
+      lbl.className = "transitions-lbl";
+      lbl.textContent = tr("Image de fin");
+      const img = document.createElement("img");
+      img.src = viewURL(relayInputRef(seg.endImage.name));
+      img.alt = "";
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.className = "secondary-btn";
+      clear.textContent = tr("✕ Retirer l'image de fin");
+      clear.disabled = busy;
+      clear.addEventListener("click", () => setSegmentEndImage(i, null));
+      wrap.append(lbl, img, clear);
+    }
+
+    // Poser ou retirer l'image de fin ne relance rien : le segment passe « à re-générer »,
+    // comme un changement de frame de transition.
+    async function setSegmentEndImage(i, file) {
+      const seg = director?.relay?.segments[i];
+      if (!seg || relayBusy()) return;
+      try {
+        seg.endImage = file ? { name: await uploadRefFile(file) } : null;
+        if (seg.status === "ready") seg.status = "stale";
+      } catch (err) { addEvent("WARN", err.message, "warn"); }
+      renderRelay();
+      saveProject();
     }
 
     // Bande de transition d'un segment : les frames candidates, la retenue mise en avant.
@@ -7367,9 +7443,12 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
       }
       seg.start = { name: keyObj.name, file: keyObj.file || null, blob: keyObj.blob };
       addEvent("REQ", `Relay · segment ${i + 1}/${total} : vidéo…`, "req");
-      seg.prompt_used = compileCutPromptFor(shot, charDesc, locDesc, null, engine, seg.duration);
+      // L'image de fin n'existe que sur H3 : sur LTX 2.5 le template ne câble pas de
+      // dernière image, la garder ferait promettre au prompt ce que le graphe ne fait pas.
+      const lastName = engine === "minimax_h3" ? seg.endImage?.name || null : null;
+      seg.prompt_used = compileCutPromptFor(shot, charDesc, locDesc, null, engine, seg.duration, !!lastName);
       const cutId = await submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText,
-        seg.seed, i, total, seg.duration, null, engine, seg.prompt_used);
+        seg.seed, i, total, seg.duration, null, engine, seg.prompt_used, lastName);
       const entry = (await waitForJobs([cutId]))[cutId];
       const f = outputFiles(entry, ".mp4")[0];
       if (!f) throw new Error(`segment ${i + 1} : aucune vidéo en sortie`);
