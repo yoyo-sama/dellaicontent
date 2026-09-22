@@ -1835,7 +1835,7 @@
                 <input type="number" id="shotCount" min="4" max="16" value="6" />
               </label>
               <label class="gb-field" id="holdWrap" style="display:none">
-                Tenue du plan final (s)
+                Tenue du plan final (s) — 0 pour aucun clip de tenue
                 <input type="number" id="holdDuration" min="0" max="8" value="2" />
               </label>
               <label class="gb-field">
@@ -2326,7 +2326,9 @@
       "Variantes": { en: "Variants", es: "Variantes", de: "Varianten" },
       "Durée vidéo (s)": { en: "Video length (s)", es: "Duración del vídeo (s)", de: "Videolänge (s)" },
       "Nombre de cases": { en: "Number of panels", es: "Número de viñetas", de: "Anzahl der Panels" },
-      "Tenue du plan final (s)": { en: "Final shot hold (s)", es: "Mantener plano final (s)", de: "Schlussbild halten (s)" },
+      "Tenue du plan final (s) — 0 pour aucun clip de tenue": {
+        en: "Final shot hold (s) — 0 for no hold clip", es: "Mantener plano final (s) — 0 para ningún clip de sostenido",
+        de: "Schlussbild halten (s) — 0 für keinen Halteclip" },
       "Generate": { fr: "Générer", es: "Generar", de: "Generieren" },
       "Enrichir le brief (LLM)": { en: "Enrich brief (LLM)", es: "Enriquecer el brief (LLM)", de: "Briefing anreichern (LLM)" },
       "Use Fallback Asset": { fr: "Utiliser l'asset de secours", es: "Usar asset de respaldo", de: "Fallback-Asset verwenden" },
@@ -2638,6 +2640,9 @@
       shotLabel: {
         fr: (i, n) => `Plan ${i}/${n}`, en: (i, n) => `Shot ${i}/${n}`,
         es: (i, n) => `Plano ${i}/${n}`, de: (i, n) => `Einstellung ${i}/${n}` },
+      holdClipLabel: {
+        fr: n => `Tenue du plan ${n}`, en: n => `Hold on shot ${n}`,
+        es: n => `Sostenido del plano ${n}`, de: n => `Halten der Einstellung ${n}` },
       subjectN: {
         fr: i => `Sujet ${i}`, en: i => `Subject ${i}`,
         es: i => `Sujeto ${i}`, de: i => `Motiv ${i}` },
@@ -6634,7 +6639,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             status: "ready", engine, edited: false,
             prompt: compileCutPromptFor(plan[k].shot, shotCharDesc(plan[k].shot), locDesc, plan[k].holdMotion, engine, plan[k].duration) };
         }
-        addEvent("OK", `${plan.length} cuts générés — réordonnez puis assemblez.`, "ok");
+        const held = plan.length - director.n;
+        addEvent("OK", `${director.n} cuts générés${held ? ` + ${held} tenue du plan final` : ""} — réordonnez puis assemblez.`, "ok");
       } catch (err) { addEvent("WARN", err.message, "warn"); }
       renderMontage();
       renderFooterTimeline();
@@ -6742,7 +6748,13 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             <button type="button" class="clip-prompt"></button>
             <button type="button" class="clip-preview"></button>
           </div>`;
-        clip.querySelector("strong").textContent = dyn("shotLabel", k + 1, director.cutPlan.length);
+        // Le clip de tenue n'est pas un plan de plus : le numéroter comme tel affichait
+        // « Plan 7/7 » sur un storyboard de 6 plans, et décalait le total de tous les
+        // autres. Il porte son propre libellé, les plans gardent la numérotation du
+        // storyboard (director.n).
+        clip.querySelector("strong").textContent = director.cutPlan[k]?.holdMotion
+          ? dyn("holdClipLabel", director.n)
+          : dyn("shotLabel", k + 1, director.n);
         const stale = cut.status === "stale";
         const realDur = cut.engine === "minimax_h3" ? ` · ${h3RealDuration(cut.duration).toFixed(2)} s rendus` : "";
         clip.querySelector(".clip-meta").innerHTML =
