@@ -884,6 +884,34 @@
     }
     .market-chip.active { background: var(--grad); color: var(--on-grad); border-color: transparent; font-weight: 600; }
 
+    /* Sujets Minimax H3 (Ref2VA) : légendes de slot + puces d'insertion sous le brief.
+       Option (a) « implicite » — l'app attribue les numéros, l'utilisateur ne les saisit
+       que s'il veut lever une ambiguïté entre plusieurs sujets d'un même plan. */
+    .subject-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .subject-chips button {
+      border: 1px solid var(--border-light);
+      background: var(--card-2);
+      color: var(--text-2);
+      border-radius: var(--pill);
+      padding: 4px 11px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .subject-chips button:hover { color: var(--text-1); border-color: var(--accent); }
+    .ref-subjects { display: grid; gap: 6px; margin-top: 8px; }
+    .ref-subject {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      background: var(--card-2);
+      padding: 7px 10px;
+      font-size: 12px;
+    }
+    .ref-subject .rs-tag { color: var(--accent); font-weight: 600; white-space: nowrap; }
+    .ref-subject .rs-name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .seq-list { display: grid; gap: 8px; }
     .seq-item {
       display: grid;
@@ -977,6 +1005,84 @@
     }
     #lightboxClose { right: 24px; }
     #lightboxCopy { left: 24px; }
+
+    /* Éditeur de prompt (planches, keyframes, cuts) — même empilement que la lightbox,
+       une couche au-dessus pour pouvoir s'ouvrir depuis un aperçu. */
+    .cut-engine { display: block; margin: 0 0 6px; max-width: 420px; }
+
+    .relay-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+    .relay-seg {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      background: var(--card-2);
+      padding: 10px;
+    }
+    .relay-seg .seg-head { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--text-2); }
+    .relay-seg textarea {
+      grid-column: 1 / -1;
+      min-height: 60px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-light);
+      background: var(--card);
+      color: var(--text);
+    }
+    .relay-seg .seg-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .relay-seg .seg-row label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .relay-seg .seg-row input[type="number"] { width: 72px; }
+    .relay-seg .seg-link.active { border-color: var(--accent); color: var(--accent); }
+    .relay-seg video { grid-column: 1 / -1; width: 100%; border-radius: 8px; }
+    .relay-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    #relayPlayer video { width: 100%; margin-top: 12px; border-radius: var(--radius); }
+
+    #promptModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 110;
+      padding: 16px;
+    }
+    #promptModal[hidden] { display: none; }
+    .prompt-dialog {
+      width: min(760px, 100%);
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+    .prompt-dialog h4 { margin: 0; font-size: 15px; }
+    .prompt-dialog textarea {
+      min-height: 220px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-light);
+      background: var(--card-2);
+      color: var(--text);
+    }
+    .prompt-dialog .prompt-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .prompt-dialog .prompt-actions .spacer { margin-right: auto; }
 
     .gallery-group {
       grid-column: 1 / -1;
@@ -1659,6 +1765,7 @@
               <label class="gb-prompt">
                 Prompt ou brief
                 <textarea id="brief"></textarea>
+                <div class="subject-chips" id="subjectChips" style="display:none"></div>
               </label>
               <label class="gb-field">
                 Pipeline
@@ -1741,6 +1848,11 @@
                   <button type="button" id="assetChipClear" title="Retirer l'asset sélectionné">✕</button>
                 </span>
               </label>
+              <label class="gb-field gb-wide" id="lastImageWrap" style="display:none">
+                Dernière image (facultatif — FL2VA)
+                <input type="file" id="lastImageInput" accept="image/*"
+                  title="Fournie, la vidéo se termine dessus ; laissée vide, le clip part de la première image comme avant." />
+              </label>
               <button class="primary-btn gb-go" id="generateBtn">Generate</button>
             </div>
 
@@ -1814,6 +1926,8 @@
                 Images de référence supplémentaires (max 7)
                 <input type="file" id="refImagesInput" accept="image/*" multiple />
               </label>
+              <p class="hint">Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.</p>
+              <div class="ref-subjects" id="refSubjects"></div>
               <label>
                 Vidéos de référence (max 3)
                 <input type="file" id="refVideosInput" accept="video/*" multiple />
@@ -1859,6 +1973,7 @@
         <button type="button" class="studio-nav-btn" data-section="location">Décor</button>
         <button type="button" class="studio-nav-btn locked" data-section="storyboard" disabled>Storyboard</button>
         <button type="button" class="studio-nav-btn locked" data-section="montage" disabled>Montage</button>
+        <button type="button" class="studio-nav-btn locked" data-section="relay" disabled>Relay</button>
         <button type="button" class="studio-nav-btn locked" data-section="video" disabled style="display:none">Vidéo</button>
         <div class="studio-nav-foot">
           <button type="button" class="primary-btn" id="directorValidateBtn" disabled>Valider les planches</button>
@@ -1887,6 +2002,7 @@
               <label>Palette<input type="text" data-field="palette" /></label>
               <div class="sheet-actions">
                 <button type="button" class="secondary-btn sheet-regen">🔄 Régénérer la planche</button>
+                <button type="button" class="secondary-btn sheet-prompt">✎ Prompt</button>
                 <button type="button" class="secondary-btn sheet-import">📥 Importer une image</button>
                 <input type="file" class="sheet-import-input" accept="image/*" hidden />
               </div>
@@ -1910,6 +2026,7 @@
               <label>Palette<input type="text" data-field="palette" /></label>
               <div class="sheet-actions">
                 <button type="button" class="secondary-btn sheet-regen">🔄 Régénérer la planche</button>
+                <button type="button" class="secondary-btn sheet-prompt">✎ Prompt</button>
                 <button type="button" class="secondary-btn sheet-import">📥 Importer une image</button>
                 <input type="file" class="sheet-import-input" accept="image/*" hidden />
               </div>
@@ -1933,10 +2050,36 @@
         <section id="studioMontage" class="studio-section" style="display:none">
           <h3 class="section-title">Montage</h3>
           <p class="hint">Générez les cuts, réordonnez ou re-rendez chaque plan, puis assemblez l'animatic. Réordonner ne relance rien.</p>
+          <label class="cut-engine">Moteur des cuts
+            <select id="cutEngineSelect">
+              <option value="ltx25">LTX 2.5 i2v</option>
+              <option value="minimax_h3">Minimax H3 i2v (grammaire Prompt Composer)</option>
+            </select>
+          </label>
+          <p class="hint" id="cutEngineHint"></p>
           <button type="button" class="primary-btn" id="directorLaunchBtn" disabled>Générer les cuts</button>
           <div class="montage-list" id="montageList"></div>
           <button type="button" class="primary-btn" id="directorAssembleBtn" disabled style="margin-top:12px">Assembler l'animatic</button>
           <div id="montagePlayer"></div>
+        </section>
+
+        <section id="studioRelay" class="studio-section" style="display:none">
+          <h3 class="section-title">Prompt Relay</h3>
+          <p class="hint">Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle keyframe est composée sur les planches validées.</p>
+          <label class="cut-engine">Moteur des segments
+            <select id="relayEngineSelect">
+              <option value="ltx25">LTX 2.5 i2v</option>
+              <option value="minimax_h3">Minimax H3 i2v (grammaire Prompt Composer)</option>
+            </select>
+          </label>
+          <div class="relay-list" id="relayList"></div>
+          <div class="relay-foot">
+            <button type="button" class="secondary-btn" id="relayAddBtn">＋ Ajouter un segment</button>
+            <button type="button" class="primary-btn" id="relayRunBtn" disabled>Générer la chaîne</button>
+            <button type="button" class="primary-btn" id="relayAssembleBtn" disabled>Assembler la séquence</button>
+          </div>
+          <p class="hint" id="relayStatus"></p>
+          <div id="relayPlayer"></div>
         </section>
 
         <section id="studioVideoR2V" class="studio-section" style="display:none">
@@ -1959,6 +2102,20 @@
       <figure class="soul-loc"><img alt="" /><figcaption>Décor</figcaption></figure>
     </div>
   </aside>
+
+  <div id="promptModal" hidden>
+    <div class="prompt-dialog">
+      <h4 id="promptModalTitle">Prompt</h4>
+      <p class="hint" id="promptModalHint"></p>
+      <textarea id="promptModalText" spellcheck="false"></textarea>
+      <div class="prompt-actions">
+        <button type="button" class="secondary-btn spacer" id="promptModalEnrich">✨ Ré-enrichir (gemma)</button>
+        <button type="button" class="secondary-btn" id="promptModalReset">↩ Prompt d'origine</button>
+        <button type="button" class="secondary-btn" id="promptModalCancel">Annuler</button>
+        <button type="button" class="primary-btn" id="promptModalApply">Appliquer et régénérer</button>
+      </div>
+    </div>
+  </div>
 
   <div id="lightbox" hidden>
     <button id="lightboxClose">✕ Fermer</button>
@@ -2110,6 +2267,23 @@
     // Clés = texte d'origine du DOM ; le journal d'événements reste technique (non traduit).
     const I18N = {
       "Media and Entertainment · GB10 Demo App": { fr: "Media and Entertainment · Démo GB10", es: "Media and Entertainment · Demo GB10", de: "Media and Entertainment · GB10-Demo" },
+      "En plus des fiches personnage/décor générées automatiquement (ref_image_0/1). Aucune obligatoire.": {
+        en: "In addition to the character/location sheets generated automatically (ref_image_0/1). None required.",
+        es: "Además de las fichas de personaje/decorado generadas automáticamente (ref_image_0/1). Ninguna obligatoria.",
+        de: "Zusätzlich zu den automatisch erzeugten Figuren-/Schauplatzblättern (ref_image_0/1). Keine erforderlich." },
+      "Dernière image (facultatif — FL2VA)": {
+        en: "Last frame (optional — FL2VA)", es: "Última imagen (opcional — FL2VA)",
+        de: "Letztes Bild (optional — FL2VA)" },
+      "personnage": { en: "character", es: "personaje", de: "Figur" },
+      "décor": { en: "location", es: "decorado", de: "Schauplatz" },
+      "référence": { en: "reference", es: "referencia", de: "Referenz" },
+      "Insérer le label de ce sujet dans le brief": {
+        en: "Insert this subject's label into the brief", es: "Insertar la etiqueta de este sujeto en el brief",
+        de: "Label dieses Subjekts in das Briefing einfügen" },
+      "Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.": {
+        en: "Each image gets a subject number, carried into the prompt automatically.",
+        es: "Cada imagen recibe un número de sujeto, incorporado automáticamente al prompt.",
+        de: "Jedes Bild erhält eine Motivnummer, die automatisch in den Prompt übernommen wird." },
       "Studio créatif IA 100 % local : text2image, image2image, image2video et text2video générés par ComfyUI sur le GB10, enrichissement de prompt par LLM local via Ollama.":
         { en: "100% local AI creative studio: text2image, image2image, image2video and text2video generated by ComfyUI on the GB10, prompt enrichment by a local LLM via Ollama.",
           es: "Estudio creativo de IA 100 % local: text2image, image2image, image2video y text2video generados por ComfyUI en el GB10, enriquecimiento de prompts con un LLM local vía Ollama.",
@@ -2348,6 +2522,65 @@
       "Durée (s)": { en: "Duration (s)", es: "Duración (s)", de: "Dauer (s)" },
       "Détails": { en: "Details", es: "Detalles" },
       "arrondi 8n+1 au rendu": { en: "rounded to 8n+1 on render", es: "redondeado a 8n+1 al renderizar", de: "beim Rendern auf 8n+1 gerundet" },
+      // Éditeur de prompt (planches, keyframes, cuts)
+      "Prompt": {},
+      "✎ Prompt": {},
+      "✎ Prompt ✱": {},
+      "✨ Ré-enrichir (gemma)": { en: "✨ Re-enrich (gemma)", es: "✨ Reenriquecer (gemma)", de: "✨ Neu anreichern (gemma)" },
+      "↩ Prompt d'origine": { en: "↩ Original prompt", es: "↩ Prompt original", de: "↩ Ursprünglicher Prompt" },
+      "Annuler": { en: "Cancel", es: "Cancelar", de: "Abbrechen" },
+      "Appliquer et régénérer": { en: "Apply and regenerate", es: "Aplicar y regenerar", de: "Übernehmen und neu generieren" },
+      "Enrichissement…": { en: "Enriching…", es: "Enriqueciendo…", de: "Anreicherung…" },
+      "Prompt de la planche personnage": { en: "Character sheet prompt", es: "Prompt de la lámina de personaje", de: "Prompt des Charakterbogens" },
+      "Prompt de la planche décor": { en: "Location sheet prompt", es: "Prompt de la lámina de decorado", de: "Prompt des Kulissenbogens" },
+      "Prompt de la keyframe": { en: "Keyframe prompt", es: "Prompt del fotograma clave", de: "Keyframe-Prompt" },
+      "Prompt du cut": { en: "Cut prompt", es: "Prompt del corte", de: "Cut-Prompt" },
+      "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement.":
+        { en: "Krea 2 encodes no negative prompt: phrase every constraint positively.",
+          es: "Krea 2 no codifica ningún prompt negativo: formule cada restricción en positivo.",
+          de: "Krea 2 kodiert keinen negativen Prompt: Formulieren Sie jede Vorgabe positiv." },
+      "Qwen-Edit tourne à cfg 1 : aucun négatif n'est encodé, tout se formule positivement. Le bloc d'ancrage final est toujours remis après un ré-enrichissement.":
+        { en: "Qwen-Edit runs at cfg 1: no negative is encoded, phrase everything positively. The closing anchor block is always restored after a re-enrichment.",
+          es: "Qwen-Edit funciona con cfg 1: no se codifica ningún negativo, formúlelo todo en positivo. El bloque de anclaje final siempre se restablece tras un reenriquecimiento.",
+          de: "Qwen-Edit läuft mit cfg 1: Es wird kein Negativ kodiert, alles positiv formulieren. Der abschließende Ankerblock wird nach einer Neuanreicherung immer wiederhergestellt." },
+      "Bloc à champs Minimax H3 : le ré-enrichissement ne réécrit que detailed_description, les définitions de sujets restent en place.":
+        { en: "Minimax H3 field block: re-enrichment only rewrites detailed_description, the subject definitions stay in place.",
+          es: "Bloque de campos Minimax H3: el reenriquecimiento solo reescribe detailed_description, las definiciones de sujetos permanecen.",
+          de: "Minimax-H3-Feldblock: Die Neuanreicherung schreibt nur detailed_description um, die Motivdefinitionen bleiben bestehen." },
+      "LTX 2.5 tourne à cfg 1 : son enhancer intégré fait loi, gardez l'identité du personnage et le décor dans le prompt.":
+        { en: "LTX 2.5 runs at cfg 1: its built-in enhancer rules, keep the character identity and the location in the prompt.",
+          es: "LTX 2.5 funciona con cfg 1: su enhancer integrado manda, mantenga la identidad del personaje y el decorado en el prompt.",
+          de: "LTX 2.5 läuft mit cfg 1: Sein integrierter Enhancer entscheidet, Charakteridentität und Kulisse im Prompt belassen." },
+      // Prompt Relay
+      "Relay": {},
+      "Prompt Relay": {},
+      "Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle keyframe est composée sur les planches validées.":
+        { en: "A chain of short video segments rather than one long shot: each segment has its own prompt and duration, and continuity comes from the chaining. Link 🔗: the segment picks up the previous one's last frame, exactly. Link 🎞: an assumed cut, a new keyframe is composed on the validated sheets.",
+          es: "Una cadena de segmentos de vídeo cortos en lugar de un único plano largo: cada segmento tiene su prompt y su duración, y la coherencia viene del encadenado. Enlace 🔗: el segmento retoma el último fotograma del anterior, exactamente. Enlace 🎞: corte asumido, se compone un nuevo fotograma clave sobre las láminas validadas.",
+          de: "Eine Kette kurzer Videosegmente statt einer einzigen langen Einstellung: Jedes Segment hat eigenen Prompt und eigene Dauer, die Kohärenz entsteht durch die Verkettung. Verbindung 🔗: Das Segment übernimmt exakt das letzte Bild des vorherigen. Verbindung 🎞: bewusster Schnitt, ein neues Keyframe wird auf den bestätigten Bögen komponiert." },
+      "Moteur des segments": { en: "Segment engine", es: "Motor de los segmentos", de: "Segment-Engine" },
+      "＋ Ajouter un segment": { en: "＋ Add a segment", es: "＋ Añadir un segmento", de: "＋ Segment hinzufügen" },
+      "Générer la chaîne": { en: "Generate the chain", es: "Generar la cadena", de: "Kette generieren" },
+      "Assembler la séquence": { en: "Assemble the sequence", es: "Ensamblar la secuencia", de: "Sequenz zusammensetzen" },
+      "Ce qui se passe dans ce segment.": { en: "What happens in this segment.", es: "Lo que ocurre en este segmento.", de: "Was in diesem Segment geschieht." },
+      "À générer": { en: "To generate", es: "Por generar", de: "Zu generieren" },
+      "🎞 Premier segment": { en: "🎞 First segment", es: "🎞 Primer segmento", de: "🎞 Erstes Segment" },
+      "Continu (frame exacte)": { en: "Continuous (exact frame)", es: "Continuo (fotograma exacto)", de: "Fortlaufend (exaktes Bild)" },
+      "Coupure (nouvelle keyframe)": { en: "Cut (new keyframe)", es: "Corte (nuevo fotograma clave)", de: "Schnitt (neues Keyframe)" },
+      "✨ Enrichir": { en: "✨ Enrich", es: "✨ Enriquecer", de: "✨ Anreichern" },
+      "✕ Retirer": { en: "✕ Remove", es: "✕ Quitar", de: "✕ Entfernen" },
+      // Moteur des cuts
+      "Moteur des cuts": { en: "Cut engine", es: "Motor de los cortes", de: "Cut-Engine" },
+      "Minimax H3 i2v (grammaire Prompt Composer)":
+        { en: "Minimax H3 i2v (Prompt Composer grammar)", es: "Minimax H3 i2v (gramática Prompt Composer)", de: "Minimax H3 i2v (Prompt-Composer-Grammatik)" },
+      "Chemin qualifié en rendu réel. Le prompt est ancré sur le contenu de la keyframe.":
+        { en: "Path qualified on real renders. The prompt is anchored on the keyframe's own content.",
+          es: "Ruta cualificada en renderizado real. El prompt se ancla en el contenido del fotograma clave.",
+          de: "In echten Renderings qualifizierter Pfad. Der Prompt ist am Inhalt des Keyframes verankert." },
+      "Grammaire du Prompt Composer (subject_definitions / retention_analysis) et turbo 8 steps.":
+        { en: "Prompt Composer grammar (subject_definitions / retention_analysis) and turbo 8 steps.",
+          es: "Gramática del Prompt Composer (subject_definitions / retention_analysis) y turbo 8 steps.",
+          de: "Prompt-Composer-Grammatik (subject_definitions / retention_analysis) und Turbo mit 8 Steps." },
       // Menu Montage
       "Générer les cuts": { en: "Generate the cuts", es: "Generar los cortes", de: "Cuts generieren" },
       "Assembler l'animatic": { en: "Assemble the animatic", es: "Ensamblar el animatic", de: "Animatic zusammensetzen" },
@@ -2395,7 +2628,15 @@
         de: n => `Motive dieser Einstellung — höchstens ${n} pro Einstellung` },
       studioJobs: {
         fr: n => `${n} job(s) en cours`, en: n => `${n} job(s) running`,
-        es: n => `${n} trabajo(s) en curso`, de: n => `${n} Job(s) aktiv` }
+        es: n => `${n} trabajo(s) en curso`, de: n => `${n} Job(s) aktiv` },
+      relaySegment: {
+        fr: (i, n) => `Segment ${i}/${n}`, en: (i, n) => `Segment ${i}/${n}`,
+        es: (i, n) => `Segmento ${i}/${n}`, de: (i, n) => `Segment ${i}/${n}` },
+      h3CutDuration: {
+        fr: (d, r) => `Durée : par défaut ${d} s demandées rendront ${r} s (grille 17n+5 du modèle) ; chaque plan affiche la sienne.`,
+        en: (d, r) => `Duration: by default ${d} s requested will render ${r} s (the model's 17n+5 grid); each shot shows its own.`,
+        es: (d, r) => `Duración: por defecto ${d} s solicitados rendirán ${r} s (rejilla 17n+5 del modelo); cada plano muestra la suya.`,
+        de: (d, r) => `Dauer: standardmäßig ergeben ${d} s angefordert ${r} s (17n+5-Raster des Modells); jede Einstellung zeigt ihre eigene.` }
     };
     let LANG = localStorage.getItem("lang") || "fr";
     function tr(key) { return LANG === "fr" ? key : (I18N[key]?.[LANG] ?? key); }
@@ -2432,7 +2673,8 @@
       renderSheetTemplateOptions();
       renderLoraSelect();
       refreshSoulId();
-      if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); }
+      refreshSubjectUI();
+      if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); renderRelay(); }
     });
 
     // ── Events log ─────────────────────────────────────────────────
@@ -2503,6 +2745,7 @@
       updateModelOptions.lastPipeline = p;
       updateModelLabel();
       updateResumeButton();
+      refreshSubjectUI();   // les puces de sujet n'existent que pour reference2video
       refreshSoulId(); // pastille d'identité : visible seulement sur storyboard_v2 / reference2video
     }
 
@@ -2526,12 +2769,25 @@
       modelLabel.textContent = wf ? `${wf.model} · ${wf.pipeline}` : "—";
       updateTurboControls();
       renderLoraSelect();
+      // Dernière image : visible seulement là où le template sait quoi en faire, et jamais
+      // hors du pipeline qui expose déjà l'image d'entrée.
+      const lastOk = isH3LastFrameWorkflow(wf) && $("imageInputWrap").style.display !== "none";
+      $("lastImageWrap").style.display = lastOk ? "" : "none";
+      if (!lastOk) $("lastImageInput").value = "";
       // Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a pas de
       // placeholder {{NEGATIVE_PROMPT}} (piège n°16) : champ désactivé plutôt que sans effet.
       const krea2 = isKrea2Workflow(wf);
       negative.disabled = krea2;
       $("negativeNote").style.display = krea2 ? "" : "none";
     }
+
+    // Workflows dont le template câble `last_frame` sur MiniMaxH3ImageToVideo, donc capables
+    // de FL2VA en plus de l'i2v. C'est une capacité du WORKFLOW, pas du pipeline : le champ
+    // n'est donc pas un `controls` du manifest (il n'aurait aucun sens sur ltx25_i2v, qui
+    // partage le pipeline image2video) mais une visibilité pilotée par le modèle sélectionné,
+    // comme le fait déjà updateTurboControls pour le turbo.
+    const H3_LAST_FRAME_WORKFLOWS = new Set(["minimax_h3_i2v"]);
+    const isH3LastFrameWorkflow = wf => !!wf && H3_LAST_FRAME_WORKFLOWS.has(wf.id);
 
     // Turbo LoRA (Minimax H3 uniquement) : sans effet sur LTX 2.5 (nœud absent du template) → désactiver les deux champs.
     function updateTurboControls() {
@@ -2773,6 +3029,56 @@
     });
     lightbox.addEventListener("click", e => { if (e.target === lightbox) closeLightbox(); });
     document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
+
+    // ── Éditeur de prompt (planches, keyframes, cuts) ──────────────────────────────
+    // Une seule modale pour les trois usages : ce qui change d'un appelant à l'autre tient
+    // dans `cfg` — `enrich(texte)` rend le texte ré-enrichi (consigne du moteur concerné),
+    // `apply(texte)` relance la génération avec ce prompt-là. Le texte appliqué part VERBATIM
+    // dans le graphe : c'est le sens de « prompt éditable », l'app ne recompile rien par-dessus.
+    let promptEditor = null;
+    function openPromptEditor(cfg) {
+      promptEditor = cfg;
+      $("promptModalTitle").textContent = tr(cfg.title);
+      $("promptModalHint").textContent = tr(cfg.hint || "");
+      $("promptModalText").value = cfg.text || "";
+      $("promptModalEnrich").disabled = false;
+      $("promptModal").hidden = false;
+      translateTree($("promptModal"));
+      $("promptModalText").focus();
+    }
+    function closePromptEditor() {
+      $("promptModal").hidden = true;
+      promptEditor = null;
+    }
+    $("promptModalCancel").addEventListener("click", closePromptEditor);
+    // « Prompt d'origine » : remet le prompt compilé par l'app, pour sortir d'un aller-retour
+    // d'enrichissement raté sans avoir à fermer et rouvrir la fiche.
+    $("promptModalReset").addEventListener("click", () => {
+      if (promptEditor) $("promptModalText").value = promptEditor.text || "";
+    });
+    $("promptModalEnrich").addEventListener("click", async () => {
+      if (!promptEditor) return;
+      const btn = $("promptModalEnrich"), area = $("promptModalText"), label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = tr("Enrichissement…");
+      addEvent("REQ", `Ré-enrichissement du prompt via ${OLLAMA_MODEL}…`, "req");
+      try { area.value = await promptEditor.enrich(area.value.trim()); }
+      catch (err) { addEvent("WARN", `Enrichissement impossible : ${err.message}`, "warn"); }
+      finally { btn.textContent = label; btn.disabled = false; }
+    });
+    $("promptModalApply").addEventListener("click", () => {
+      if (!promptEditor) return;
+      const text = $("promptModalText").value.trim();
+      const apply = promptEditor.apply;
+      closePromptEditor();
+      if (text) apply(text);
+    });
+    $("promptModal").addEventListener("click", e => { if (e.target === $("promptModal")) closePromptEditor(); });
+    // Échap ferme la modale EN PRIORITÉ sur la lightbox : les deux écoutent la même touche et
+    // l'éditeur est au-dessus, donc il se ferme d'abord et la lightbox reste ouverte derrière.
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && !$("promptModal").hidden) { e.stopPropagation(); closePromptEditor(); }
+    }, true);
 
     // ── Asset sélectionné comme entrée de pipeline ─────────────────
     let selectedAsset = null; // {filename, url}
@@ -3098,7 +3404,7 @@
         const jobsSpec = wf.pipeline === "image2image" && selectedMarkets.size
           ? [...selectedMarkets].map(id => ({ prompt: withStyle(marketPrompt(id)), tag: MARKETS[id].label }))
           : [{ prompt: withStyle(brief.value.trim()), tag: null }];
-        let image = "", uploaded = false;
+        let image = "", lastImage = "", uploaded = false;
         for (let i = 0; i < jobsSpec.length; i++) {
           const spec = jobsSpec[i];
           if (await tryCloudGeneration(wf, {
@@ -3106,13 +3412,25 @@
           })) continue;
           if (["image2image", "image2video"].includes(wf.pipeline) && !uploaded) {
             image = await uploadInputImage();
+            // Dernière image facultative : fournie ⇒ FL2VA, absente ⇒ i2v comme avant.
+            // C'est le même nœud dans les deux cas, seul `last_frame` change.
+            if (isH3LastFrameWorkflow(wf) && $("lastImageInput").files[0])
+              lastImage = await uploadRefFile($("lastImageInput").files[0]);
             uploaded = true;
           }
           const raw = await getTemplate(wf.file);
+          // Minimax H3 : la phrase d'alignement dit au modèle à quel instant du clip chaque
+          // image d'entrée correspond. Le template ne le dit nulle part, et H3 l'attend en
+          // tête de prompt (header() du composer de référence). Les autres moteurs
+          // l'ignorent, on ne l'ajoute donc que sur ce workflow.
+          const promptText = isH3LastFrameWorkflow(wf)
+            ? capH3Prompt(`${h3Alignment(!!lastImage, duration)}\n\n${spec.prompt}`)
+            : spec.prompt;
           const graph = buildGraph(raw, {
-            prompt: spec.prompt, negative: negative.value.trim(),
-            seed: seed + i, width, height, batch, duration, image, fps: wf.fps
+            prompt: promptText, negative: negative.value.trim(),
+            seed: seed + i, width, height, batch, duration, image, image2: lastImage, fps: wf.fps
           });
+          applyMinimaxLastFrame(graph, !!lastImage);
           // Audio : tous les moteurs vidéo restants (LTX 2.5, Minimax H3) câblent
           // CreateVideo.audio nativement dans leur template — rien à ajouter côté JS.
           // Steps 4/6/8 exposés uniquement pour text2video/image2video (fl2v) — reference2video
@@ -3169,6 +3487,28 @@ Rules:
 - A PRIMARY_STYLE line may follow the brief. Build the description so it fits that style, but do NOT restate the style wording itself: it is appended separately.
 Before answering, re-read your prompt and delete any banned word that slipped in.
 Answer ONLY with JSON: {"positive_prompt": "..."}`;
+
+    // Consigne dédiée Qwen-Edit (keyframes de storyboard_v2/reference2video). Krea 2 GÉNÈRE
+    // une image, Qwen-Edit en COMPOSE une nouvelle à partir d'images de référence : la
+    // consigne générique lui ferait perdre ce qui fait tout le travail — le rôle assigné à
+    // chaque référence et la préservation d'identité. Reprise de la documentation
+    // Qwen-Image-Edit-2509 fournie par l'utilisateur (« dire quoi changer et quoi préserver »,
+    // rôles d'images explicites, pas de remplissage, longueur bornée), plus nos deux pièges
+    // maison : cfg 1 donc aucun négatif encodé (tout est formulé positivement) et interdiction
+    // du vocabulaire « storyboard/keyframe/planche » qui fait dessiner une planche annotée.
+    const QWEN_EDIT_ENRICH_SYSTEM = `You are an image-edit instruction architect for Qwen-Image-Edit-2509, an editing model that composes one new cinematic film still out of reference images.
+Rewrite the user's instruction into ONE precise English edit instruction.
+Rules:
+- Qwen-Image-Edit-2509 must be told WHAT TO CHANGE and WHAT TO PRESERVE. Never turn a local edit into a global restyle.
+- Every sentence that assigns a role to a reference image ("the first reference image ...", "the second reference image ...", "the third reference image ...") carries the identity anchoring: keep those sentences and their meaning intact.
+- Keep the user's subject, action and intent exactly. Invent no character, object or detail the instruction does not imply.
+- Identity comes from the reference images: face, body plan, surface, materials, markings, clothing and colors are preserved, never reimagined.
+- The model runs at cfg 1 and never encodes a negative prompt, so express every constraint POSITIVELY: write "both hands fully visible and correctly formed", never "no extra limbs".
+- Never describe the OUTPUT as a storyboard, keyframe, reference sheet, model sheet, contact sheet, panel or caption: those words make the model draw an annotated board instead of a film still.
+- Enrich only the moment itself: action, expression, framing, lighting, materials, texture, atmosphere.
+- Under 120 words. Every phrase must add visual information; delete filler.
+- Never write "masterpiece", "best quality", "8k", "ultra detailed" or "award winning".
+Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Filet déterministe : gemma4:e4b n'honore PAS de façon fiable une interdiction de
     // vocabulaire (constaté en rendu réel le 2026-09-21 — "ultra-detailed, 8k, highly
@@ -3441,6 +3781,80 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       addEvent("SYS", `Auto-enrichissement ${autoEnrich ? "activé" : "désactivé"} (${OLLAMA_MODEL}).`, "sys");
     });
 
+    // ── Ré-enrichissement des prompts du studio (planches, keyframes, cuts) ────────
+    // Trois moteurs, trois consignes : les planches sortent de Krea 2, les keyframes de
+    // Qwen-Edit, les cuts de LTX 2.5 ou Minimax H3. Chacun a déjà sa consigne ; ces
+    // fonctions ne font que router et remettre d'aplomb ce que gemma renvoie.
+
+    // Retire les blocs d'ancrage d'un prompt de keyframe. Point de passage unique du
+    // « strip-then-reappend » : on ne DONNE jamais l'ancrage à gemma (il le réécrirait) et on
+    // le ré-appose nous-mêmes après coup, donc le prompt ne part jamais sans lui.
+    function stripKeyframeAnchor(text) {
+      return String(text || "")
+        .split(KEYFRAME_ANCHOR_DUAL).join(" ")
+        .split(KEYFRAME_ANCHOR_SOLO).join(" ")
+        .replace(/\s{2,}/g, " ").trim();
+    }
+
+    // Ré-enrichit un prompt de keyframe édité à la main. `dual` = plan à deux sujets (choisit
+    // le bloc d'ancrage à remettre). Deux filets, parce qu'un prompt Qwen-Edit amputé rend une
+    // image plausible mais fausse, ce qu'aucun statut de job ne signale (piège n°14) :
+    //   1. gemma qui perd les phrases de rôle des références → on garde le texte édité tel quel
+    //      et on le DIT, plutôt que d'envoyer un prompt désancré ;
+    //   2. l'ancrage est ré-apposé dans tous les cas, y compris quand gemma est injoignable.
+    async function enrichKeyframeText(editedText, dual) {
+      const anchorBlock = dual ? KEYFRAME_ANCHOR_DUAL : KEYFRAME_ANCHOR_SOLO;
+      const stripped = stripKeyframeAnchor(editedText);
+      let txt = "";
+      try {
+        const out = await gemmaJSON(QWEN_EDIT_ENRICH_SYSTEM, stripped);
+        txt = fieldText(out.prompt || out.Rewritten || out.rewritten || out.positive_prompt);
+      } catch (err) {
+        addEvent("WARN", `Enrichissement Qwen-Edit indisponible (${err.message}) — prompt édité conservé.`, "warn");
+        return stripped + " " + anchorBlock;
+      }
+      if (!txt || txt.length < 20 || !/reference image/i.test(txt)) {
+        addEvent("WARN", "Enrichissement Qwen-Edit écarté : les rôles des images de référence avaient disparu de la sortie de gemma.", "warn");
+        return stripped + " " + anchorBlock;
+      }
+      addEvent("OK", `Prompt de keyframe enrichi par ${OLLAMA_MODEL} (consigne Qwen-Edit).`, "ok");
+      return stripPromptPadding(txt) + " " + anchorBlock;
+    }
+
+    // Ré-enrichit le prompt d'une planche (Krea 2) : même consigne que le brief, donc même
+    // interdiction de négatif et même filtre de remplissage.
+    async function enrichSheetText(editedText) {
+      try {
+        const out = await gemmaJSON(KREA2_ENRICH_SYSTEM, editedText);
+        const txt = fieldText(out.positive_prompt || out.prompt);
+        if (!txt || txt.length < 20) return editedText;
+        addEvent("OK", `Prompt de planche enrichi par ${OLLAMA_MODEL} (consigne Krea 2).`, "ok");
+        return stripPromptPadding(txt);
+      } catch (err) {
+        addEvent("WARN", `Enrichissement Krea 2 indisponible (${err.message}) — prompt édité conservé.`, "warn");
+        return editedText;
+      }
+    }
+
+    // Ré-enrichit le prompt d'un cut, consigne dépendante du moteur ciblé. Les deux moteurs
+    // consomment de la prose cinématographique, mais H3 ne doit JAMAIS voir de jeton
+    // <Picture>/<Subject> ici : sa grammaire à champs est assemblée par buildH3CutPrompt, un
+    // jeton lâché dans la prose la ferait mentir sur le nombre de références.
+    const CUT_ENRICH_SYSTEM = engine => `You are a motion-picture prompt writer for the ${engine === "minimax_h3" ? "MiniMax H3" : "LTX 2.5"} video model. Enrich the following shot into one dense cinematic English paragraph of 30 to 60 words: what happens, then lighting, materials, atmosphere and natural motion. STRICT RULES: keep the exact same subject, action, environment and camera motion; add no new character or object; use ONLY positive phrasing (never "no", "without", "avoid"); ${engine === "minimax_h3" ? "write no reference token such as <Picture>, <Subject> or <Video>" : "write plain prose only, no tokens, no brackets, no lists"}; never write "masterpiece", "best quality", "8k" or "ultra detailed". Answer ONLY with JSON: {"prompt": "..."}`;
+
+    async function enrichCutText(editedText, engine) {
+      try {
+        const out = await gemmaJSON(CUT_ENRICH_SYSTEM(engine), editedText);
+        const txt = fieldText(out.prompt || out.positive_prompt);
+        if (!txt || txt.length < 20) return editedText;
+        addEvent("OK", `Prompt de cut enrichi par ${OLLAMA_MODEL} (consigne ${engine === "minimax_h3" ? "Minimax H3" : "LTX 2.5"}).`, "ok");
+        return stripPromptPadding(txt);
+      } catch (err) {
+        addEvent("WARN", `Enrichissement du cut indisponible (${err.message}) — prompt édité conservé.`, "warn");
+        return editedText;
+      }
+    }
+
     // ── Fallback asset ─────────────────────────────────────────────
     $("fallbackBtn").addEventListener("click", () => {
       $("galleryImagesEmpty")?.remove();
@@ -3650,6 +4064,33 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Fourni ET turbo actif : 4 → bascule sur MINIMAX_FL2V_LORA_4STEP + BasicScheduler.steps=4 ;
     // 6/8 → LoRA du template conservé + BasicScheduler.steps=steps.
     // turbo OFF : comportement inchangé (LoRA retirée, steps=20), quel que soit `steps`.
+    // Retire `last_frame` (et son LoadImage) du graphe Minimax H3 quand aucune dernière
+    // image n'est fournie. Le nœud `MiniMaxH3ImageToVideo` couvre à lui seul les trois
+    // modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, les deux =
+    // FL2VA — nos templates t2v et i2v sont déjà le MÊME nœud à un champ près. Même idiome
+    // de retrait qu'applyMinimaxTurbo : on supprime la clé et le nœud devenu orphelin.
+    function applyMinimaxLastFrame(graph, hasLast) {
+      const entry = Object.entries(graph).find(([, n]) => n.class_type === "MiniMaxH3ImageToVideo");
+      if (!entry || hasLast) return graph;
+      const src = entry[1].inputs.last_frame;
+      delete entry[1].inputs.last_frame;
+      if (Array.isArray(src)) delete graph[src[0]];
+      return graph;
+    }
+
+    // Durée RÉELLEMENT rendue par Minimax H3, en secondes. La longueur se cale sur la
+    // grille 17n+5 à 24 fps (LESSONS piège n°11) : une demande de 1 s rend 39 frames, soit
+    // 1,625 s. Reproduit l'expression des templates
+    //   max(5, round(a*24)) + (5 - (max(5, round(a*24)) % 17)) % 17
+    // dont le `%` est un modulo à la Python : sur une valeur négative il rend un résultat
+    // POSITIF, contrairement à celui de JavaScript (-2 % 17 vaut 15 d'un côté, -2 de
+    // l'autre). Sans cette correction, une demande de 1 s donnerait 22 frames au lieu de 39.
+    const h3VideoFrames = seconds => {
+      const base = Math.max(5, Math.round(seconds * 24));
+      return base + (((5 - (base % 17)) % 17) + 17) % 17;
+    };
+    const h3RealDuration = seconds => h3VideoFrames(seconds) / 24;
+
     function applyMinimaxTurbo(graph, turboOn, steps) {
       const loraEntry = Object.entries(graph).find(([, n]) => n.class_type === "LoraLoaderModelOnly");
       if (!loraEntry) return graph;
@@ -4065,6 +4506,34 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       saveProject();
     });
 
+    // ── Ancrage des keyframes Qwen-Edit : invariant sorti en constantes ───────────
+    // Ces deux blocs sont la part NON NÉGOCIABLE du prompt de keyframe : ils disent au
+    // modèle que le rendu est un plan de film unique et que l'identité de chaque référence
+    // est conservée. Ils étaient écrits en dur dans compileKeyframePrompt ; ils en sortent
+    // pour que le ré-enrichissement gemma puisse les RETIRER avant l'appel puis les
+    // RÉ-APPOSER après (« strip-then-reappend »). Sans ça, gemma réécrit la prose et emporte
+    // l'ancrage avec elle : le prompt part sans sa contrainte la plus importante, et le
+    // rendu redevient une planche annotée. Texte reproduit AU CARACTÈRE PRÈS depuis la
+    // formulation qualifiée en rendu réel (LOT 4/7) — ne pas le reformuler.
+    const KEYFRAME_ANCHOR_DUAL =
+      "Both characters are fully integrated into the same scene, present together in that "
+      + "location with correct perspective and scale. Do not place the references side by side, "
+      + "do not create a split screen, diptych or collage, do not show any reference sheet, "
+      + "contact sheet, grid, thumbnails, multiple poses, color swatches, panels, borders, "
+      + "margins, black frame, caption or text anywhere. The whole picture is a single unified "
+      + "live-action movie frame, one continuous scene that extends all the way to all four "
+      + "edges. Keep each character's anatomy, body plan, head, surface, materials, markings, "
+      + "clothing if any and colors identical to its own reference image.";
+    const KEYFRAME_ANCHOR_SOLO =
+      "The character is fully integrated into the scene, present in that location with correct "
+      + "perspective and scale. Do not place the two references side by side, do not create a "
+      + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
+      + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
+      + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
+      + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
+      + "body plan, head, surface, materials, markings, clothing if any and colors identical to the "
+      + "first reference image.";
+
     // `descs` = description(s) du/des sujet(s) du plan, dans l'ordre des entrées image.
     // La branche À UN SUJET est la formulation qualifiée en rendu réel (LOT 4/7) : elle est
     // reproduite au caractère près, ne la reformuler sous aucun prétexte. La branche à deux
@@ -4090,14 +4559,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
           + "reference image: " + shot.action + ". Frame it as " + cam.frame + ".";
         if (emotion) s += " The characters' expressions and body language convey " + emotion + ".";
         s += " " + light.text;
-        s += " Both characters are fully integrated into the same scene, present together in that "
-          + "location with correct perspective and scale. Do not place the references side by side, "
-          + "do not create a split screen, diptych or collage, do not show any reference sheet, "
-          + "contact sheet, grid, thumbnails, multiple poses, color swatches, panels, borders, "
-          + "margins, black frame, caption or text anywhere. The whole picture is a single unified "
-          + "live-action movie frame, one continuous scene that extends all the way to all four "
-          + "edges. Keep each character's anatomy, body plan, head, surface, materials, markings, "
-          + "clothing if any and colors identical to its own reference image.";
+        s += " " + KEYFRAME_ANCHOR_DUAL;
       } else {
         s = "Use the first reference image only as the appearance guide for one single character, "
           + charDesc
@@ -4107,14 +4569,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
           + shot.action + ". Frame it as " + cam.frame + ".";
         if (emotion) s += " The character's expression and body language convey " + emotion + ".";
         s += " " + light.text;
-        s += " The character is fully integrated into the scene, present in that location with correct "
-          + "perspective and scale. Do not place the two references side by side, do not create a "
-          + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
-          + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
-          + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
-          + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
-          + "body plan, head, surface, materials, markings, clothing if any and colors identical to the "
-          + "first reference image.";
+        s += " " + KEYFRAME_ANCHOR_SOLO;
       }
       if (extra) s += " " + extra;
       if (styleText) s += " " + styleText;
@@ -4136,6 +4591,66 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       if (extra) s += " " + extra;
       if (styleText) s += " " + styleText;
       return s;
+    }
+
+    // ── Grammaire Minimax H3 appliquée aux cuts (i2v depuis une keyframe) ─────────
+    // Le composer H3 numérote deux espaces distincts : <Picture N> = l'entrée physique,
+    // <Subject N> = une identité. En r2v chaque sujet a SON image, donc N↔N. Un cut n'a
+    // qu'une seule entrée — la keyframe, où personnage et décor sont déjà composés
+    // ensemble : tous les sujets se définissent donc sur <Picture 1>, et seule la
+    // numérotation des Subject varie. C'est la seule adaptation ; le reste du bloc 6 champs
+    // (subject_definitions / retention_analysis / …) est celui de buildH3RefPrompt.
+    function h3CutSubjects(shot, locDesc) {
+      const list = shotSubjects(shot).map(sub => ({ kind: "character", desc: sub.desc })).filter(sub => sub.desc);
+      if (locDesc) list.push({ kind: "environment", desc: locDesc });
+      return list.map((sub, i) => ({ ...sub, picture: 1, label: h3Subject(i + 1) }));
+    }
+
+    // Corps narratif d'un cut H3 : même matière que compileCutPrompt (action, émotion,
+    // lumière, mouvement de caméra, extra, style) MAIS sans recopier charDesc/locDesc —
+    // ils sont déjà dans subject_definitions, les répéter mangerait le plafond de 7 000
+    // caractères et ferait douter le modèle sur le nombre de sujets.
+    function h3CutBodyText(shot, subjects, holdMotion) {
+      const cam = CAMERA_LIB[shot.camera] || CAMERA_LIB.medium;
+      const light = LIGHTING_LIB[shot.lighting] || LIGHTING_LIB.golden_hour;
+      const emotion = (shot.emotion || "").trim();
+      const extra = (shot.extra || "").trim();
+      const styleText = currentStyleText();
+      const env = subjects.find(sub => sub.kind === "environment");
+      const char = subjects.find(sub => sub.kind === "character");
+      const lead = char && env ? `${char.label} is in ${env.label}. ` : "";
+      let s = lead + shot.action + (emotion ? ", conveying " + emotion : "") + ". " + light.text
+        + " Camera motion: " + (holdMotion || cam.motion) + ".";
+      if (extra) s += " " + extra;
+      if (styleText) s += " " + styleText;
+      return s;
+    }
+
+    // Bloc complet d'un cut H3 : phrase d'alignement (la keyframe est l'instant 0 du clip)
+    // puis les 6 champs. `bodyOverride` sert au ré-enrichissement, qui ne réécrit QUE le
+    // corps narratif et laisse la structure intacte.
+    function buildH3CutPrompt(shot, locDesc, holdMotion, duration, bodyOverride) {
+      const subjects = h3CutSubjects(shot, locDesc);
+      const body = bodyOverride || h3CutBodyText(shot, subjects, holdMotion);
+      return capH3Prompt(`${h3Alignment(false, duration)}\n\n` + buildH3RefPrompt({
+        subjects, summary: h3Summary(shot.action), body
+      }));
+    }
+
+    // Corps narratif d'un bloc H3 déjà assemblé. Repli sur le texte entier quand la forme
+    // n'est pas celle attendue (prompt LTX, ou bloc réécrit à la main dans l'éditeur) :
+    // l'enrichissement dégrade alors vers « on enrichit ce qu'on a », jamais vers une perte.
+    function h3CutBodyOf(text) {
+      const m = /detailed_description:\n([\s\S]*?)(?:\n\n[a-z_]+:\n|$)/.exec(String(text || ""));
+      return m ? m[1].trim() : String(text || "").trim();
+    }
+
+    // Prompt d'un cut, moteur compris. LTX 2.5 garde EXACTEMENT compileCutPrompt (piège n°9,
+    // formulation qualifiée au LOT 4) — le moteur H3 est un chemin à part, pas une refonte.
+    function compileCutPromptFor(shot, charDesc, locDesc, holdMotion, engine, duration) {
+      return engine === "minimax_h3"
+        ? buildH3CutPrompt(shot, locDesc, holdMotion, duration)
+        : compileCutPrompt(shot, charDesc, locDesc, holdMotion);
     }
 
     // ── Normalisation de la sortie gemma (shotListFromBrief DNA) vers ids valides ──
@@ -4205,10 +4720,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     const HOLD_MOTION = "Locked camera holding on the final shot, subtle ambient motion only.";
 
     // Appel gemma4 mutualisé : format JSON, think:false, retry sans think sur 4xx.
-    async function gemmaJSON(system, user) {
+    // `images` (optionnel) : tableau de base64 SANS le préfixe data: — le champ `images`
+    // du message utilisateur est la façon dont Ollama passe une image à un modèle vision.
+    async function gemmaJSON(system, user, images) {
+      const userMsg = { role: "user", content: user };
+      if (images && images.length) userMsg.images = images;
       const body = {
         model: OLLAMA_MODEL, stream: false, format: "json", think: false,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }]
+        messages: [{ role: "system", content: system }, userMsg]
       };
       let res = await fetch(`${OLLAMA}/api/chat`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
@@ -4591,27 +5110,34 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       sel.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
-    function buildCharsheetGraph(charFields, negText, seed, width, height, loraName) {
-      const { g, add } = makeGraphBuilder();
-      const kx = addKrea2Shared(add, loraName);
+    // Le prompt est compilé À PART du graphe : c'est le texte que l'éditeur de prompt montre
+    // et, quand l'utilisateur l'a modifié, celui qui remplace la compilation (`promptOverride`).
+    function compileCharsheetPrompt(charFields) {
       const styleText = currentStyleText();
-      const charDesc = charDescFromFields(charFields);
       const kind = charKindOf(charFields);
       const layout = currentSheetLayout();
+      return `${layout.build(charDescFromFields(charFields), sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
+    }
+    function buildCharsheetGraph(charFields, negText, seed, width, height, loraName, promptOverride) {
+      const { g, add } = makeGraphBuilder();
+      const kx = addKrea2Shared(add, loraName);
       const dec = addKrea2Shot(add, kx,
-        `${layout.build(charDesc, sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
+        promptOverride || compileCharsheetPrompt(charFields),
         seed, 1920, 1088, 1);
       add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/charsheet" });
       return g;
     }
 
     // Planche décor multi-vues (ancre d'environnement, image 2 des keyframes duales).
-    function buildLocsheetGraph(locDesc, negText, seed, width, height, loraName) {
+    function compileLocsheetPrompt(locDesc) {
+      const styleText = currentStyleText();
+      return `A professional photorealistic environment reference sheet of one single location, composited as a clean multi-view layout on a smooth seamless dark neutral background: ${locDesc}. Arranged neatly, the sheet shows several wide establishing photographs of the same location from different angles across the top, below them a row of medium shots of key structures, and along the bottom a cluster of tight close-up material and detail studies. The location is completely empty and deserted, showing only architecture, materials and scenery. Consistent art direction, matching lighting and color palette across every view. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
+    }
+    function buildLocsheetGraph(locDesc, negText, seed, width, height, loraName, promptOverride) {
       const { g, add } = makeGraphBuilder();
       const kx = addKrea2Shared(add, loraName);
-      const styleText = currentStyleText();
       const dec = addKrea2Shot(add, kx,
-        `A professional photorealistic environment reference sheet of one single location, composited as a clean multi-view layout on a smooth seamless dark neutral background: ${locDesc}. Arranged neatly, the sheet shows several wide establishing photographs of the same location from different angles across the top, below them a row of medium shots of key structures, and along the bottom a cluster of tight close-up material and detail studies. The location is completely empty and deserted, showing only architecture, materials and scenery. Consistent art direction, matching lighting and color palette across every view. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
+        promptOverride || compileLocsheetPrompt(locDesc),
         seed, 1920, 1088, 1);
       add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/locsheet" });
       return g;
@@ -4639,12 +5165,12 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // Mêmes graphes/prompts que l'ancienne implémentation monolithique, juste sortis
     // en fonctions réutilisables pour que le mode Réalisateur puisse s'arrêter entre
     // chaque étape sans dupliquer la logique de construction de graphe.
-    async function submitCharsheetJob(charFields, negText, seed, width, height, wf) {
-      return submitGraph(buildCharsheetGraph(charFields, negText, seed, width, height, $("sheetLoraSelect").value),
+    async function submitCharsheetJob(charFields, negText, seed, width, height, wf, promptOverride) {
+      return submitGraph(buildCharsheetGraph(charFields, negText, seed, width, height, $("sheetLoraSelect").value, promptOverride),
         "Storyboard · fiche personnage", `${wf.model} · charsheet · seed ${seed}`);
     }
-    async function submitLocsheetJob(locDesc, negText, seed, width, height, wf) {
-      return submitGraph(buildLocsheetGraph(locDesc, negText, seed, width, height, $("sheetLoraSelect").value),
+    async function submitLocsheetJob(locDesc, negText, seed, width, height, wf, promptOverride) {
+      return submitGraph(buildLocsheetGraph(locDesc, negText, seed, width, height, $("sheetLoraSelect").value, promptOverride),
         "Storyboard · fiche décor", `${wf.model} · locsheet · seed ${seed}`);
     }
     // Attend un job image et le ré-uploade (pattern charsheet→ancre / keyframe→cut).
@@ -4670,10 +5196,12 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     // `subjects` = [{desc, name}] du plan (1 ou 2). À un sujet : image1 = planche perso,
     // image2 = décor — exactement l'ancien câblage. À deux : image1/image2 = les deux
     // planches perso, le décor passe sur image3.
-    async function submitKeyframeJob(anchorRaw, shot, subjects, negText, locName, seed, width, height, idx, n) {
+    // `promptOverride` : prompt édité dans l'éditeur, envoyé VERBATIM (il porte déjà son bloc
+    // d'ancrage — enrichKeyframeText le ré-appose systématiquement).
+    async function submitKeyframeJob(anchorRaw, shot, subjects, negText, locName, seed, width, height, idx, n, promptOverride) {
       const refs = (Array.isArray(subjects) ? subjects : [subjects]).filter(Boolean);
       const g = buildGraph(anchorRaw, {
-        prompt: compileKeyframePrompt(shot, refs.map(r => r.desc)), negative: negText,
+        prompt: promptOverride || compileKeyframePrompt(shot, refs.map(r => r.desc)), negative: negText,
         seed, image: refs[0]?.name, image2: refs[1] ? refs[1].name : locName, width, height, batch: 1
       });
       if (refs[1]) addKeyframeThirdRef(g, locName);
@@ -4687,23 +5215,275 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       gridAdd("SaveImage", { images: addGrid(gridAdd, refs), filename_prefix: "studio/story/grid" });
       return submitGraph(gridG, "Storyboard · grille", `contact-sheet ${keys.length} cases`);
     }
-    async function submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText, seed, idx, total, dur, holdMotion) {
+    // `engine` : "ltx25" (défaut, chemin qualifié LOT 4) ou "minimax_h3". `promptOverride` :
+    // prompt saisi dans l'éditeur, envoyé VERBATIM.
+    async function submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText, seed, idx, total, dur, holdMotion, engine, promptOverride) {
       const sz = videoSizeFor(await imageSize(keyObj.blob));
+      const isMM = engine === "minimax_h3";
       // Piège n°9 : l'enhancer LTX (TextGenerateLTX2Prompt) n'a AUCUNE entrée image et,
       // à cfg 1, fait loi sur le rendu. Un prompt de mouvement seul le laisse inventer une
       // scène sans rapport avec la keyframe. compileCutPrompt l'ancre sur le contenu réel de
       // l'image guide : action + identité personnage + décor + lumière + mouvement de caméra.
+      // H3 n'a pas d'enhancer : l'ancrage y passe par la grammaire à champs (buildH3CutPrompt),
+      // qui nomme explicitement le personnage et le décor de la keyframe.
       const g = buildGraph(i2vRaw, {
-        prompt: compileCutPrompt(shot, charDesc, locDesc, holdMotion), negative: negText, seed,
-        image: keyObj.name, width: sz.w, height: sz.h, batch: 1, duration: dur
+        prompt: promptOverride || compileCutPromptFor(shot, charDesc, locDesc, holdMotion, engine, dur),
+        negative: negText, seed, image: keyObj.name, width: sz.w, height: sz.h, batch: 1, duration: dur
       });
+      if (isMM) {
+        // i2v : première image seule, pas de FL2VA ici — on retire `last_frame` comme le
+        // fait le chemin générique. Turbo 8 steps = le réglage qualifié (LESSONS piège n°12,
+        // 4 steps casse la colorimétrie et n'est jamais exposé).
+        applyMinimaxLastFrame(g, false);
+        applyMinimaxTurbo(g, true, 8);
+      }
       for (const node of Object.values(g))
         if (node.class_type === "SaveVideo") node.inputs.filename_prefix = `studio/story/cut_${String(idx + 1).padStart(2, "0")}`;
-      return submitGraph(g, `Storyboard · cut ${idx + 1}/${total}`, `LTX 2.5 i2v · ${dur}s · ${sz.w}x${sz.h} · seed ${seed}`);
+      return submitGraph(g, `Storyboard · cut ${idx + 1}/${total}`, isMM
+        ? `Minimax H3 i2v · turbo 8 steps · ${dur}s demandés → ${h3RealDuration(dur).toFixed(2)}s rendus · ${sz.w}x${sz.h} · seed ${seed}`
+        : `LTX 2.5 i2v · ${dur}s · ${sz.w}x${sz.h} · seed ${seed}`);
     }
     async function submitAnimaticJob(cutNames, withAudio, seed) {
       return submitGraph(buildAnimaticGraph(cutNames, withAudio), "Storyboard · animatic (assemblage)",
         `${cutNames.length} cuts francs · ${withAudio ? "audio" : "muet"} · fps 24 · seed ${seed}`);
+    }
+
+    // ── Sujets Minimax H3 : légendes de slot et puces d'insertion ──────────────────
+    // Option (a) : l'app attribue les numéros et les montre, l'utilisateur écrit son brief
+    // en langage normal. Les puces ne servent qu'à lever une ambiguïté quand plusieurs
+    // sujets agissent dans le même plan (« <Subject 1> tend la boîte à <Subject 2> ») —
+    // il n'existe aucune autre façon de l'exprimer en Ref2VA.
+    // Le bypass fiches décale la sémantique : coché, les 2 premiers fichiers SONT les
+    // sujets 1/2 ; décoché, ils viennent après les deux planches générées.
+    const SUBJECT_KIND_LABEL = { character: "personnage", environment: "décor", reference: "référence" };
+
+    function refImageFiles() {
+      return Array.from($("refImagesInput").files).slice(0, REF_EXTRA_CAPS.refImagesInput[0]);
+    }
+    // Liste ordonnée {kind, name} des sujets du prochain job r2v, slots dans l'ordre.
+    function plannedSubjects() {
+      const files = refImageFiles();
+      if ($("skipSheetsToggle").checked) {
+        return files.map((file, i) => ({
+          kind: i === 0 ? "character" : i === 1 ? "environment" : "reference", name: file.name
+        }));
+      }
+      return [{ kind: "character", name: "" }, { kind: "environment", name: "" }]
+        .concat(files.map(file => ({ kind: "reference", name: file.name })));
+    }
+
+    function renderSubjectChips() {
+      const box = $("subjectChips");
+      const active = pipelineSelect.value === "reference2video";
+      box.style.display = active ? "" : "none";
+      box.innerHTML = "";
+      if (!active) return;
+      plannedSubjects().forEach((sub, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = `${tr("Sujet")} ${i + 1} · ${tr(SUBJECT_KIND_LABEL[sub.kind])}`;
+        btn.title = tr("Insérer le label de ce sujet dans le brief");
+        // mousedown annulé : sans ça le focus quitte le textarea et la position du curseur
+        // est perdue avant le click (même idiome que les puces du composer de référence).
+        btn.addEventListener("mousedown", ev => ev.preventDefault());
+        btn.addEventListener("click", () => {
+          const start = brief.selectionStart ?? brief.value.length;
+          const end = brief.selectionEnd ?? start;
+          const token = h3Subject(i + 1);
+          brief.value = brief.value.slice(0, start) + token + brief.value.slice(end);
+          brief.focus();
+          brief.setSelectionRange(start + token.length, start + token.length);
+        });
+        box.appendChild(btn);
+      });
+    }
+
+    function renderRefSubjects() {
+      const list = $("refSubjects");
+      list.innerHTML = "";
+      const skip = $("skipSheetsToggle").checked;
+      refImageFiles().forEach((file, i) => {
+        const n = skip ? i + 1 : i + 3;
+        const row = document.createElement("div");
+        row.className = "ref-subject";
+        const tag = document.createElement("div");
+        tag.className = "rs-tag";
+        tag.textContent = `${tr("Sujet")} ${n}`;
+        const name = document.createElement("div");
+        name.className = "rs-name";
+        name.textContent = file.name;
+        row.append(tag, name);
+        list.appendChild(row);
+      });
+    }
+
+    function refreshSubjectUI() { renderSubjectChips(); renderRefSubjects(); }
+    $("refImagesInput").addEventListener("change", refreshSubjectUI);
+    $("skipSheetsToggle").addEventListener("change", refreshSubjectUI);
+
+    // ── Description des images sources par gemma4:e4b en vision ────────────────────
+    // Sans ça, sur le chemin « Ignorer les fiches » comme sur les références
+    // supplémentaires, le modèle reçoit bien l'image mais AUCUN texte qui dise ce qu'elle
+    // contient ni à quoi elle sert : la définition <Subject N> reste vide et la référence
+    // ne pèse presque rien. Capacité vision constatée sur gemma4:e4b (2026-09-21) ; on la
+    // sonde quand même au démarrage, un modèle retéléchargé sans projecteur la perdrait.
+    const REF_FIELD_KEYS = ["subject", "appearance", "materials", "palette"];
+    const REF_VISION_SYSTEM = `You are describing a reference image for a video model. Describe ONLY what is visibly present, so the subject stays IDENTICAL across shots. No camera, scene, action or mood wording, no speculation about story. Answer ONLY with JSON with these fields, each a dense ~10-20 word English string: {"subject":"...","appearance":"...","materials":"...","palette":"..."}.`;
+    let ollamaVision = null;   // null = pas encore sondé · true/false = capacité constatée
+
+    async function probeOllamaVision() {
+      try {
+        const res = await fetch(`${OLLAMA}/api/show`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: OLLAMA_MODEL })
+        });
+        if (!res.ok) throw new Error(`ollama ${res.status}`);
+        ollamaVision = ((await res.json()).capabilities || []).includes("vision");
+      } catch {
+        ollamaVision = false;
+      }
+      if (!ollamaVision)
+        addEvent("WARN", `${OLLAMA_MODEL} ne déclare pas la capacité vision — les références fournies ne seront pas décrites.`, "warn");
+      return ollamaVision;
+    }
+
+    const fileToBase64 = file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+      reader.onerror = () => reject(new Error(`lecture de « ${file.name} » impossible`));
+      reader.readAsDataURL(file);
+    });
+
+    // Même filtre de remplissage que partout ailleurs : gemma lâche « ultra-detailed, 8k »
+    // aussi bien en vision qu'en texte, et cette chaîne part dans un prompt H3.
+    async function describeRefImage(file) {
+      const out = await gemmaJSON(REF_VISION_SYSTEM, "Describe this reference image.", [await fileToBase64(file)]);
+      return stripPromptPadding(REF_FIELD_KEYS.map(k => fieldText(out[k])).filter(Boolean).join(", "));
+    }
+
+    // Descriptions en parallèle, chacune dégradant en chaîne vide : une référence non
+    // décrite reste une référence valide (l'image part quand même dans le graphe), elle
+    // pèse simplement moins. Jamais de génération bloquée pour ça.
+    async function describeRefImages(files) {
+      if (!files.length) return [];
+      if (ollamaVision === null) await probeOllamaVision();
+      if (!ollamaVision) return files.map(() => "");
+      addEvent("REQ", `Description de ${files.length} référence(s) via ${OLLAMA_MODEL} (vision)…`, "req");
+      const descs = await Promise.all(files.map(file => describeRefImage(file).catch(err => {
+        addEvent("WARN", `Description de « ${file.name} » indisponible (${err.message}).`, "warn");
+        return "";
+      })));
+      const ok = descs.filter(Boolean).length;
+      if (ok) addEvent("OK", `${ok}/${files.length} référence(s) décrite(s) par ${OLLAMA_MODEL}.`, "ok");
+      return descs;
+    }
+
+    // ── Grammaire de prompt Minimax H3 (Ref2VA / I2VA) ─────────────────────────────
+    // Portage de la grammaire du composer de référence BMB12d3/minimax-h3-prompt-composer
+    // (V5.43.4, fonctions build() et header()). Deux espaces de numérotation DISTINCTS,
+    // c'est tout le mécanisme :
+    //   <Picture N> = l'entrée PHYSIQUE ComfyUI, 1-indexée → ref_images.ref_image_{N-1}
+    //   <Subject N> = une identité LOGIQUE (personnage, décor, objet…), numérotation propre
+    // La liaison entre les deux tient en UNE phrase du bloc subject_definitions
+    // ("<Subject 1> is the main character in <Picture 1>"), après quoi toute la prose
+    // n'emploie plus que <Subject N> — jamais le nom propre, jamais <Picture N>. Les deux
+    // erreurs sont ce que son validateur signale en premier.
+    // Ses plafonds (img 9 / vid 3 / aud 3) sont exactement ceux déjà documentés dans
+    // addMinimaxRefs : même nœud, mêmes bornes. Il en ajoute une que nous n'appliquions
+    // nulle part — 7 000 caractères de prompt.
+    const H3_PROMPT_CHARS = 7000;
+    const h3Subject = n => `<Subject ${n}>`;
+    const h3Picture = n => `<Picture ${n}>`;
+
+    // Définition et note de rétention par nature de sujet. La rétention dit COMBIEN on garde
+    // d'une référence (fully_preserved / partially_preserved / attribute_transfer /
+    // weak_reference) : c'est ce qui distingue « ce personnage, exactement » de « juste la
+    // lumière de cette image ». Nos 3 natures sont toutes des références d'identité, donc
+    // fully_preserved — le défaut du composer lui aussi.
+    const H3_SUBJECT_KINDS = {
+      character:   { lead: "is the main character in",   note: "the complete defined identity, face, and body proportions are preserved." },
+      environment: { lead: "is the location as defined by", note: "the environment's defined architecture, layout, and spatial continuity are retained." },
+      reference:   { lead: "is an additional reference in", note: "the defined shape, proportions, materials, colors, and distinguishing features are retained." }
+    };
+
+    // Option (a), tranchée par l'utilisateur : l'attribution des numéros est faite par l'app,
+    // jamais saisie. L'ordre des slots EST l'ordre des sujets — ref_image_0 → <Picture 1> →
+    // <Subject 1>. Les puces d'insertion sous le brief (renderSubjectChips) ne servent qu'à
+    // lever une ambiguïté quand plusieurs sujets agissent dans le même plan.
+    function h3AssignSubjects(list) {
+      return list.map((sub, i) => ({ ...sub, picture: i + 1, label: h3Subject(i + 1) }));
+    }
+
+    // Résumé d'une ligne (champ `summary`) : première phrase du brief, bornée. Recopier le
+    // brief entier y ferait doublon avec detailed_description et mangerait le plafond.
+    function h3Summary(text) {
+      const first = String(text || "").trim().split(/[.!?]/)[0].trim() || String(text || "").trim();
+      return first.length > 200 ? `${first.slice(0, 197)}…` : first;
+    }
+
+    // Corps de detailed_description : une phrase d'ancrage qui relie les deux sujets
+    // principaux, puis le brief. L'ancrage emploie les labels — c'est l'idiome du composer
+    // et la seule façon de dire au modèle laquelle des deux images est le personnage.
+    function h3RefBody(subjects, text) {
+      const char = subjects.find(sub => sub.kind === "character");
+      const env = subjects.find(sub => sub.kind === "environment");
+      const anchor = char && env ? `${char.label} is in ${env.label}. ` : "";
+      return anchor + String(text || "").trim();
+    }
+
+    // Assemble le bloc Ref2VA 6 champs. `subjects` sort de h3AssignSubjects.
+    function buildH3RefPrompt({ subjects, summary, body }) {
+      const defs = subjects.map(sub => {
+        const kind = H3_SUBJECT_KINDS[sub.kind] || H3_SUBJECT_KINDS.reference;
+        const desc = (sub.desc || "").trim().replace(/[.\s]+$/, "");
+        return `${sub.label} ${kind.lead} ${h3Picture(sub.picture)}${desc ? `, ${desc}` : ""}.`;
+      }).join("\n");
+      // Pas de parenthèse après le label : dans la grammaire du composer, cette position
+      // porte un « où ça apparaît » (whereFor — « appears in [Shot 2] »), pas la liaison
+      // vers la Picture, qui est déjà faite par subject_definitions. Nous n'avons qu'un
+      // seul plan par clip r2v, donc rien à y mettre — la parenthèse est omise, ce que sa
+      // grammaire prévoit (`par` vaut '' quand whereFor ne rend rien).
+      const ret = subjects.map(sub => {
+        const kind = H3_SUBJECT_KINDS[sub.kind] || H3_SUBJECT_KINDS.reference;
+        return `${sub.label}: fully_preserved - ${kind.note}`;
+      }).join("\n");
+      return [
+        `subject_definitions:\n${defs || "—"}`,
+        `summary:\n[reference generation] ${summary}`,
+        `retention_analysis:\n${ret || "—"}`,
+        `detailed_description:\n${body}`,
+        // Les deux derniers champs font partie de la grammaire : H3 les attend. Aucun
+        // contrôle d'UI ne les alimente, on émet donc un défaut neutre plutôt qu'un vide.
+        "overall_soundscape:\nNatural diegetic ambience consistent with the scene.",
+        "non_diegetic_music:\nNone."
+      ].join("\n\n");
+    }
+
+    // Plafond dur du modèle. On tronque en le disant plutôt que de laisser H3 couper en
+    // silence : le prompt Ref2VA est structuré, une coupe muette emporterait les champs
+    // de fin sans que rien ne le signale.
+    function capH3Prompt(text) {
+      if (text.length <= H3_PROMPT_CHARS) return text;
+      addEvent("WARN", `Prompt H3 de ${text.length} caractères — tronqué à ${H3_PROMPT_CHARS} (plafond du modèle).`, "warn");
+      return text.slice(0, H3_PROMPT_CHARS);
+    }
+
+    // Phrase d'alignement temporel (header() du composer) : elle dit au modèle à quel
+    // instant du clip chaque image d'entrée correspond. Nos templates ne le disent nulle part.
+    // Deux formes selon ce qui est branché sur MiniMaxH3ImageToVideo — i2v (première image
+    // seule) ou FL2VA (première ET dernière).
+    // Le repère temporel de fin est la durée RÉELLEMENT rendue (h3RealDuration), pas celle
+    // demandée : H3 se cale sur la grille 17n+5, donc annoncer « à 2,00 s » sur un clip qui
+    // en fait 2,33 placerait la dernière image avant la fin. C'est exactement le piège n°11.
+    // Le composer écrit ici « Picture 1 » sans chevrons alors que ses autres en-têtes
+    // emploient « <Picture 1> » — et son propre validateur signale la forme nue comme non
+    // canonique. On garde donc partout la forme à chevrons.
+    function h3Alignment(hasLast, seconds) {
+      if (!hasLast)
+        return "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
+      return "How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with "
+        + `the 0.00-second mark of the target video; <Picture 2> (from [Shot 1]) aligns with the `
+        + `${h3RealDuration(seconds).toFixed(2)}-second mark of the target video.`;
     }
 
     // ── Reference2Video (Minimax H3 r2v, LOT 1) : réutilise la génération charsheet/locsheet
@@ -4728,19 +5508,33 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         Promise.all(capped.refVideosInput.map(uploadRefFile)),
         Promise.all(capped.refAudiosInput.map(uploadRefFile))
       ]);
-      return { images, videos, audios, count: images.length + videos.length + audios.length };
+      // `imageFiles` : les File effectivement retenus (après cap), pour describeRefImages —
+      // `images` ne porte que les noms rendus par ComfyUI après upload.
+      return { images, videos, audios, imageFiles: capped.refImagesInput,
+               count: images.length + videos.length + audios.length };
     }
 
     // Tail commun aux 3 chemins (Auto, Auto-bypass, lancement Réalisateur) : références
     // supplémentaires + graphe Minimax H3 r2v + soumission. Seules différences entre chemins :
     // d'où viennent prompt/image/image2 (fiches fraîches, upload utilisateur, ou session
     // director validée) — capturées par l'appelant, pas ici.
-    async function submitReference2VideoGraph({ wf, negText, seed, width, height, duration, turboOn, loraName, prompt, image, image2, extraImageFiles }) {
+    // `subjects` : [{kind, desc}] pour ref_image_0/1 dans cet ordre (personnage, décor) —
+    // les références supplémentaires deviennent les sujets 3+ ici même, décrites par vision.
+    // `body` : le brief brut. Le prompt Ref2VA complet est assemblé ici, point de passage
+    // unique des 3 chemins.
+    async function submitReference2VideoGraph({ wf, negText, seed, width, height, duration, turboOn, loraName, subjects, body, image, image2, extraImageFiles }) {
       const refs = await collectRefExtras(extraImageFiles);
+      const extraDescs = await describeRefImages(refs.imageFiles);
+      const all = h3AssignSubjects(subjects.concat(extraDescs.map(desc => ({ kind: "reference", desc }))));
+      // Ancrage (piège n°9/n°10 LESSONS) : le prompt rappelle personnage + décor plutôt que
+      // la seule action. La grammaire Ref2VA le fait mieux que l'ancienne chaîne plate —
+      // subject_definitions dit LAQUELLE des deux images est le personnage, ce que
+      // « charDesc. locDesc. brief » ne disait pas.
+      const prompt = capH3Prompt(buildH3RefPrompt({
+        subjects: all, summary: h3Summary(body), body: h3RefBody(all, body)
+      }));
       const raw = await getTemplate(wf.file);
       const graph = buildGraph(raw, {
-        // Ancrage double (piège n°9/n°10 LESSONS) : le prompt rappelle scène + personnage +
-        // décor plutôt que la seule action, pour ne pas laisser le modèle dériver.
         prompt, negative: negText, seed: seed + 201, width, height, duration, image, image2
       });
       addMinimaxRefs(graph, refs);
@@ -4767,9 +5561,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         if (files.length < 2) throw new Error("Ignorer les fiches nécessite au moins 2 fichiers dans « Images de référence supplémentaires » (ref_image_0/1).");
         addEvent("REQ", "Fiches ignorées — upload des références fournies…", "req");
         const [image, image2] = await Promise.all([uploadRefFile(files[0]), uploadRefFile(files[1])]);
+        // Sans fiche générée, la description des 2 premières images est la SEULE chose qui
+        // dise au modèle ce qu'elles contiennent : c'est le chemin où la vision compte le plus.
+        const [charDesc, locDesc] = await describeRefImages([files[0], files[1]]);
         await submitReference2VideoGraph({
           wf, negText, seed, width, height, duration, turboOn, loraName,
-          prompt: brief.value.trim(), image, image2, extraImageFiles: files.slice(2)
+          subjects: [{ kind: "character", desc: charDesc }, { kind: "environment", desc: locDesc }],
+          body: brief.value.trim(), image, image2, extraImageFiles: files.slice(2)
         });
         return;
       }
@@ -4788,7 +5586,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
       await submitReference2VideoGraph({
         wf, negText, seed, width, height, duration, turboOn, loraName,
-        prompt: `${charDesc}. ${locDesc}. ${brief.value.trim()}`, image: charRef.name, image2: locRef.name
+        subjects: [{ kind: "character", desc: charDesc }, { kind: "environment", desc: locDesc }],
+        body: brief.value.trim(), image: charRef.name, image2: locRef.name
       });
     }
 
@@ -4804,7 +5603,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
           wf: director.wf, negText: director.negText, seed: director.seed,
           width: director.width, height: director.height, duration: director.duration,
           turboOn: director.turboOn, loraName: director.loraName,
-          prompt: `${director.charDesc}. ${director.locDesc}. ${brief.value.trim()}`,
+          subjects: [{ kind: "character", desc: director.charDesc }, { kind: "environment", desc: director.locDesc }],
+          body: brief.value.trim(),
           image: director.charName, image2: director.locName
         });
       } catch (err) { addEvent("WARN", err.message, "warn"); }
@@ -4823,7 +5623,8 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     function exitStudio() { delete document.body.dataset.studio; }
 
     const STUDIO_SECTIONS = { character: "studioCharacter", location: "studioLocation",
-                              storyboard: "studioStoryboard", montage: "studioMontage", video: "studioVideoR2V" };
+                              storyboard: "studioStoryboard", montage: "studioMontage",
+                              relay: "studioRelay", video: "studioVideoR2V" };
     function selectStudioSection(name) {
       for (const [key, id] of Object.entries(STUDIO_SECTIONS))
         $(id).style.display = key === name ? "" : "none";
@@ -4839,6 +5640,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const isR2V = director?.pipeline === "reference2video";
       document.querySelector('#studioNav [data-section="storyboard"]').style.display = isR2V ? "none" : "";
       document.querySelector('#studioNav [data-section="montage"]').style.display = isR2V ? "none" : "";
+      document.querySelector('#studioNav [data-section="relay"]').style.display = isR2V ? "none" : "";
       document.querySelector('#studioNav [data-section="video"]').style.display = isR2V ? "" : "none";
     }
     document.querySelectorAll("#studioNav .studio-nav-btn").forEach(btn =>
@@ -4906,6 +5708,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         style: $("styleSelect").value,           // style figé à l'ouverture de la session
         sheetTemplate: $("sheetTemplateSelect").value,  // gabarit de planche figé de même
         cutPlan: null, cuts: null, order: null, animatic: null,  // état Montage
+        cutEngine: "ltx25", relay: null,                          // moteur des cuts + Prompt Relay
         // Fiches structurées éditables (menus Personnage/Décor) + historiques de variantes.
         // `chars` = liste de sujets (un seul à l'ouverture, « + Ajouter un sujet » en ajoute) ;
         // `charIdx` = celui qu'édite le menu Personnage.
@@ -4923,6 +5726,10 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       updateStudioNavForPipeline();
       enterStudio();
       selectStudioSection("character");
+      ensureRelay();
+      $("relayEngineSelect").value = director.relay.engine;
+      updateCutEngineHint();
+      renderRelay(); renderRelayPlayer();
       renderSheetMenu("char");
       renderSheetMenu("loc");
       updateValidateButtonState();
@@ -5204,6 +6011,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       section.querySelector(".sheet-status").textContent =
         !word ? "" : variants.length > 1 ? `${tr(word)} · ${dyn("activeSheet", active + 1, variants.length)}` : tr(word);
       section.querySelector(".sheet-regen").disabled = !director || variants.some(v => v.status === "pending");
+      section.querySelector(".sheet-prompt").disabled = !director || variants.some(v => v.status === "pending");
       section.querySelector(".sheet-import").disabled = !director;
     }
 
@@ -5230,7 +6038,11 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Régénère une planche depuis les champs édités : PUSH d'une nouvelle variante (l'historique
     // ne remplace jamais), seed = seed de la dernière variante générée + 1, active = la nouvelle.
-    async function regenerateSheet(kind) {
+    // `promptOverride` : prompt saisi dans l'éditeur, envoyé VERBATIM au graphe. Il est
+    // rangé sur la variante (`variant.prompt`), donc il survit à la persistance et c'est lui
+    // que l'éditeur rouvre — une planche régénérée deux fois de suite repart du prompt édité,
+    // pas de la compilation d'origine.
+    async function regenerateSheet(kind, promptOverride) {
       if (!director) return;
       const isChar = kind === "char";
       const variants = isChar ? director.charVariants : director.locVariants;
@@ -5238,16 +6050,17 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const lastGen = [...variants].reverse().find(v => v.source === "generated");
       const seed = (lastGen ? lastGen.seed : director.seed + (isChar ? 0 : 101)) + 1;
       const desc = isChar ? charDescFromFields(director.charFields) : locDescFromFields(director.locFields);
-      const variant = { file: null, inputName: null, seed, source: "generated", prompt: desc,
-                        status: "pending", blob: null, url: null };
+      const prompt = promptOverride || (isChar ? compileCharsheetPrompt(director.charFields) : compileLocsheetPrompt(desc));
+      const variant = { file: null, inputName: null, seed, source: "generated", prompt,
+                        edited: !!promptOverride, status: "pending", blob: null, url: null };
       variants.push(variant);
       if (isChar) director.charActive = variants.length - 1; else director.locActive = variants.length - 1;
       director.validated = false;
       refreshSheetUI(kind);
       try {
         const promptId = isChar
-          ? await submitCharsheetJob(director.charFields, director.negText, seed, director.width, director.height, director.wf)
-          : await submitLocsheetJob(desc, director.negText, seed, director.width, director.height, director.wf);
+          ? await submitCharsheetJob(director.charFields, director.negText, seed, director.width, director.height, director.wf, promptOverride)
+          : await submitLocsheetJob(desc, director.negText, seed, director.width, director.height, director.wf, promptOverride);
         await resolveVariantJob(kind, variant, promptId);
       } catch (err) {
         variant.status = "error";
@@ -5288,6 +6101,23 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         if (isChar && director.chars.length > 1) { renderSubjectTabs(); renderShotDNAList(); }
       });
       section.querySelector(".sheet-regen").addEventListener("click", () => regenerateSheet(kind));
+      // ✎ Prompt : le prompt de la variante active si elle en porte un (planche déjà
+      // régénérée, éventuellement avec un prompt édité), sinon la compilation courante —
+      // les champs ont pu changer depuis la génération initiale.
+      section.querySelector(".sheet-prompt").addEventListener("click", () => {
+        if (!director) return;
+        const variants = isChar ? director.charVariants : director.locVariants;
+        const active = variants[isChar ? director.charActive : director.locActive];
+        const compiled = isChar ? compileCharsheetPrompt(director.charFields)
+                                : compileLocsheetPrompt(locDescFromFields(director.locFields));
+        openPromptEditor({
+          title: isChar ? "Prompt de la planche personnage" : "Prompt de la planche décor",
+          hint: "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement.",
+          text: (active?.source === "generated" && active.prompt) || compiled,
+          enrich: enrichSheetText,
+          apply: text => regenerateSheet(kind, text)
+        });
+      });
       const fileInput = section.querySelector(".sheet-import-input");
       section.querySelector(".sheet-import").addEventListener("click", () => fileInput.click());
       fileInput.addEventListener("change", () => {
@@ -5333,6 +6163,12 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const mt = document.querySelector('#studioNav [data-section="montage"]');
         mt.disabled = !mtReady;
         mt.classList.toggle("locked", !mtReady);
+        // Le Relay n'a pas besoin des keyframes du storyboard : il compose les siennes à
+        // partir des planches. Il s'ouvre donc en même temps que le Storyboard.
+        const rl = document.querySelector('#studioNav [data-section="relay"]');
+        rl.disabled = !unlocked;
+        rl.classList.toggle("locked", !unlocked);
+        updateRelayButtons();
       }
       refreshSoulId();
     }
@@ -5453,7 +6289,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       // et directorKeyframesBtn ne sont accessibles qu'une fois les 2 planches prêtes ET validées).
       addEvent("REQ", "Mode Réalisateur : keyframes ancrées sur les planches validées…", "req");
       director.anchorRaw = await getTemplate(director.wf.anchor);
-      director.keyframes = director.shots.map(() => ({ status: "pending", locked: false, seed: 0, name: null, file: null, blob: null, url: null }));
+      director.keyframes = director.shots.map(() => ({ status: "pending", locked: false, seed: 0, name: null, file: null, blob: null, url: null, prompt: null, edited: false }));
       // Nouvelles keyframes → l'ancien montage (cuts/animatic) est obsolète : on le repart de zéro.
       director.cutPlan = null; director.cuts = null; director.order = null; director.animatic = null;
       renderShotDNAList();   // recrée les emplacements (et efface les cartes d'un run précédent)
@@ -5464,6 +6300,7 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       for (let i = 0; i < director.n; i++) {
         const seed = director.seed + 11 + i;
         director.keyframes[i].seed = seed;
+        director.keyframes[i].prompt = compileKeyframePrompt(director.shots[i], shotSubjects(director.shots[i]).map(r => r.desc));
         renderKeyframeCard(i);
         ids.push(await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
           director.locName, seed, director.width, director.height, i, director.n));
@@ -5493,8 +6330,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         card.className = "asset fade-in";
         card.id = `kfCard_${i}`;
         card.innerHTML = `<img alt="" /><div class="thumb-missing" hidden></div><div class="meta"><strong></strong><span></span></div>
-          <div class="asset-actions"><button type="button" class="kf-regen"></button><button type="button" class="kf-lock"></button></div>`;
+          <div class="asset-actions"><button type="button" class="kf-regen"></button><button type="button" class="kf-prompt"></button><button type="button" class="kf-lock"></button></div>`;
         card.querySelector(".kf-regen").addEventListener("click", () => regenerateKeyframe(i));
+        card.querySelector(".kf-prompt").addEventListener("click", () => openKeyframePrompt(i));
         card.querySelector(".kf-lock").addEventListener("click", () => toggleLockKeyframe(i));
         slot.appendChild(card);
       }
@@ -5509,6 +6347,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       const regenBtn = card.querySelector(".kf-regen");
       regenBtn.textContent = tr("🔄 Régénérer");
       regenBtn.disabled = kf.locked || kf.status === "pending";
+      const promptBtn = card.querySelector(".kf-prompt");
+      promptBtn.textContent = tr(kf.edited ? "✎ Prompt ✱" : "✎ Prompt");
+      promptBtn.disabled = kf.locked || kf.status === "pending";
       const lockBtn = card.querySelector(".kf-lock");
       lockBtn.textContent = tr(kf.locked ? "🔓 Déverrouiller" : "🔒 Verrouiller");
       lockBtn.disabled = kf.status !== "ready" && !kf.locked;
@@ -5519,16 +6360,20 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       director.keyframes.forEach((_, i) => renderKeyframeCard(i));
     }
 
-    async function regenerateKeyframe(i) {
+    // `promptOverride` : régénération depuis l'éditeur de prompt. Sans lui, on repart du
+    // prompt DÉJÀ porté par la keyframe (donc du prompt édité si elle en a un) : un simple
+    // « 🔄 Régénérer » après une édition ne doit pas ramener sournoisement la compilation.
+    async function regenerateKeyframe(i, promptOverride) {
       const kf = director.keyframes[i];
       if (kf.locked || kf.status === "pending") return;
       kf.seed += 1;
       kf.status = "pending";
+      if (promptOverride) { kf.prompt = promptOverride; kf.edited = true; }
       renderKeyframeCard(i);
       updateLaunchButtonState();
       try {
         const promptId = await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
-          director.locName, kf.seed, director.width, director.height, i, director.n);
+          director.locName, kf.seed, director.width, director.height, i, director.n, kf.prompt);
         await trackKeyframeCompletion(i, promptId);
       } catch (err) {
         kf.status = "error";
@@ -5536,6 +6381,24 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         addEvent("WARN", err.message, "warn");
         saveProject();
       }
+    }
+
+    // Le bloc d'ancrage à ré-apposer dépend du nombre de sujets du plan : c'est la seule
+    // chose que l'éditeur a besoin de savoir du graphe.
+    function openKeyframePrompt(i) {
+      const kf = director?.keyframes?.[i];
+      if (!kf || kf.locked || kf.status === "pending") return;
+      const shot = director.shots[i];
+      const subs = shotSubjects(shot);
+      const dual = subs.length > 1;
+      const compiled = compileKeyframePrompt(shot, subs.map(r => r.desc));
+      openPromptEditor({
+        title: "Prompt de la keyframe",
+        hint: "Qwen-Edit tourne à cfg 1 : aucun négatif n'est encodé, tout se formule positivement. Le bloc d'ancrage final est toujours remis après un ré-enrichissement.",
+        text: kf.prompt || compiled,
+        enrich: text => enrichKeyframeText(text, dual),
+        apply: text => regenerateKeyframe(i, text)
+      });
     }
 
     function toggleLockKeyframe(i) {
@@ -5557,6 +6420,39 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     function viewURL(f) {
       return `${COMFY}/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}`;
     }
+    // ── Moteur des cuts : LTX 2.5 (défaut qualifié) ou Minimax H3 ────────────────
+    // Un seul choix pour toute la série de cuts. Il est lu au lancement et RANGÉ sur chaque
+    // cut : re-rendre un plan ne change jamais son moteur, même si le sélecteur a bougé
+    // depuis — sinon un montage finirait mi-LTX mi-H3 sans que rien ne le dise.
+    const CUT_ENGINES = {
+      ltx25:      { label: "LTX 2.5 i2v", template: "api/ltx25_i2v.json" },
+      minimax_h3: { label: "Minimax H3 i2v", template: "api/minimax_h3_i2v.json" }
+    };
+    const currentCutEngine = () => (CUT_ENGINES[$("cutEngineSelect").value] ? $("cutEngineSelect").value : "ltx25");
+    const cutEngineLabel = e => (CUT_ENGINES[e] || CUT_ENGINES.ltx25).label;
+    const cutTemplateFor = e => (CUT_ENGINES[e] || CUT_ENGINES.ltx25).template;
+
+    // La durée rendue par H3 n'est pas celle demandée (grille 17n+5, piège n°11) : on
+    // l'annonce AVANT le lancement plutôt que de laisser découvrir un animatic plus long
+    // que la somme des durées affichées sur les clips.
+    function updateCutEngineHint() {
+      const engine = currentCutEngine();
+      const el = $("cutEngineHint");
+      if (engine !== "minimax_h3") {
+        el.textContent = tr("Chemin qualifié en rendu réel. Le prompt est ancré sur le contenu de la keyframe.");
+        return;
+      }
+      const dur = Math.min(8, Math.max(1, parseInt($("videoDuration").value, 10) || 2));
+      el.textContent = `${tr("Grammaire du Prompt Composer (subject_definitions / retention_analysis) et turbo 8 steps.")} `
+        + dyn("h3CutDuration", dur, h3RealDuration(dur).toFixed(2));
+      // La durée réellement rendue est aussi rappelée sur chaque clip, qui peut avoir la sienne.
+    }
+    $("cutEngineSelect").addEventListener("change", () => {
+      if (director) { director.cutEngine = currentCutEngine(); saveProject(); }
+      updateCutEngineHint();
+    });
+    $("videoDuration").addEventListener("change", updateCutEngineHint);
+
     // Plan de cut par index : keyframe + shot source + mouvement de tenue (dernier plan).
     function buildCutPlan() {
       const { keyframes, shots, n, holdDur } = director;
@@ -5578,10 +6474,12 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       if (!director || !keyframesAllReady()) return;
       $("directorLaunchBtn").disabled = true;
       const { negText, seed, locDesc } = director;
+      const engine = currentCutEngine();
+      director.cutEngine = engine;
       try {
-        addEvent("REQ", "Montage : grille + cuts i2v (1 par plan)…", "req");
+        addEvent("REQ", `Montage : grille + cuts i2v (1 par plan, ${cutEngineLabel(engine)})…`, "req");
         await submitGridJob(director.keyframes); // fire-and-forget (non attendu)
-        const i2vRaw = await getTemplate("api/ltx25_i2v.json");
+        const i2vRaw = await getTemplate(cutTemplateFor(engine));
         const plan = buildCutPlan();
         director.cutPlan = plan;
         director.cuts = new Array(plan.length).fill(null);
@@ -5589,13 +6487,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         const ids = [];
         for (let k = 0; k < plan.length; k++)
           ids.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, shotCharDesc(plan[k].shot), locDesc, negText,
-            seed + 31 + k, k, plan.length, plan[k].duration, plan[k].holdMotion));
+            seed + 31 + k, k, plan.length, plan[k].duration, plan[k].holdMotion, engine));
         const entries = await waitForJobs(ids);
         for (let k = 0; k < ids.length; k++) {
           const f = outputFiles(entries[ids[k]], ".mp4")[0];
           const up = await reupload(f);
           director.cuts[k] = { file: f, inputName: up.name, seed: seed + 31 + k, duration: plan[k].duration,
-            status: "ready", prompt: compileCutPrompt(plan[k].shot, shotCharDesc(plan[k].shot), locDesc, plan[k].holdMotion) };
+            status: "ready", engine, edited: false,
+            prompt: compileCutPromptFor(plan[k].shot, shotCharDesc(plan[k].shot), locDesc, plan[k].holdMotion, engine, plan[k].duration) };
         }
         addEvent("OK", `${plan.length} cuts générés — réordonnez puis assemblez.`, "ok");
       } catch (err) { addEvent("WARN", err.message, "warn"); }
@@ -5606,20 +6505,29 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     }
 
     // Re-rendre UN plan : un seul submitCutJob sur la MÊME keyframe (seed+1, durée courante).
-    async function regenerateCut(k) {
+    // `promptOverride` : re-rendu depuis l'éditeur de prompt. Sans lui, on repart du prompt
+    // DÉJÀ porté par le cut — un cut dont le prompt a été édité ne revient pas à la
+    // compilation sur un simple « 🔄 Re-rendre ». Le moteur reste celui du cut : changer le
+    // sélecteur ne doit pas réécrire en douce un clip qu'on voulait seulement relancer.
+    async function regenerateCut(k, promptOverride) {
       const cut = director.cuts?.[k], p = director.cutPlan?.[k];
       if (!cut || !p || cut.status === "pending") return;
+      const engine = cut.engine || director.cutEngine || "ltx25";
       cut.status = "pending"; cut.seed += 1;
+      if (promptOverride) { cut.prompt = promptOverride; cut.edited = true; }
+      // Durée modifiée depuis la dernière génération (statut « à re-rendre ») : sur H3 le
+      // prompt porte la durée dans sa phrase d'alignement, il faut donc le recompiler —
+      // sauf s'il a été édité à la main, auquel cas c'est le texte de l'utilisateur qui prime.
+      if (!cut.edited) cut.prompt = compileCutPromptFor(p.shot, shotCharDesc(p.shot), director.locDesc, p.holdMotion, engine, cut.duration);
       renderMontage(); renderFooterTimeline(); updateMontageButtons();
       try {
-        const i2vRaw = await getTemplate("api/ltx25_i2v.json");
+        const i2vRaw = await getTemplate(cutTemplateFor(engine));
         const id = await submitCutJob(i2vRaw, p.keyObj, p.shot, shotCharDesc(p.shot), director.locDesc, director.negText,
-          cut.seed, k, director.cutPlan.length, cut.duration, p.holdMotion);
+          cut.seed, k, director.cutPlan.length, cut.duration, p.holdMotion, engine, cut.prompt);
         const entry = (await waitForJobs([id]))[id];
         const f = outputFiles(entry, ".mp4")[0];
         const up = await reupload(f);
         cut.file = f; cut.inputName = up.name; cut.status = "ready";
-        cut.prompt = compileCutPrompt(p.shot, shotCharDesc(p.shot), director.locDesc, p.holdMotion);
       } catch (err) { cut.status = "error"; addEvent("WARN", err.message, "warn"); }
       renderMontage(); renderFooterTimeline(); updateMontageButtons();
       saveProject();
@@ -5651,6 +6559,30 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       saveProject();
     }
 
+    // Éditeur de prompt d'un cut. Sur H3 le prompt est un bloc à champs : le
+    // ré-enrichissement n'en réécrit que `detailed_description` puis RÉASSEMBLE le bloc —
+    // même idiome que le « strip-then-reappend » des keyframes. Laisser gemma réécrire le
+    // bloc entier le rendrait en prose et ferait perdre subject_definitions, donc l'ancrage.
+    function openCutPrompt(k) {
+      const cut = director?.cuts?.[k], p = director?.cutPlan?.[k];
+      if (!cut || !p || cut.status === "pending") return;
+      const engine = cut.engine || director.cutEngine || "ltx25";
+      const isMM = engine === "minimax_h3";
+      openPromptEditor({
+        title: "Prompt du cut",
+        hint: isMM
+          ? "Bloc à champs Minimax H3 : le ré-enrichissement ne réécrit que detailed_description, les définitions de sujets restent en place."
+          : "LTX 2.5 tourne à cfg 1 : son enhancer intégré fait loi, gardez l'identité du personnage et le décor dans le prompt.",
+        text: cut.prompt || compileCutPromptFor(p.shot, shotCharDesc(p.shot), director.locDesc, p.holdMotion, engine, cut.duration),
+        enrich: async text => {
+          if (!isMM) return enrichCutText(text, engine);
+          const body = await enrichCutText(h3CutBodyOf(text), engine);
+          return buildH3CutPrompt(p.shot, director.locDesc, p.holdMotion, cut.duration, body);
+        },
+        apply: text => regenerateCut(k, text)
+      });
+    }
+
     // Rendu du menu Montage : clips dans l'ordre director.order.
     function renderMontage() {
       const list = $("montageList");
@@ -5669,12 +6601,14 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
             <button type="button" class="clip-up"></button>
             <button type="button" class="clip-down"></button>
             <button type="button" class="clip-regen"></button>
+            <button type="button" class="clip-prompt"></button>
             <button type="button" class="clip-preview"></button>
           </div>`;
         clip.querySelector("strong").textContent = dyn("shotLabel", k + 1, director.cutPlan.length);
         const stale = cut.status === "stale";
+        const realDur = cut.engine === "minimax_h3" ? ` · ${h3RealDuration(cut.duration).toFixed(2)} s rendus` : "";
         clip.querySelector(".clip-meta").innerHTML =
-          `seed ${cut.seed} · ${stale ? `<span class="stale">${tr("à re-rendre")}</span>` :
+          `seed ${cut.seed}${realDur} · ${stale ? `<span class="stale">${tr("à re-rendre")}</span>` :
             tr(cut.status === "pending" ? "Génération…" : cut.status === "error" ? "Erreur" : cut.status === "missing" ? "Manquant" : "Prêt")}`;
         const vid = clip.querySelector("video"), missEl = clip.querySelector(".thumb-missing");
         if (cut.status === "missing") { vid.hidden = true; missEl.hidden = false; missEl.textContent = tr("Manquant"); }
@@ -5700,6 +6634,10 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         regenBtn.textContent = tr("🔄 Re-rendre ce plan");
         regenBtn.disabled = cut.status === "pending";
         regenBtn.addEventListener("click", () => regenerateCut(k));
+        const promptBtn = clip.querySelector(".clip-prompt");
+        promptBtn.textContent = tr(cut.edited ? "✎ Prompt ✱" : "✎ Prompt");
+        promptBtn.disabled = cut.status === "pending";
+        promptBtn.addEventListener("click", () => openCutPrompt(k));
         const prevBtn = clip.querySelector(".clip-preview");
         prevBtn.textContent = tr("⤢ Aperçu");
         prevBtn.disabled = !cut.file || cut.status === "missing";
@@ -5748,6 +6686,282 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
     $("directorLaunchBtn").addEventListener("click", generateCuts);
     $("directorAssembleBtn").addEventListener("click", assembleTimeline);
 
+    // ── Prompt Relay : chaîne de segments vidéo courts ────────────────────────────
+    // Porté de la piste « Cinema Studio » (dépôt yoyo-sama/cinema-ai-studio), où la chaîne a
+    // été qualifiée en rendu réel. Le principe : plutôt qu'un seul long plan, n segments
+    // courts — chacun s'infère mieux — dont la cohérence vient du CHAÎNAGE et non du prompt.
+    //
+    // Deux liaisons par segment, et c'est tout le mécanisme :
+    //   🔗 « continu » : la DERNIÈRE FRAME du segment précédent est ré-uploadée TELLE QUELLE
+    //      comme image de départ du segment suivant. Aucune keyframe, donc aucune
+    //      réinterprétation : c'est la seule façon d'obtenir une continuité frame-exacte
+    //      (la repasse par Qwen-Edit produisait une coupure visible à chaque raccord).
+    //   🎞 « coupure » : changement de plan assumé — une keyframe Qwen-Edit est composée sur
+    //      la frame de transition (ou sur les planches pour le premier segment) et le décor.
+    // Le segment 1 est toujours en coupure : il n'a pas de frame précédente à reprendre.
+    const RELAY_MAX_SEGMENTS = 10;
+    const RELAY_MODES = { continue: "🔗", cut: "🎞" };
+
+    // Extraction de la dernière frame d'un cut. Il n'existe AUCUN nœud « VideoFrameExtract »
+    // dans ce runtime : la chaîne native est LoadVideo → GetVideoComponents →
+    // ImageFromBatch → SaveImage, celle que docs/TESTING.md emploie déjà pour inspecter des
+    // frames. `batch_index: -1` (dernière frame) est accepté par l'API bien que le widget
+    // annonce un minimum de 0 — vérifié sur la piste Cinema Studio.
+    function buildLastFrameGraph(videoName) {
+      const { g, add } = makeGraphBuilder();
+      const comps = add("GetVideoComponents", { video: [add("LoadVideo", { file: videoName }), 0] });
+      const frame = add("ImageFromBatch", { image: [comps, 0], batch_index: -1, length: 1 });
+      add("SaveImage", { images: [frame, 0], filename_prefix: "studio/relay/transition" });
+      return g;
+    }
+
+    // Rend { name, file, blob } — `name` est une entrée ComfyUI fraîche, utilisable aussi
+    // bien comme image de départ d'un i2v que comme référence d'une keyframe.
+    async function extractLastFrame(videoFile) {
+      const up = await reupload(videoFile);
+      const id = await submitGraph(buildLastFrameGraph(up.name), "Relay · frame de transition",
+        `${up.name} → dernière frame`);
+      const entry = (await waitForJobs([id]))[id];
+      const file = outputFiles(entry, ".png")[0];
+      if (!file) throw new Error("frame de transition : aucune image en sortie");
+      return { ...(await reupload(file)), file };
+    }
+
+    // Prompt de keyframe d'un segment en coupure. Premier segment : exactement la structure
+    // d'ancrage des keyframes de storyboard (image 1 = planche personnage, image 2 = décor).
+    // Segments suivants : l'image 1 n'est plus une planche mais la frame de transition, et le
+    // prompt doit le DIRE, sinon Qwen-Edit la traite comme une fiche de référence et recompose
+    // une pose. Le bloc d'ancrage solo est ré-apposé dans les deux cas.
+    function compileRelayKeyframePrompt(text, charDesc, locDesc, isFirst) {
+      const styleText = currentStyleText();
+      let s;
+      if (isFirst) {
+        s = "Use the first reference image only as the appearance guide for one single character, "
+          + charDesc
+          + ", and use the second reference image only as the guide for the environment"
+          + (locDesc ? ", " + locDesc : "") + ". "
+          + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+          + "instance of that character inside the environment of the second reference image: "
+          + text + ".";
+      } else {
+        s = "The first reference image is the last film frame of the previous segment of one single "
+          + "continuous shot. Continue that exact scene: keep the character's face, hair, clothing, "
+          + "position and the environment strictly continuous with that first reference image. "
+          + "The second reference image is the guide for the environment"
+          + (locDesc ? ", " + locDesc : "") + ". "
+          + "Create the next photorealistic cinematic film still of this same continuous shot, moments "
+          + "later: " + text + ".";
+      }
+      s += " " + KEYFRAME_ANCHOR_SOLO;
+      if (styleText) s += " " + styleText;
+      return s;
+    }
+
+    // Prompt vidéo d'un segment : même matière que les cuts, mais l'« action » est le texte
+    // du segment et non un plan de la Scene DNA. On passe donc par un shot minimal, ce qui
+    // laisse compileCutPrompt / buildH3CutPrompt seuls responsables de la forme du prompt.
+    function relayShot(seg) {
+      return { camera: "medium", lighting: "golden_hour", action: seg.prompt.trim(),
+               emotion: "", extra: "", duration: seg.duration, subjects: [0] };
+    }
+
+    const relayEngine = () => (CUT_ENGINES[$("relayEngineSelect").value] ? $("relayEngineSelect").value : "ltx25");
+    const newRelaySegment = () => ({ prompt: "", duration: 3, mode: "continue", status: "idle",
+                                     file: null, inputName: null, seed: 0, prompt_used: null });
+
+    function ensureRelay() {
+      if (!director) return null;
+      if (!director.relay) director.relay = { segments: [newRelaySegment()], engine: "ltx25", video: null };
+      return director.relay;
+    }
+
+    function relayReady() {
+      const r = director?.relay;
+      return !!(r && r.segments.length && r.segments.every(seg => seg.prompt.trim()));
+    }
+    function updateRelayButtons() {
+      const r = director?.relay;
+      const unlocked = anchorsReady() && !!director?.validated;
+      const busy = !!r && r.segments.some(seg => seg.status === "pending");
+      $("relayRunBtn").disabled = !unlocked || !relayReady() || busy;
+      $("relayAddBtn").disabled = !r || r.segments.length >= RELAY_MAX_SEGMENTS || busy;
+      $("relayAssembleBtn").disabled = !r || busy || !r.segments.length || !r.segments.every(seg => seg.status === "ready");
+    }
+
+    function renderRelay() {
+      const list = $("relayList");
+      list.innerHTML = "";
+      const r = director?.relay;
+      if (!r) return;
+      r.segments.forEach((seg, i) => {
+        const el = document.createElement("div");
+        el.className = "relay-seg";
+        el.innerHTML = `<div class="seg-head"><strong></strong><span class="seg-status"></span></div>
+          <textarea spellcheck="false"></textarea>
+          <div class="seg-row">
+            <label><span class="seg-dur-lbl"></span><input type="number" min="2" max="8" /></label>
+            <button type="button" class="secondary-btn seg-link"></button>
+            <button type="button" class="secondary-btn seg-enrich"></button>
+            <button type="button" class="secondary-btn seg-del"></button>
+          </div>
+          <video muted preload="metadata" hidden></video>`;
+        el.querySelector("strong").textContent = dyn("relaySegment", i + 1, r.segments.length);
+        el.querySelector(".seg-status").textContent = tr(
+          seg.status === "pending" ? "Génération…" : seg.status === "error" ? "Erreur"
+          : seg.status === "ready" ? "Prêt" : "À générer");
+        const area = el.querySelector("textarea");
+        area.value = seg.prompt;
+        area.placeholder = tr("Ce qui se passe dans ce segment.");
+        area.addEventListener("change", () => { seg.prompt = area.value; updateRelayButtons(); saveProject(); });
+        el.querySelector(".seg-dur-lbl").textContent = tr("Durée (s)");
+        const dur = el.querySelector('input[type="number"]');
+        dur.value = seg.duration;
+        dur.addEventListener("change", () => {
+          seg.duration = Math.min(8, Math.max(2, parseInt(dur.value, 10) || seg.duration));
+          dur.value = seg.duration;
+          saveProject();
+        });
+        // Le premier segment n'a pas de frame précédente : sa liaison n'existe pas, le bouton
+        // le dit plutôt que d'afficher un choix sans effet.
+        const link = el.querySelector(".seg-link");
+        if (i === 0) {
+          link.textContent = tr("🎞 Premier segment");
+          link.disabled = true;
+        } else {
+          link.textContent = `${RELAY_MODES[seg.mode]} ${tr(seg.mode === "continue" ? "Continu (frame exacte)" : "Coupure (nouvelle keyframe)")}`;
+          link.classList.toggle("active", seg.mode === "continue");
+          link.addEventListener("click", () => {
+            seg.mode = seg.mode === "continue" ? "cut" : "continue";
+            renderRelay(); saveProject();
+          });
+        }
+        const enrich = el.querySelector(".seg-enrich");
+        enrich.textContent = tr("✨ Enrichir");
+        enrich.addEventListener("click", async () => {
+          const label = enrich.textContent;
+          enrich.disabled = true;
+          enrich.textContent = tr("Enrichissement…");
+          try {
+            seg.prompt = await enrichCutText(area.value.trim(), relayEngine());
+            area.value = seg.prompt;
+            saveProject();
+          } finally { enrich.textContent = label; enrich.disabled = false; }
+        });
+        const del = el.querySelector(".seg-del");
+        del.textContent = tr("✕ Retirer");
+        del.disabled = r.segments.length < 2;
+        del.addEventListener("click", () => {
+          r.segments.splice(i, 1);
+          renderRelay(); updateRelayButtons(); saveProject();
+        });
+        const vid = el.querySelector("video");
+        if (seg.file) { vid.hidden = false; vid.src = viewURL(seg.file); }
+        list.appendChild(el);
+      });
+      translateTree(list);
+      updateRelayButtons();
+    }
+
+    // Génération de la chaîne. Séquentielle par construction : un segment continu a besoin de
+    // la dernière frame du précédent, donc rien ne peut partir en parallèle.
+    async function runRelay() {
+      const r = ensureRelay();
+      if (!r || !relayReady()) return;
+      const engine = relayEngine();
+      r.engine = engine;
+      const { negText, seed, locDesc } = director;
+      const charDesc = charDescFromFields(director.charFields);
+      $("relayRunBtn").disabled = true;
+      let prevFrame = null;
+      try {
+        const anchorRaw = director.anchorRaw || (director.anchorRaw = await getTemplate(director.wf.anchor));
+        const i2vRaw = await getTemplate(cutTemplateFor(engine));
+        for (let i = 0; i < r.segments.length; i++) {
+          const seg = r.segments[i];
+          const mode = i === 0 || !prevFrame ? "cut" : seg.mode;
+          seg.status = "pending";
+          renderRelay();
+          const shot = relayShot(seg);
+          let keyObj;
+          if (mode === "continue") {
+            // Frame exacte : aucune keyframe, l'image de départ EST la dernière frame rendue.
+            addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : vidéo (liaison continue)…`, "req");
+            keyObj = prevFrame;
+          } else {
+            addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : keyframe (liaison coupure)…`, "req");
+            const kPrompt = compileRelayKeyframePrompt(seg.prompt.trim(), charDesc, locDesc, i === 0);
+            const kId = await submitKeyframeJob(anchorRaw, shot,
+              [{ desc: charDesc, name: prevFrame ? prevFrame.name : director.charName }],
+              negText, director.locName, seed + 401 + i, director.width, director.height, i, r.segments.length, kPrompt);
+            keyObj = await resolveImageJob(kId);
+          }
+          addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : vidéo…`, "req");
+          seg.seed = seed + 501 + i;
+          seg.prompt_used = compileCutPromptFor(shot, charDesc, locDesc, null, engine, seg.duration);
+          const cutId = await submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText,
+            seg.seed, i, r.segments.length, seg.duration, null, engine, seg.prompt_used);
+          const entry = (await waitForJobs([cutId]))[cutId];
+          const f = outputFiles(entry, ".mp4")[0];
+          if (!f) throw new Error(`segment ${i + 1} : aucune vidéo en sortie`);
+          const up = await reupload(f);
+          seg.file = f; seg.inputName = up.name; seg.status = "ready";
+          renderRelay();
+          saveProject();
+          if (i < r.segments.length - 1) {
+            addEvent("REQ", "Relay · extraction de la dernière frame…", "req");
+            prevFrame = await extractLastFrame(f);
+          }
+        }
+        addEvent("OK", `Relay : ${r.segments.length} segments générés — assemblez la séquence.`, "ok");
+      } catch (err) {
+        const pending = r.segments.find(seg => seg.status === "pending");
+        if (pending) pending.status = "error";
+        addEvent("WARN", err.message, "warn");
+      }
+      renderRelay();
+      updateRelayButtons();
+      saveProject();
+    }
+
+    // Assemblage : mêmes cuts francs que l'animatic du storyboard, dans l'ordre des segments.
+    async function assembleRelay() {
+      const r = director?.relay;
+      if (!r || !r.segments.every(seg => seg.inputName)) return;
+      $("relayAssembleBtn").disabled = true;
+      try {
+        addEvent("REQ", "Relay : assemblage de la séquence…", "req");
+        const id = await submitAnimaticJob(r.segments.map(seg => seg.inputName), director.withAudio, director.seed);
+        const entry = (await waitForJobs([id]))[id];
+        r.video = { file: outputFiles(entry, ".mp4")[0], seed: director.seed };
+        renderRelayPlayer();
+        addEvent("OK", "Relay : séquence assemblée.", "ok");
+      } catch (err) { addEvent("WARN", err.message, "warn"); }
+      updateRelayButtons();
+      saveProject();
+    }
+
+    function renderRelayPlayer() {
+      const wrap = $("relayPlayer");
+      wrap.innerHTML = "";
+      if (!director?.relay?.video) return;
+      const vid = document.createElement("video");
+      vid.controls = true; vid.playsInline = true;
+      vid.src = viewURL(director.relay.video.file);
+      wrap.appendChild(vid);
+    }
+
+    $("relayAddBtn").addEventListener("click", () => {
+      const r = ensureRelay();
+      if (!r || r.segments.length >= RELAY_MAX_SEGMENTS) return;
+      r.segments.push(newRelaySegment());
+      renderRelay(); saveProject();
+    });
+    $("relayRunBtn").addEventListener("click", runRelay);
+    $("relayAssembleBtn").addEventListener("click", assembleRelay);
+    $("relayEngineSelect").addEventListener("change", () => {
+      if (director?.relay) { director.relay.engine = relayEngine(); saveProject(); }
+    });
+
     // ── LOT C : persistance de session (clé localStorage "studioProject") ──────────
     // Tout l'état projet du studio est sauvegardé PAR RÉFÉRENCES de fichiers ComfyUI
     // ({filename, subfolder, type} — sorties disque re-lisibles via /view) : jamais de
@@ -5783,7 +6997,9 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         chars: director.chars, charIdx: director.charIdx,
         locVariants: director.locVariants, locActive: director.locActive,
         shots: director.shots, keyframes: director.keyframes,
-        cuts: director.cuts, order: director.order, animatic: director.animatic
+        cuts: director.cuts, order: director.order, animatic: director.animatic,
+        cutEngine: director.cutEngine || "ltx25",
+        relay: director.relay || null
         // cutPlan : non persisté — reconstruit au restore via buildCutPlan().
       };
       try {
@@ -5880,7 +7096,13 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
         locVariants: (p.locVariants || []).map(revive), locActive: p.locActive ?? 0,
         keyframes: p.keyframes ? p.keyframes.map(revive) : null,
         cutPlan: null, cuts: p.cuts ? p.cuts.map(revive) : null,
-        order: p.order || null, animatic: p.animatic || null
+        order: p.order || null, animatic: p.animatic || null,
+        cutEngine: CUT_ENGINES[p.cutEngine] ? p.cutEngine : "ltx25",
+        // Projet d'avant le Prompt Relay : pas de clé `relay` → chaîne vierge à un segment.
+        relay: p.relay ? { engine: CUT_ENGINES[p.relay.engine] ? p.relay.engine : "ltx25",
+                           video: p.relay.video || null,
+                           segments: (p.relay.segments || []).map(seg => ({ ...newRelaySegment(), ...seg,
+                             status: seg.file ? "ready" : "idle" })) } : null
       };
       attachSheetAccessors(director);
       director.charIdx = Math.min(Math.max(0, p.charIdx ?? 0), director.chars.length - 1);
@@ -5894,6 +7116,11 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
       renderSheetMenu("char"); renderSheetMenu("loc");
       updateValidateButtonState();
       renderShotDNAList();   // redessine aussi les keyframes déjà rendues
+      $("cutEngineSelect").value = director.cutEngine;
+      updateCutEngineHint();
+      ensureRelay();
+      $("relayEngineSelect").value = director.relay.engine;
+      renderRelay(); renderRelayPlayer();
       renderMontage(); renderFooterTimeline(); renderMontagePlayer();
       updateMontageButtons();
       updateGateState();
@@ -5932,12 +7159,24 @@ Answer ONLY with JSON: {"positive_prompt": "..."}`;
           catch { cut.status = "missing"; }
         })());
       });
+      (director.relay?.segments || []).forEach(seg => {
+        if (!seg?.file || seg.status !== "ready") return;
+        tasks.push((async () => {
+          try { seg.inputName = (await resolveFileRef(seg.file)).name; }
+          catch { seg.status = "error"; }
+        })());
+      });
+      if (director.relay?.video?.file) tasks.push((async () => {
+        try { if (!(await fetch(viewURL(director.relay.video.file))).ok) throw new Error(); }
+        catch { director.relay.video = null; renderRelayPlayer(); }
+      })());
       if (director.animatic?.file) tasks.push((async () => {
         try { if (!(await fetch(viewURL(director.animatic.file))).ok) throw new Error(); }
         catch { director.animatic = null; renderMontagePlayer(); }
       })());
       await Promise.allSettled(tasks);
       renderMontage(); renderFooterTimeline(); updateMontageButtons(); updateGateState();
+      renderRelay();
       const missing = [...director.chars.flatMap(c => c.variants), ...(director.locVariants || []),
         ...(director.keyframes || []), ...(director.cuts || [])].filter(x => x?.status === "missing").length;
       addEvent(missing ? "WARN" : "OK",

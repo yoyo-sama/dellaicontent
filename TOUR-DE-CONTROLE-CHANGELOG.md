@@ -1,5 +1,101 @@
 # Tour de contrôle — changelog
 
+## 2026-09-21 (suite 6) — Prompt Relay, prompts éditables, composer H3 sur les cuts
+
+Trois demandes de l'utilisateur, posées ensemble parce qu'elles touchent le même code de studio, et deux documents de référence fournis par lui : l'ontologie de styles et le system prompt Qwen-Image-Edit-2509.
+
+### 1. Prompts éditables partout, ré-enrichissement par moteur
+
+Un bouton « ✎ Prompt » sur les deux planches, sur chaque keyframe et sur chaque cut ouvre une modale montrant le texte réellement envoyé au graphe. Le texte appliqué part **verbatim** — l'app ne recompile rien par-dessus — et il est rangé sur l'objet (variante, keyframe, cut), donc il survit à la persistance et une régénération ultérieure ne ramène pas la compilation d'origine.
+
+Trois consignes, une par moteur : planches → `KREA2_ENRICH_SYSTEM` (existante), keyframes → `QWEN_EDIT_ENRICH_SYSTEM` (nouvelle, tirée du document fourni : dire quoi changer et quoi préserver, rôles d'images explicites, identité non réinventée, formulation positive puisque cfg 1, interdiction du vocabulaire « storyboard/planche »), cuts → consigne dépendante du moteur ciblé.
+
+L'invariant d'ancrage des keyframes sort en constantes et n'est jamais soumis à gemma : détail et règle générale dans `docs/LESSONS.md`, piège n°21.
+
+### 2. Moteur des cuts : LTX 2.5 ou Minimax H3
+
+Le menu Montage expose un sélecteur. LTX 2.5 reste le défaut, prompt inchangé au caractère près (formulation qualifiée au LOT 4, piège n°9). Minimax H3 réutilise la grammaire du Prompt Composer déjà portée pour le `reference2video`, avec **une seule adaptation** : un cut n'a qu'une image d'entrée, la keyframe, où personnage et décor sont déjà composés ensemble — tous les sujets se définissent donc sur `<Picture 1>` et seule la numérotation des `<Subject>` varie. La phrase d'alignement dit au modèle que la keyframe est l'instant 0 du clip ; le graphe part en turbo 8 steps, sans `last_frame`.
+
+Le moteur est rangé **sur chaque cut** : re-rendre un plan ne change jamais son moteur, même si le sélecteur a bougé depuis, sinon un montage finirait mi-LTX mi-H3 sans que rien ne le dise. La grille 17n+5 est annoncée avant le lancement et rappelée sur chaque clip, qui a sa propre durée.
+
+### 3. Prompt Relay
+
+Porté depuis la piste « Cinema Studio » (`yoyo-sama/cinema-ai-studio`), où la chaîne a été qualifiée en rendu réel. Nouvelle section du studio, ouverte dès les planches validées (elle n'a pas besoin des keyframes du storyboard, elle compose les siennes). De 1 à 10 segments, chacun avec son prompt, sa durée, son enrichissement et sa **liaison** : 🔗 continu (la dernière frame du segment précédent est ré-uploadée telle quelle) ou 🎞 coupure (keyframe composée). L'assemblage réutilise les cuts francs de l'animatic.
+
+Pourquoi deux liaisons plutôt qu'une : `docs/LESSONS.md`, piège n°22 — repasser la frame de transition par Qwen-Edit produit une coupure visible, c'est l'inverse de l'effet recherché.
+
+### Vérification
+
+75 assertions headless (Chromium, ComfyUI et Ollama bouchonnés) : invariant d'ancrage et ses trois replis d'enrichissement, grammaire H3 des cuts, câblage réel des graphes soumis, éditeur de prompt, chaîne relay complète (suite de jobs `key,cut,frame,cut,frame,key,cut` sur trois segments en liaisons coupure/continu/coupure), persistance. Captures clair et sombre à 1440 et 390 px.
+
+**Rien n'est vérifié en pixels** : ni ComfyUI ni Ollama ne tournent dans une session distante. Restent à constater sur le GB10 : la tenue d'un cut H3 par rapport au même plan en LTX, et la continuité réelle d'un raccord 🔗.
+
+## 2026-09-21 (suite 5) — FL2VA Minimax H3
+
+L'utilisateur signale que le nœud `MiniMaxH3ImageToVideo` couvre trois modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, `first_frame` + `last_frame` = FL2VA. Capture de son ComfyUI à l'appui, les deux entrées y figurant comme facultatives.
+
+Vérifié dans le dépôt : nos templates `minimax_h3_t2v.json` et `minimax_h3_i2v.json` utilisent **déjà le même nœud**, à la seule présence de `first_frame` près. Le FL2VA H3 ne coûtait donc qu'une entrée `last_frame` et son `LoadImage` — ce que la note précédente annonçait comme « presque gratuit », confirmé.
+
+### Ce qui change
+
+- `api/minimax_h3_i2v.json` câble `last_frame` sur un `LoadImage` alimenté par `{{IMAGE2}}`. Aucune dernière image fournie ⇒ `applyMinimaxLastFrame` retire la clé et le nœud orphelin, et le graphe redevient **identique à l'ancien** (23 nœuds, aucun lien pendant — vérifié).
+- Un champ « dernière image (facultatif — FL2VA) » apparaît, piloté par le **modèle** sélectionné et non par `pipelines[].controls` : la capacité appartient au workflow, et le champ n'a aucun sens sur `ltx25_i2v`, qui partage pourtant le pipeline `image2video`. Vérifié affiché sur `minimax_h3_i2v`, masqué sur `ltx25_i2v` et hors pipeline image.
+- La phrase d'alignement temporel prend sa forme FL2VA quand les deux images sont là, et son repère de fin est la durée **réellement rendue** — pas celle demandée. H3 se cale sur la grille 17n+5 : annoncer « à 5,00 s » sur un clip qui en rend 5,17 placerait la dernière image avant la fin.
+
+### Un piège rencontré en chemin
+
+Transcrire la formule 17n+5 en JavaScript ne marche pas telle quelle : le `%` de `ComfyMathExpression` est un modulo à la Python, positif sur une valeur négative, là où celui de JS garde le signe. La version naïve rendait **22 frames** pour une demande de 1 s au lieu des 39 mesurées en rendu réel — 40 % d'écart, silencieux. Détail dans `docs/LESSONS.md`, piège n°20.
+
+Autre rappel, refait malgré sa présence dans le dépôt : `.gb-field` est un `<label>` en `text-transform:uppercase`, une phrase d'aide y devient illisible. Constaté en capture, corrigé en `title`.
+
+### Vérifications
+
+JS validé, graphes construits hors navigateur dans les deux modes (i2v inchangé, FL2VA câblé, aucun lien orphelin), `h3VideoFrames(1) = 39` recoupé avec la mesure en rendu réel du piège n°11, UI capturée en clair/sombre à 1440 et 390 px avec la visibilité du champ vérifiée sur les trois cas. **Aucun rendu réel** — ComfyUI tourne sur la machine de l'utilisateur.
+
+---
+
+## 2026-09-21 (suite 6) — Rebase derrière les fiches personnage
+
+La branche `claude/fiches-personnage-animaux-np87b7` ayant été fusionnée en premier (PR #1, `812499c`), le travail des suites 4 et 5 a été rebasé derrière elle. Trois conflits résolus à la main, aucun arbitrage silencieux :
+
+- `AGENTS.md`, deux fois : les deux branches réécrivaient le même paragraphe de repères JS puis la même puce Minimax H3. Les deux apports sont conservés, pas l'un à la place de l'autre.
+- `index.html` : `main` a supprimé `generateStoryboardV2` (le sélecteur Auto/Réalisateur a disparu, la revue est le seul mode) pendant que la suite 4 insérait ses sections juste après. Suppression conservée, sections conservées.
+
+Deux points d'intégration relevés en relisant plutôt qu'en se fiant au résumé :
+
+- `characterSheetFromBrief` renvoie désormais un objet de champs passé tel quel à `submitCharsheetJob` ; le chemin r2v reprend cette version, la couche vision n'y touchant pas (elle produit une chaîne, indépendante de ce schéma).
+- Le rebase avait introduit un **doublon de clé** dans `I18N` : `"Sujet"` existait des deux côtés, avec un allemand différent (`Subjekt` contre `Motiv`). La dernière écrasait silencieusement la première. L'entrée de `main` est conservée — les onglets de sujet et les puces d'insertion doivent dire le même mot — et l'allemand des libellés associés a été aligné sur `Motiv`.
+
+La frontière convenue avec l'autre fil tient et a été vérifiée dans le navigateur : les puces d'insertion n'apparaissent que sur `reference2video`, jamais sur `storyboard_v2`, donc aucun jeton `<Subject N>` ne peut fuiter dans le prompt Qwen-Edit via le brief.
+
+---
+
+## 2026-09-21 (suite 4) — Grammaire de prompt Minimax H3 et description des sources par vision
+
+Demande de l'utilisateur : intégrer la mécanique de `BMB12d3/minimax-h3-prompt-composer`, et pouvoir décrire les images sources par un modèle Ollama — nécessaire en Ref2VA pour les notions de `<Subject x>`.
+
+### Ce que fait le composer de référence
+
+Un seul fichier HTML (9 492 lignes), aucune dépendance, aucun appel réseau — même architecture que nous. Il **ne génère rien et n'appelle aucun modèle** : on remplit des champs, il assemble un prompt structuré, il le vérifie, on copie-colle dans ComfyUI. Sa valeur tient à la grammaire H3 et à son validateur ; le reste (planificateur de caméra 3D, extracteur de frames, assistants d'édition) est du cockpit, contraire à la raison d'être de cette démo, et n'a pas été repris.
+
+### Le mécanisme `<Subject x>`, et l'écart qu'il révélait
+
+Deux numérotations distinctes : `<Picture N>` est l'entrée physique ComfyUI 1-indexée (`ref_image_{N-1}`), `<Subject N>` une identité logique, la liaison tenant en une phrase de `subject_definitions`. Nos deux planches r2v **étaient** bien `ref_image_0`/`ref_image_1`, mais le prompt était la chaîne plate `charDesc. locDesc. brief` : rien ne disait au modèle laquelle des deux images était le personnage. Le job passait, l'image sortait — d'où un défaut invisible jusqu'ici. Détail dans `docs/LESSONS.md`, piège n°19.
+
+### Ce qui change
+
+- Ref2VA émet les 6 champs de la grammaire (`buildH3RefPrompt`), les chemins (revue des planches, bypass fiches) passant par le même point unique `submitReference2VideoGraph`.
+- I2VA reçoit la phrase d'alignement temporel (`H3_I2V_ALIGNMENT`), absente du template.
+- Plafond dur de 7 000 caractères appliqué (`capH3Prompt`), il ne l'était nulle part.
+- Les références fournies par l'utilisateur sont décrites par `gemma4:e4b` en vision (`describeRefImages`) — capacité confirmée par l'utilisateur en direct, et sondée au premier usage plutôt que supposée. C'est sur le chemin « Ignorer les fiches » que ça compte le plus : sans fiche générée, c'était la seule chose qui pouvait dire au modèle ce que contiennent ses images.
+- UI : attribution des numéros de sujet **par l'app**, jamais saisie (option « implicite », tranchée par l'utilisateur). Légende de slot sous chaque image de référence, et une rangée de puces d'insertion sous le brief pour les cas où plusieurs sujets agissent dans le même plan — « `<Subject 1>` tend la boîte à `<Subject 2>` » n'a aucune autre façon de s'exprimer en Ref2VA.
+
+### Vérifications
+
+JS validé (`node --check`), builder exercé hors navigateur sur cas nominal et cas limites (aucune description, brief sans ponctuation, description déjà ponctuée, troncature à 7 000). UI capturée en headless Chromium en clair et sombre à 1440 et 390 px : puces et légendes correctes, insertion au curseur fonctionnelle, aucun débordement horizontal, aucune erreur JS. Les 4 langues vérifiées. **Aucun rendu réel** : ComfyUI et Ollama tournent sur la machine de l'utilisateur, pas dans la session — l'effet en vidéo reste à constater par lui.
+
+---
+
 ## 2026-09-21 (suite 3) — Couverture Krea 2 complète, plus de titre incrusté, et la vraie cause du « je ne vois pas les styles »
 
 Trois demandes de l'utilisateur après le second A/B.
