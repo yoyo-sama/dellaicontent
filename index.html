@@ -1041,6 +1041,48 @@
     .relay-seg .seg-link.active { border-color: var(--accent); color: var(--accent); }
     .relay-seg video { grid-column: 1 / -1; width: 100%; border-radius: 8px; }
     .relay-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .relay-composer {
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      background: var(--card-2);
+      padding: 12px;
+      margin: 10px 0;
+    }
+    .relay-composer .composer-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); }
+    .relay-composer textarea {
+      width: 100%;
+      margin-top: 6px;
+      min-height: 84px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-light);
+      background: var(--card);
+      color: var(--text);
+    }
+    .relay-composer .composer-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .relay-composer .composer-row label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    .relay-composer .composer-row input[type="number"] { width: 72px; }
+    .relay-composer .hint { margin-top: 8px; }
+    /* Bande de frames candidates : la retenue porte le liseré d'accent, les autres restent
+       lisibles mais en retrait — c'est un choix, pas une galerie. */
+    .relay-transitions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .relay-transitions .transitions-lbl { font-size: 12px; color: var(--text-2); margin-right: 4px; }
+    .relay-thumb {
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      background: none;
+      cursor: pointer;
+      line-height: 0;
+      opacity: 0.6;
+    }
+    .relay-thumb img { width: 84px; height: 48px; object-fit: cover; border-radius: 4px; display: block; }
+    .relay-thumb:hover:not(:disabled) { opacity: 1; }
+    .relay-thumb.active { border-color: var(--accent); opacity: 1; }
+    .relay-thumb:disabled { cursor: default; }
     #relayPlayer video { width: 100%; margin-top: 12px; border-radius: var(--radius); }
 
     #promptModal {
@@ -2076,6 +2118,17 @@
               <option value="minimax_h3">Minimax H3 i2v (grammaire Prompt Composer)</option>
             </select>
           </label>
+          <div class="relay-composer" id="relayComposer" hidden>
+            <label class="composer-lbl">Scénario
+              <textarea id="relayScenario" rows="4" spellcheck="false" placeholder="Le scénario complet de la séquence, écrit en une fois."></textarea>
+            </label>
+            <div class="composer-row">
+              <label>Segments <input type="number" id="relaySegCount" min="1" max="10" value="6" /></label>
+              <label>Durée par segment (s) <input type="number" id="relaySegDur" min="2" max="8" value="3" /></label>
+              <button type="button" class="secondary-btn" id="relayComposeBtn" disabled>✨ Découper le scénario</button>
+            </div>
+            <p class="hint">Le scénario est découpé en autant de plans consécutifs, chacun écrit pour la grammaire de Minimax H3, les sujets désignés par le numéro que l'app leur attribue. Rien n'est généré : relisez et corrigez chaque segment avant de lancer la chaîne.</p>
+          </div>
           <div class="relay-list" id="relayList"></div>
           <div class="relay-foot">
             <button type="button" class="secondary-btn" id="relayAddBtn">＋ Ajouter un segment</button>
@@ -2586,6 +2639,28 @@
       "Coupure (nouvelle keyframe)": { en: "Cut (new keyframe)", es: "Corte (nuevo fotograma clave)", de: "Schnitt (neues Keyframe)" },
       "✨ Enrichir": { en: "✨ Enrich", es: "✨ Enriquecer", de: "✨ Anreichern" },
       "✕ Retirer": { en: "✕ Remove", es: "✕ Quitar", de: "✕ Entfernen" },
+      "🔄 Re-générer": { en: "🔄 Re-generate", es: "🔄 Volver a generar", de: "🔄 Neu generieren" },
+      "À re-générer": { en: "To re-generate", es: "Por volver a generar", de: "Neu zu generieren" },
+      "Image de transition": { en: "Transition frame", es: "Imagen de transición", de: "Übergangsbild" },
+      "Dernière frame": { en: "Last frame", es: "Último fotograma", de: "Letztes Bild" },
+      // Composer de scénario (moteur H3)
+      "Scénario": { en: "Screenplay", es: "Guion", de: "Drehbuch" },
+      "Le scénario complet de la séquence, écrit en une fois.":
+        { en: "The whole screenplay of the sequence, written in one go.",
+          es: "El guion completo de la secuencia, escrito de una vez.",
+          de: "Das gesamte Drehbuch der Sequenz, in einem Zug geschrieben." },
+      "Segments": { en: "Segments", es: "Segmentos", de: "Segmente" },
+      "Durée par segment (s)": { en: "Duration per segment (s)", es: "Duración por segmento (s)", de: "Dauer pro Segment (s)" },
+      "✨ Découper le scénario": { en: "✨ Split the screenplay", es: "✨ Dividir el guion", de: "✨ Drehbuch aufteilen" },
+      "Découpage…": { en: "Splitting…", es: "Dividiendo…", de: "Wird aufgeteilt…" },
+      "Remplacer les segments actuels par le découpage du scénario ?":
+        { en: "Replace the current segments with the screenplay split?",
+          es: "¿Sustituir los segmentos actuales por la división del guion?",
+          de: "Aktuelle Segmente durch die Drehbuchaufteilung ersetzen?" },
+      "Le scénario est découpé en autant de plans consécutifs, chacun écrit pour la grammaire de Minimax H3, les sujets désignés par le numéro que l'app leur attribue. Rien n'est généré : relisez et corrigez chaque segment avant de lancer la chaîne.":
+        { en: "The screenplay is split into that many consecutive shots, each written for the Minimax H3 grammar, the subjects named by the number the app assigns them. Nothing is generated: read and correct each segment before running the chain.",
+          es: "El guion se divide en otros tantos planos consecutivos, cada uno escrito para la gramática de Minimax H3, con los sujetos designados por el número que les asigna la app. No se genera nada: relea y corrija cada segmento antes de lanzar la cadena.",
+          de: "Das Drehbuch wird in ebenso viele aufeinanderfolgende Einstellungen aufgeteilt, jede für die Minimax-H3-Grammatik geschrieben, die Motive mit der von der App vergebenen Nummer benannt. Es wird nichts generiert: Lesen und korrigieren Sie jedes Segment, bevor Sie die Kette starten." },
       // Moteur des cuts
       "Moteur des cuts": { en: "Cut engine", es: "Motor de los cortes", de: "Cut-Engine" },
       "Minimax H3 i2v (grammaire Prompt Composer)":
@@ -2662,6 +2737,9 @@
       relaySegment: {
         fr: (i, n) => `Segment ${i}/${n}`, en: (i, n) => `Segment ${i}/${n}`,
         es: (i, n) => `Segmento ${i}/${n}`, de: (i, n) => `Segment ${i}/${n}` },
+      relayFramesBefore: {
+        fr: n => `${n} frames avant la fin`, en: n => `${n} frames before the end`,
+        es: n => `${n} fotogramas antes del final`, de: n => `${n} Bilder vor dem Ende` },
       h3CutDuration: {
         fr: (d, r) => `Durée : par défaut ${d} s demandées rendront ${r} s (grille 17n+5 du modèle) ; chaque plan affiche la sienne.`,
         en: (d, r) => `Duration: by default ${d} s requested will render ${r} s (the model's 17n+5 grid); each shot shows its own.`,
@@ -3915,18 +3993,23 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     }
 
     // Ré-enrichit le prompt d'un cut, consigne dépendante du moteur ciblé. Les deux moteurs
-    // consomment de la prose cinématographique, mais H3 ne doit JAMAIS voir de jeton
-    // <Picture>/<Subject> ici : sa grammaire à champs est assemblée par buildH3CutPrompt, un
-    // jeton lâché dans la prose la ferait mentir sur le nombre de références.
-    const CUT_ENRICH_SYSTEM = engine => `You are a motion-picture prompt writer for the ${engine === "minimax_h3" ? "MiniMax H3" : "LTX 2.5"} video model. Enrich the following shot into one dense cinematic English paragraph of 30 to 60 words: what happens, then lighting, materials, atmosphere and natural motion. STRICT RULES: keep the exact same subject, action, environment and camera motion; add no new character or object; use ONLY positive phrasing (never "no", "without", "avoid"); ${engine === "minimax_h3" ? "write no reference token such as <Picture>, <Subject> or <Video>" : "write plain prose only, no tokens, no brackets, no lists"}; never write "masterpiece", "best quality", "8k" or "ultra detailed". Answer ONLY with JSON: {"prompt": "..."}`;
+    // consomment de la prose cinématographique. Côté H3 la prose PEUT désigner les sujets —
+    // c'est même la seule façon de dire lequel agit — mais le jeton `<Subject N>` ne doit
+    // jamais traverser gemma : il est remplacé par son substitut nu avant l'appel et remis
+    // après (h3TokensOut/h3TokensIn). La consigne ne fait plus qu'appuyer la substitution,
+    // elle ne la remplace pas : l'ancienne version interdisait les jetons et gemma les
+    // recopiait quand même, abîmés.
+    const CUT_ENRICH_SYSTEM = engine => `You are a motion-picture prompt writer for the ${engine === "minimax_h3" ? "MiniMax H3" : "LTX 2.5"} video model. Enrich the following shot into one dense cinematic English paragraph of 30 to 60 words: what happens, then lighting, materials, atmosphere and natural motion. STRICT RULES: keep the exact same subject, action, environment and camera motion; add no new character or object; use ONLY positive phrasing (never "no", "without", "avoid"); ${engine === "minimax_h3" ? "the text may contain subject markers written as a single bare word such as SUBJECTREF1 — copy every one of them character for character, keep them where they belong in the sentence, and write no other marker, no angle bracket and no square bracket" : "write plain prose only, no tokens, no brackets, no lists"}; never write "masterpiece", "best quality", "8k" or "ultra detailed". Answer ONLY with JSON: {"prompt": "..."}`;
 
     async function enrichCutText(editedText, engine) {
+      const isMM = engine === "minimax_h3";
       try {
-        const out = await gemmaJSON(CUT_ENRICH_SYSTEM(engine), editedText);
+        const out = await gemmaJSON(CUT_ENRICH_SYSTEM(engine), isMM ? h3TokensOut(editedText) : editedText);
         const txt = fieldText(out.prompt || out.positive_prompt);
         if (!txt || txt.length < 20) return editedText;
-        addEvent("OK", `Prompt de cut enrichi par ${OLLAMA_MODEL} (consigne ${engine === "minimax_h3" ? "Minimax H3" : "LTX 2.5"}).`, "ok");
-        return stripPromptPadding(txt);
+        addEvent("OK", `Prompt de cut enrichi par ${OLLAMA_MODEL} (consigne ${isMM ? "Minimax H3" : "LTX 2.5"}).`, "ok");
+        const clean = stripPromptPadding(txt);
+        return isMM ? h3NormalizeTokens(h3TokensIn(clean)) : clean;
       } catch (err) {
         addEvent("WARN", `Enrichissement du cut indisponible (${err.message}) — prompt édité conservé.`, "warn");
         return editedText;
@@ -4168,6 +4251,14 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return base + (((5 - (base % 17)) % 17) + 17) % 17;
     };
     const h3RealDuration = seconds => h3VideoFrames(seconds) / 24;
+
+    // Même besoin côté LTX 2.5, pour viser une frame par son index : son template demande
+    // `durée * 24 + 1` frames (nœud ComfyMathExpression "a * b + 1", b = 24) et le modèle
+    // arrondit au 8n+1 inférieur. À 3 s : 73 frames, déjà sur la grille.
+    const ltx25Frames = seconds => {
+      const f = Math.round(seconds * 24) + 1;
+      return f - ((f - 1) % 8);
+    };
 
     function applyMinimaxTurbo(graph, turboOn, steps) {
       const loraEntry = Object.entries(graph).find(([, n]) => n.class_type === "LoraLoaderModelOnly");
@@ -5479,6 +5570,39 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     const h3Subject = n => `<Subject ${n}>`;
     const h3Picture = n => `<Picture ${n}>`;
 
+    // ── Jetons <Subject N> : ils ne traversent JAMAIS gemma ────────────────────────
+    // Constaté en rendu réel le 2026-09-22 sur la chaîne relay : le texte d'un segment
+    // renvoyé par « ✨ Enrichir » revenait avec « >Subject 1> » (chevron ouvrant devenu
+    // fermant) et « <Subject 1> 's fingers » (espace avant l'apostrophe). La consigne
+    // d'alors interdisait les jetons ; gemma les recopiait quand même, abîmés. C'est le
+    // strip-then-reappend du piège n°21 : le code RETIRE les jetons avant l'appel et les
+    // REMET après, au lieu de compter sur une consigne.
+    // Le substitut est un mot nu, sans chevron ni ponctuation : un modèle de langue le
+    // traite comme un nom propre ordinaire et le recopie intact, là où « <Subject 1> »
+    // ressemble à du balisage qu'il croit devoir reformater.
+    const H3_TOKEN_STUB = n => `SUBJECTREF${n}`;
+    // Tolérant sur les deux chevrons : « <Subject 1> », « >Subject 1> », « < subject 1 > ».
+    const H3_TOKEN_RE = /[<>]\s*subject\s*(\d+)\s*[<>]/gi;
+    const H3_STUB_RE = /\bSUBJECT\s*_?\s*REF\s*_?\s*(\d+)\b/gi;
+    const h3TokensOut = text => String(text || "").replace(H3_TOKEN_RE, (_, n) => H3_TOKEN_STUB(n));
+    const h3TokensIn = text => String(text || "").replace(H3_STUB_RE, (_, n) => h3Subject(n));
+
+    // Dernier filet, appliqué à la SORTIE de gemma uniquement — jamais au texte de
+    // l'utilisateur, qui part verbatim (règle projet « prompt éditable, prompt verbatim »).
+    // Répare le jeton mal reformé qui aurait échappé à la substitution et les deux scories
+    // de recopie que gemma produit autour : l'espace avant une apostrophe et la virgule
+    // collée à un point. C'est le validateur du composer de référence
+    // (BMB12d3/minimax-h3-prompt-composer), jamais repris jusqu'ici.
+    function h3NormalizeTokens(text) {
+      return String(text || "")
+        .replace(H3_TOKEN_RE, (_, n) => h3Subject(n))
+        .replace(/(<Subject \d+>)\s+'/g, "$1'")
+        .replace(/,\s*([.!?])/g, "$1")
+        .replace(/\s+([,.!?])/g, "$1")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+
     // Définition et note de rétention par nature de sujet. La rétention dit COMBIEN on garde
     // d'une référence (fully_preserved / partially_preserved / attribute_transfer /
     // weak_reference) : c'est ce qui distingue « ce personnage, exactement » de « juste la
@@ -5825,6 +5949,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       selectStudioSection("character");
       ensureRelay();
       $("relayEngineSelect").value = director.relay.engine;
+      $("relayScenario").value = director.relay.scenario || "";
       updateCutEngineHint();
       renderRelay(); renderRelayPlayer();
       renderSheetMenu("char");
@@ -6851,31 +6976,69 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Le segment 1 est toujours en coupure : il n'a pas de frame précédente à reprendre.
     const RELAY_MAX_SEGMENTS = 10;
     const RELAY_MODES = { continue: "🔗", cut: "🎞" };
+    // Bande de frames candidates proposée à la fin d'un segment, en frames avant la fin
+    // (24 fps, donc 0 à 0,5 s). La dernière frame n'est pas toujours la meilleure
+    // transition : un mouvement rapide la rend floue, et sur un plan qui a commencé à
+    // dériver c'est la plus dégradée de toutes. Au-delà d'un demi-seconde on coupe l'action.
+    const RELAY_TRANSITION_OFFSETS = [0, 3, 6, 9, 12];
 
-    // Extraction de la dernière frame d'un cut. Il n'existe AUCUN nœud « VideoFrameExtract »
-    // dans ce runtime : la chaîne native est LoadVideo → GetVideoComponents →
-    // ImageFromBatch → SaveImage, celle que docs/TESTING.md emploie déjà pour inspecter des
-    // frames. `batch_index: -1` (dernière frame) est accepté par l'API bien que le widget
-    // annonce un minimum de 0 — vérifié sur la piste Cinema Studio.
-    function buildLastFrameGraph(videoName) {
+    // Nombre de frames RÉELLEMENT rendues par un segment. Les deux moteurs tournent à
+    // 24 fps : H3 se cale sur la grille 17n+5, LTX 2.5 sur 8n+1.
+    const relayFrameCount = (engine, seconds) =>
+      engine === "minimax_h3" ? h3VideoFrames(seconds) : ltx25Frames(seconds);
+
+    // Extraction des frames candidates d'un segment. Il n'existe AUCUN nœud
+    // « VideoFrameExtract » dans ce runtime : la chaîne native est LoadVideo →
+    // GetVideoComponents → ImageFromBatch → SaveImage, celle que docs/TESTING.md emploie
+    // déjà pour inspecter des frames.
+    // L'index visé est POSITIF et calculé en JS depuis la durée. `ImageFromBatch` borne son
+    // index à `taille - 1` puis tranche `images[i : i + length]` : un index positif
+    // surestimé retombe donc proprement sur la dernière frame, là où un index négatif
+    // donnerait une tranche vide (images[-1:0]). Un filename_prefix par candidat :
+    // outputFiles aplatit les sorties de tous les nœuds, le nom de fichier est la seule
+    // façon de rattacher chaque image à son offset.
+    function buildTransitionStripGraph(videoName, frames) {
       const { g, add } = makeGraphBuilder();
       const comps = add("GetVideoComponents", { video: [add("LoadVideo", { file: videoName }), 0] });
-      const frame = add("ImageFromBatch", { image: [comps, 0], batch_index: -1, length: 1 });
-      add("SaveImage", { images: [frame, 0], filename_prefix: "studio/relay/transition" });
+      RELAY_TRANSITION_OFFSETS.forEach((off, k) => {
+        const one = add("ImageFromBatch", { image: [comps, 0], batch_index: Math.max(0, frames - 1 - off), length: 1 });
+        add("SaveImage", { images: [one, 0], filename_prefix: `studio/relay/tr${k}` });
+      });
       return g;
     }
 
-    // Rend { name, file, blob } — `name` est une entrée ComfyUI fraîche, utilisable aussi
-    // bien comme image de départ d'un i2v que comme référence d'une keyframe.
-    async function extractLastFrame(videoFile) {
+    // Rend la liste des candidates, la plus tardive d'abord. Chaque entrée est une entrée
+    // ComfyUI fraîche, utilisable aussi bien comme image de départ d'un i2v que comme
+    // référence d'une keyframe.
+    async function extractTransitionStrip(videoFile, engine, duration) {
       const up = await reupload(videoFile);
-      const id = await submitGraph(buildLastFrameGraph(up.name), "Relay · frame de transition",
-        `${up.name} → dernière frame`);
+      const frames = relayFrameCount(engine, duration);
+      const id = await submitGraph(buildTransitionStripGraph(up.name, frames),
+        "Relay · frames de transition", `${up.name} → ${RELAY_TRANSITION_OFFSETS.length} candidates sur ${frames} frames`);
       const entry = (await waitForJobs([id]))[id];
-      const file = outputFiles(entry, ".png")[0];
-      if (!file) throw new Error("frame de transition : aucune image en sortie");
-      return { ...(await reupload(file)), file };
+      const pngs = outputFiles(entry, ".png");
+      const out = [];
+      for (let k = 0; k < RELAY_TRANSITION_OFFSETS.length; k++) {
+        const f = pngs.find(x => x.filename.split("/").pop().startsWith(`tr${k}_`));
+        if (!f) continue;
+        out.push({ ...(await reupload(f)), file: f, offset: RELAY_TRANSITION_OFFSETS[k] });
+      }
+      if (!out.length) throw new Error("frames de transition : aucune image en sortie");
+      return out;
     }
+
+    // Une image restaurée depuis un projet sauvegardé n'a plus ni blob ni entrée ComfyUI
+    // fraîche (le replacer ne persiste que la référence de fichier) : on la re-résout à la
+    // demande, au moment où un re-rendu en a besoin, plutôt qu'au chargement.
+    async function relayResolveImage(img) {
+      if (img.blob && img.name) return img;
+      return { ...img, ...(await reupload(img.file)) };
+    }
+
+    // Frame de transition retenue à la fin d'un segment : celle que l'utilisateur a choisie
+    // dans la bande, la dernière rendue par défaut.
+    const relayTransitionOf = seg =>
+      (seg?.transitions?.length ? seg.transitions[Math.min(seg.transitionIdx || 0, seg.transitions.length - 1)] : null);
 
     // Prompt de keyframe d'un segment en coupure. Premier segment : exactement la structure
     // d'ancrage des keyframes de storyboard (image 1 = planche personnage, image 2 = décor).
@@ -6917,32 +7080,116 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     const relayEngine = () => (CUT_ENGINES[$("relayEngineSelect").value] ? $("relayEngineSelect").value : "ltx25");
     const newRelaySegment = () => ({ prompt: "", duration: 3, mode: "continue", status: "idle",
-                                     file: null, inputName: null, seed: 0, prompt_used: null });
+                                     file: null, inputName: null, seed: 0, prompt_used: null,
+                                     // Image de départ réellement employée (keyframe composée ou frame de
+                                     // transition reprise) : c'est elle qui rend un re-rendu d'UN segment
+                                     // possible sans relancer toute la chaîne.
+                                     start: null,
+                                     // Bande de frames candidates rendue à la fin du segment + celle retenue.
+                                     transitions: null, transitionIdx: 0 });
 
     function ensureRelay() {
       if (!director) return null;
-      if (!director.relay) director.relay = { segments: [newRelaySegment()], engine: "ltx25", video: null };
+      if (!director.relay) director.relay = { segments: [newRelaySegment()], engine: "ltx25", video: null, scenario: "" };
       return director.relay;
+    }
+
+    // ── Composer de scénario (moteur Minimax H3) ──────────────────────────────────
+    // Un scénario entier saisi en une fois, découpé par gemma en N plans consécutifs :
+    // l'utilisateur n'écrit plus segment par segment. La structure à champs de H3 n'est PAS
+    // demandée au modèle — elle reste assemblée par buildH3CutPrompt au moment du rendu, et
+    // gemma ne produit que la prose de `detailed_description`. Ce qu'il doit tenir, c'est la
+    // désignation des sujets, et elle lui arrive sous forme de substituts nus : les jetons
+    // <Subject N> ne traversent jamais l'appel (strip-then-reappend, piège n°21).
+    const H3_SCENARIO_SYSTEM = (n, legend) => `You are a shot-list writer for the MiniMax H3 video model.
+Split the user's scenario into exactly ${n} consecutive video segments of one single continuous sequence, in chronological order.
+Rules:
+- Each segment is ONE English paragraph of 25 to 50 words: what happens first, then lighting, materials, atmosphere and the natural camera motion of that segment.
+- The segments follow on from one another: segment k+1 starts exactly where segment k ended. Never restart the scene, never retell the whole scenario inside one segment, never jump elsewhere unless the scenario says so.
+- The recurring subjects are named by a marker, one bare word each. Copy each marker character for character wherever that subject acts:
+${legend}
+- Write the marker instead of a proper name, and instead of a bare pronoun whenever the sentence would otherwise be ambiguous.
+- Use ONLY positive phrasing (never "no", "without", "avoid").
+- Plain prose only: no field name, no heading, no numbering, no angle bracket, no square bracket.
+- Never write "masterpiece", "best quality", "8k" or "ultra detailed".
+Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, in order.`;
+
+    // Légende des substituts, construite depuis h3CutSubjects — la MÊME fonction qui
+    // numérote les sujets dans le bloc rendu. Une légende écrite à part finirait par mentir
+    // sur la numérotation le jour où la chaîne porterait un sujet de plus.
+    function relaySubjectLegend(locDesc) {
+      return h3CutSubjects(relayShot(newRelaySegment()), locDesc)
+        .map((sub, i) => `  ${H3_TOKEN_STUB(i + 1)} = ${sub.kind === "environment" ? "the location" : "the main character"}${sub.desc ? `, ${sub.desc}` : ""}`)
+        .join("\n");
+    }
+
+    async function composeRelayFromScenario() {
+      const r = ensureRelay();
+      if (!r) return;
+      const text = $("relayScenario").value.trim();
+      if (!text) return;
+      const n = Math.min(RELAY_MAX_SEGMENTS, Math.max(1, parseInt($("relaySegCount").value, 10) || 6));
+      const dur = Math.min(8, Math.max(2, parseInt($("relaySegDur").value, 10) || 3));
+      // Le découpage REMPLACE la chaîne : on le demande avant, jamais après coup.
+      if (r.segments.some(seg => seg.prompt.trim() || seg.file)
+          && !confirm(tr("Remplacer les segments actuels par le découpage du scénario ?"))) return;
+      const btn = $("relayComposeBtn"), label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = tr("Découpage…");
+      try {
+        addEvent("REQ", `Relay : découpage du scénario en ${n} segments par ${OLLAMA_MODEL}…`, "req");
+        const out = await gemmaJSON(H3_SCENARIO_SYSTEM(n, relaySubjectLegend(director.locDesc)), text);
+        const list = (Array.isArray(out.segments) ? out.segments : [])
+          .map(seg => h3NormalizeTokens(h3TokensIn(stripPromptPadding(fieldText(seg)))))
+          .filter(Boolean)
+          .slice(0, RELAY_MAX_SEGMENTS);
+        if (!list.length) throw new Error("aucun segment rendu");
+        // gemma rend parfois un segment de plus ou de moins. On garde ce qu'il a écrit
+        // plutôt que de perdre l'appel, et on le DIT : le compte porté par les cartes est
+        // celui des segments réellement posés.
+        r.segments = list.map(prompt => ({ ...newRelaySegment(), prompt, duration: dur }));
+        r.scenario = text;
+        addEvent(list.length === n ? "OK" : "WARN",
+          `Relay : ${list.length} segments posés${list.length === n ? "" : ` (${n} demandés)`} — relisez-les avant de lancer la chaîne.`,
+          list.length === n ? "ok" : "warn");
+      } catch (err) {
+        addEvent("WARN", `Découpage du scénario indisponible (${err.message}) — segments inchangés.`, "warn");
+      } finally {
+        btn.textContent = label;
+        btn.disabled = false;
+      }
+      renderRelay();
+      saveProject();
     }
 
     function relayReady() {
       const r = director?.relay;
       return !!(r && r.segments.length && r.segments.every(seg => seg.prompt.trim()));
     }
+    const relayBusy = () => !!director?.relay?.segments.some(seg => seg.status === "pending");
+
     function updateRelayButtons() {
       const r = director?.relay;
       const unlocked = anchorsReady() && !!director?.validated;
-      const busy = !!r && r.segments.some(seg => seg.status === "pending");
+      const busy = relayBusy();
+      // Le composer est propre au moteur H3 : c'est sa grammaire que le découpage vise.
+      const composer = relayEngine() === "minimax_h3";
+      $("relayComposer").hidden = !composer;
+      if (composer) $("relayComposeBtn").disabled = busy || !$("relayScenario").value.trim();
       $("relayRunBtn").disabled = !unlocked || !relayReady() || busy;
       $("relayAddBtn").disabled = !r || r.segments.length >= RELAY_MAX_SEGMENTS || busy;
-      $("relayAssembleBtn").disabled = !r || busy || !r.segments.length || !r.segments.every(seg => seg.status === "ready");
+      // Un segment « à re-générer » a bien son fichier : la séquence reste assemblable,
+      // exactement comme un clip « stale » du montage.
+      $("relayAssembleBtn").disabled = !r || busy || !r.segments.length
+        || !r.segments.every(seg => seg.inputName && (seg.status === "ready" || seg.status === "stale"));
     }
 
     function renderRelay() {
       const list = $("relayList");
       list.innerHTML = "";
       const r = director?.relay;
-      if (!r) return;
+      if (!r) { updateRelayButtons(); return; }
+      const busy = relayBusy();
       r.segments.forEach((seg, i) => {
         const el = document.createElement("div");
         el.className = "relay-seg";
@@ -6952,13 +7199,15 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             <label><span class="seg-dur-lbl"></span><input type="number" min="2" max="8" /></label>
             <button type="button" class="secondary-btn seg-link"></button>
             <button type="button" class="secondary-btn seg-enrich"></button>
+            <button type="button" class="secondary-btn seg-regen"></button>
             <button type="button" class="secondary-btn seg-del"></button>
           </div>
-          <video muted preload="metadata" hidden></video>`;
+          <video muted preload="metadata" hidden></video>
+          <div class="relay-transitions" hidden></div>`;
         el.querySelector("strong").textContent = dyn("relaySegment", i + 1, r.segments.length);
         el.querySelector(".seg-status").textContent = tr(
           seg.status === "pending" ? "Génération…" : seg.status === "error" ? "Erreur"
-          : seg.status === "ready" ? "Prêt" : "À générer");
+          : seg.status === "stale" ? "À re-générer" : seg.status === "ready" ? "Prêt" : "À générer");
         const area = el.querySelector("textarea");
         area.value = seg.prompt;
         area.placeholder = tr("Ce qui se passe dans ce segment.");
@@ -6980,6 +7229,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         } else {
           link.textContent = `${RELAY_MODES[seg.mode]} ${tr(seg.mode === "continue" ? "Continu (frame exacte)" : "Coupure (nouvelle keyframe)")}`;
           link.classList.toggle("active", seg.mode === "continue");
+          link.disabled = busy;
           link.addEventListener("click", () => {
             seg.mode = seg.mode === "continue" ? "cut" : "continue";
             renderRelay(); saveProject();
@@ -6987,6 +7237,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         }
         const enrich = el.querySelector(".seg-enrich");
         enrich.textContent = tr("✨ Enrichir");
+        enrich.disabled = busy;
         enrich.addEventListener("click", async () => {
           const label = enrich.textContent;
           enrich.disabled = true;
@@ -6997,77 +7248,179 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             saveProject();
           } finally { enrich.textContent = label; enrich.disabled = false; }
         });
+        // Re-rendre CE segment seul. Disponible dès qu'il a déjà été rendu une fois (ou a
+        // échoué) : avant, c'est « Générer la chaîne » qui fait le travail.
+        const regen = el.querySelector(".seg-regen");
+        regen.textContent = tr("🔄 Re-générer");
+        regen.disabled = busy || !["ready", "stale", "error"].includes(seg.status);
+        regen.addEventListener("click", () => regenerateRelaySegment(i));
         const del = el.querySelector(".seg-del");
         del.textContent = tr("✕ Retirer");
-        del.disabled = r.segments.length < 2;
+        del.disabled = busy || r.segments.length < 2;
         del.addEventListener("click", () => {
           r.segments.splice(i, 1);
-          renderRelay(); updateRelayButtons(); saveProject();
+          renderRelay(); saveProject();
         });
         const vid = el.querySelector("video");
         if (seg.file) { vid.hidden = false; vid.src = viewURL(seg.file); }
+        renderTransitionStrip(el.querySelector(".relay-transitions"), i, seg, busy);
         list.appendChild(el);
       });
       translateTree(list);
       updateRelayButtons();
     }
 
+    // Bande de transition d'un segment : les frames candidates, la retenue mise en avant.
+    // Le dernier segment n'en a pas — il n'a rien à alimenter.
+    function renderTransitionStrip(wrap, i, seg, busy) {
+      const r = director.relay;
+      if (!seg.transitions?.length || i >= r.segments.length - 1) return;
+      wrap.hidden = false;
+      const lbl = document.createElement("span");
+      lbl.className = "transitions-lbl";
+      lbl.textContent = tr("Image de transition");
+      wrap.appendChild(lbl);
+      const chosen = Math.min(seg.transitionIdx || 0, seg.transitions.length - 1);
+      seg.transitions.forEach((cand, k) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "relay-thumb" + (k === chosen ? " active" : "");
+        b.disabled = busy;
+        // L'offset en frames dit ce qu'on reprend : 0 = la toute dernière, 12 = un demi-seconde
+        // avant la fin. Une valeur en secondes serait plus parlante mais moins exacte.
+        b.title = cand.offset ? dyn("relayFramesBefore", cand.offset) : tr("Dernière frame");
+        const img = document.createElement("img");
+        img.src = viewURL(cand.file);
+        img.alt = b.title;
+        b.appendChild(img);
+        b.addEventListener("click", () => chooseRelayTransition(i, k));
+        wrap.appendChild(b);
+      });
+    }
+
+    // Choisir une autre frame ne relance RIEN (règle projet : rien ne part en rendu sans un
+    // clic). Elle devient l'image de départ du segment suivant, qui passe « à re-générer ».
+    function chooseRelayTransition(i, k) {
+      const seg = director?.relay?.segments[i];
+      if (!seg?.transitions?.[k] || relayBusy()) return;
+      if (seg.transitionIdx === k) return;
+      seg.transitionIdx = k;
+      markRelayStaleFrom(i + 1);
+      renderRelay();
+      saveProject();
+    }
+
+    // Tout ce qui suit un segment re-rendu (ou dont la transition a changé) repartait de son
+    // ancienne dernière frame — y compris un segment en coupure, dont la keyframe est
+    // composée SUR cette frame. On les marque donc tous, sans en relancer aucun.
+    function markRelayStaleFrom(from) {
+      const segs = director?.relay?.segments || [];
+      for (let k = from; k < segs.length; k++)
+        if (segs[k].status === "ready") segs[k].status = "stale";
+    }
+
+    // Contexte partagé par « Générer la chaîne » et le 🔄 d'un segment : gabarits et
+    // descriptions résolus une fois.
+    async function relayContext() {
+      const engine = relayEngine();
+      director.relay.engine = engine;
+      return {
+        engine,
+        anchorRaw: director.anchorRaw || (director.anchorRaw = await getTemplate(director.wf.anchor)),
+        i2vRaw: await getTemplate(cutTemplateFor(engine)),
+        charDesc: charDescFromFields(director.charFields),
+        locDesc: director.locDesc, negText: director.negText, seed: director.seed
+      };
+    }
+
+    function relayFail(err) {
+      const pending = director?.relay?.segments.find(seg => seg.status === "pending");
+      if (pending) pending.status = "error";
+      addEvent("WARN", err.message, "warn");
+    }
+
+    // Rend UN segment : image de départ, cut, puis bande de frames candidates pour la
+    // transition suivante. Chemin unique — la chaîne entière et le re-rendu d'un segment
+    // passent tous deux par ici, donc un re-rendu produit exactement ce que la chaîne aurait
+    // produit. Le seed est posé par l'appelant (suite pour la chaîne, +1 pour un re-rendu).
+    async function renderRelaySegment(i, ctx) {
+      const r = director.relay, seg = r.segments[i], total = r.segments.length;
+      const { engine, anchorRaw, i2vRaw, charDesc, locDesc, negText, seed } = ctx;
+      seg.status = "pending";
+      renderRelay();
+      const prev = i > 0 ? relayTransitionOf(r.segments[i - 1]) : null;
+      const mode = i === 0 || !prev ? "cut" : seg.mode;
+      const shot = relayShot(seg);
+      let keyObj;
+      if (mode === "continue") {
+        // Frame exacte : aucune keyframe, l'image de départ EST la frame de transition retenue.
+        addEvent("REQ", `Relay · segment ${i + 1}/${total} : vidéo (liaison continue)…`, "req");
+        keyObj = await relayResolveImage(prev);
+      } else {
+        addEvent("REQ", `Relay · segment ${i + 1}/${total} : keyframe (liaison coupure)…`, "req");
+        const kPrompt = compileRelayKeyframePrompt(seg.prompt.trim(), charDesc, locDesc, i === 0);
+        const base = prev ? await relayResolveImage(prev) : null;
+        const kId = await submitKeyframeJob(anchorRaw, shot,
+          [{ desc: charDesc, name: base ? base.name : director.charName }],
+          negText, director.locName, seed + 401 + i, director.width, director.height, i, total, kPrompt);
+        keyObj = await resolveImageJob(kId);
+      }
+      seg.start = { name: keyObj.name, file: keyObj.file || null, blob: keyObj.blob };
+      addEvent("REQ", `Relay · segment ${i + 1}/${total} : vidéo…`, "req");
+      seg.prompt_used = compileCutPromptFor(shot, charDesc, locDesc, null, engine, seg.duration);
+      const cutId = await submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText,
+        seg.seed, i, total, seg.duration, null, engine, seg.prompt_used);
+      const entry = (await waitForJobs([cutId]))[cutId];
+      const f = outputFiles(entry, ".mp4")[0];
+      if (!f) throw new Error(`segment ${i + 1} : aucune vidéo en sortie`);
+      const up = await reupload(f);
+      seg.file = f; seg.inputName = up.name; seg.engine = engine; seg.status = "ready";
+      renderRelay();
+      saveProject();
+      if (i < total - 1) {
+        addEvent("REQ", `Relay · segment ${i + 1}/${total} : frames de transition…`, "req");
+        seg.transitions = await extractTransitionStrip(f, engine, seg.duration);
+        seg.transitionIdx = 0;
+      } else {
+        seg.transitions = null;
+      }
+      renderRelay();
+      saveProject();
+    }
+
     // Génération de la chaîne. Séquentielle par construction : un segment continu a besoin de
-    // la dernière frame du précédent, donc rien ne peut partir en parallèle.
+    // la frame de transition du précédent, donc rien ne peut partir en parallèle.
     async function runRelay() {
       const r = ensureRelay();
       if (!r || !relayReady()) return;
-      const engine = relayEngine();
-      r.engine = engine;
-      const { negText, seed, locDesc } = director;
-      const charDesc = charDescFromFields(director.charFields);
       $("relayRunBtn").disabled = true;
-      let prevFrame = null;
       try {
-        const anchorRaw = director.anchorRaw || (director.anchorRaw = await getTemplate(director.wf.anchor));
-        const i2vRaw = await getTemplate(cutTemplateFor(engine));
+        const ctx = await relayContext();
         for (let i = 0; i < r.segments.length; i++) {
-          const seg = r.segments[i];
-          const mode = i === 0 || !prevFrame ? "cut" : seg.mode;
-          seg.status = "pending";
-          renderRelay();
-          const shot = relayShot(seg);
-          let keyObj;
-          if (mode === "continue") {
-            // Frame exacte : aucune keyframe, l'image de départ EST la dernière frame rendue.
-            addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : vidéo (liaison continue)…`, "req");
-            keyObj = prevFrame;
-          } else {
-            addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : keyframe (liaison coupure)…`, "req");
-            const kPrompt = compileRelayKeyframePrompt(seg.prompt.trim(), charDesc, locDesc, i === 0);
-            const kId = await submitKeyframeJob(anchorRaw, shot,
-              [{ desc: charDesc, name: prevFrame ? prevFrame.name : director.charName }],
-              negText, director.locName, seed + 401 + i, director.width, director.height, i, r.segments.length, kPrompt);
-            keyObj = await resolveImageJob(kId);
-          }
-          addEvent("REQ", `Relay · segment ${i + 1}/${r.segments.length} : vidéo…`, "req");
-          seg.seed = seed + 501 + i;
-          seg.prompt_used = compileCutPromptFor(shot, charDesc, locDesc, null, engine, seg.duration);
-          const cutId = await submitCutJob(i2vRaw, keyObj, shot, charDesc, locDesc, negText,
-            seg.seed, i, r.segments.length, seg.duration, null, engine, seg.prompt_used);
-          const entry = (await waitForJobs([cutId]))[cutId];
-          const f = outputFiles(entry, ".mp4")[0];
-          if (!f) throw new Error(`segment ${i + 1} : aucune vidéo en sortie`);
-          const up = await reupload(f);
-          seg.file = f; seg.inputName = up.name; seg.status = "ready";
-          renderRelay();
-          saveProject();
-          if (i < r.segments.length - 1) {
-            addEvent("REQ", "Relay · extraction de la dernière frame…", "req");
-            prevFrame = await extractLastFrame(f);
-          }
+          r.segments[i].seed = ctx.seed + 501 + i;
+          await renderRelaySegment(i, ctx);
         }
         addEvent("OK", `Relay : ${r.segments.length} segments générés — assemblez la séquence.`, "ok");
-      } catch (err) {
-        const pending = r.segments.find(seg => seg.status === "pending");
-        if (pending) pending.status = "error";
-        addEvent("WARN", err.message, "warn");
-      }
+      } catch (err) { relayFail(err); }
+      renderRelay();
+      updateRelayButtons();
+      saveProject();
+    }
+
+    // Re-rendre UN segment, sur son image de départ courante et avec un seed neuf. Les
+    // segments qui suivent ne sont pas relancés d'office — ils passent « à re-générer », pour
+    // qu'une chaîne mi-ancienne mi-nouvelle ne passe jamais inaperçue.
+    async function regenerateRelaySegment(i) {
+      const r = director?.relay;
+      const seg = r?.segments?.[i];
+      if (!seg || relayBusy()) return;
+      try {
+        const ctx = await relayContext();
+        seg.seed = (seg.seed || ctx.seed + 501 + i) + 1;
+        await renderRelaySegment(i, ctx);
+        markRelayStaleFrom(i + 1);
+        addEvent("OK", `Relay : segment ${i + 1} re-généré.`, "ok");
+      } catch (err) { relayFail(err); }
       renderRelay();
       updateRelayButtons();
       saveProject();
@@ -7108,8 +7461,14 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     });
     $("relayRunBtn").addEventListener("click", runRelay);
     $("relayAssembleBtn").addEventListener("click", assembleRelay);
+    $("relayComposeBtn").addEventListener("click", composeRelayFromScenario);
+    $("relayScenario").addEventListener("input", () => updateRelayButtons());
+    $("relayScenario").addEventListener("change", () => {
+      if (director?.relay) { director.relay.scenario = $("relayScenario").value; saveProject(); }
+    });
     $("relayEngineSelect").addEventListener("change", () => {
       if (director?.relay) { director.relay.engine = relayEngine(); saveProject(); }
+      updateRelayButtons();
     });
 
     // ── LOT C : persistance de session (clé localStorage "studioProject") ──────────
@@ -7257,9 +7616,12 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         cutEngine: CUT_ENGINES[p.cutEngine] ? p.cutEngine : "ltx25",
         // Projet d'avant le Prompt Relay : pas de clé `relay` → chaîne vierge à un segment.
         relay: p.relay ? { engine: CUT_ENGINES[p.relay.engine] ? p.relay.engine : "ltx25",
-                           video: p.relay.video || null,
+                           video: p.relay.video || null, scenario: p.relay.scenario || "",
+                           // Un segment restauré garde son statut « à re-générer » : la chaîne peut
+                           // avoir été sauvée après un re-rendu partiel, et l'oublier ferait passer
+                           // pour à jour un segment qui ne l'est pas.
                            segments: (p.relay.segments || []).map(seg => ({ ...newRelaySegment(), ...seg,
-                             status: seg.file ? "ready" : "idle" })) } : null
+                             status: seg.file ? (seg.status === "stale" ? "stale" : "ready") : "idle" })) } : null
       };
       attachSheetAccessors(director);
       director.charIdx = Math.min(Math.max(0, p.charIdx ?? 0), director.chars.length - 1);
@@ -7277,6 +7639,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       updateCutEngineHint();
       ensureRelay();
       $("relayEngineSelect").value = director.relay.engine;
+      $("relayScenario").value = director.relay.scenario || "";
       renderRelay(); renderRelayPlayer();
       renderMontage(); renderFooterTimeline(); renderMontagePlayer();
       updateMontageButtons();
