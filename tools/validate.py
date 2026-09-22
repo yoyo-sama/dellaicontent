@@ -19,6 +19,7 @@ Options:
     --timeout N      Poll timeout in seconds for one render (default 600).
     --image NAME     Name of a file already present in input/, required when the graph
                       contains an {{IMAGE}} placeholder.
+    --image2 NAME    Same for {{IMAGE2}}.
     --fps N          FPS used to compute FRAMES = fps*duration+1 (default 25).
     --refresh        Forces a refresh of tools/object_info.json.
 
@@ -56,7 +57,7 @@ DEFAULT_BATCH = 1
 DEFAULT_DURATION = 1
 REDUCE_FRAMES = 25
 
-STRING_PLACEHOLDERS = ("PROMPT", "NEGATIVE_PROMPT", "IMAGE")
+STRING_PLACEHOLDERS = ("PROMPT", "NEGATIVE_PROMPT", "IMAGE", "IMAGE2")
 NUMERIC_PLACEHOLDERS = ("SEED", "WIDTH", "HEIGHT", "BATCH", "DURATION", "FRAMES")
 
 
@@ -367,6 +368,7 @@ def parse_args():
     p.add_argument("--audio", action="store_true", help="also extract the audio track")
     p.add_argument("--timeout", type=int, default=600, help="poll timeout in seconds (default 600)")
     p.add_argument("--image", default=None, help="file name in input/ for {{IMAGE}}")
+    p.add_argument("--image2", default=None, help="file name in input/ for {{IMAGE2}}")
     p.add_argument("--fps", type=int, default=25, help="fps for FRAMES = fps*duration+1 (default 25)")
     p.add_argument("--refresh", action="store_true", help="force a refresh of object_info.json")
     return p.parse_args()
@@ -406,6 +408,10 @@ def main():
         step.fail("placeholder substitution", "the graph contains {{IMAGE}} but --image was not given")
         step.recap()
         return 1
+    if '"{{IMAGE2}}"' in raw_text and not args.image2:
+        step.fail("placeholder substitution", "the graph contains {{IMAGE2}} but --image2 was not given")
+        step.recap()
+        return 1
 
     values = {
         "PROMPT": DEFAULT_PROMPT,
@@ -419,6 +425,8 @@ def main():
     }
     if args.image:
         values["IMAGE"] = args.image
+    if args.image2:
+        values["IMAGE2"] = args.image2
 
     substituted_text = substitute(raw_text, values)
     leftover = leftover_placeholders(substituted_text)
