@@ -2607,14 +2607,14 @@
           es: "Este texto describe lo que ocurre en el plano. Se traslada tal cual al fotograma clave y luego al corte; el encuadre, la luz y el estilo los añade la app.",
           de: "Dieser Text beschreibt, was in der Einstellung geschieht. Er wird unverändert in den Keyframe und dann in den Cut übernommen; Bildausschnitt, Licht und Stil ergänzt die App." },
       "Prompt du cut": { en: "Cut prompt", es: "Prompt del corte", de: "Cut-Prompt" },
-      "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement.":
-        { en: "Krea 2 encodes no negative prompt: phrase every constraint positively.",
-          es: "Krea 2 no codifica ningún prompt negativo: formule cada restricción en positivo.",
-          de: "Krea 2 kodiert keinen negativen Prompt: Formulieren Sie jede Vorgabe positiv." },
-      "Qwen-Edit tourne à cfg 1 : aucun négatif n'est encodé, tout se formule positivement. Le bloc d'ancrage final est toujours remis après un ré-enrichissement.":
-        { en: "Qwen-Edit runs at cfg 1: no negative is encoded, phrase everything positively. The closing anchor block is always restored after a re-enrichment.",
-          es: "Qwen-Edit funciona con cfg 1: no se codifica ningún negativo, formúlelo todo en positivo. El bloque de anclaje final siempre se restablece tras un reenriquecimiento.",
-          de: "Qwen-Edit läuft mit cfg 1: Es wird kein Negativ kodiert, alles positiv formulieren. Der abschließende Ankerblock wird nach einer Neuanreicherung immer wiederhergestellt." },
+      "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement. Un ré-enrichissement ne réécrit que la description du sujet — la composition de la planche est toujours remise après.":
+        { en: "Krea 2 encodes no negative prompt: phrase every constraint positively. A re-enrichment rewrites the subject description only — the sheet layout is always restored afterwards.",
+          es: "Krea 2 no codifica ningún prompt negativo: formule cada restricción en positivo. Un reenriquecimiento solo reescribe la descripción del sujeto: la composición de la lámina siempre se restablece después.",
+          de: "Krea 2 kodiert keinen negativen Prompt: Formulieren Sie jede Vorgabe positiv. Eine Neuanreicherung schreibt nur die Motivbeschreibung um — das Layout des Blatts wird danach immer wiederhergestellt." },
+      "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passez par « ✎ Prompt de l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.":
+        { en: "This text is the prompt sent to the engine, not a shot description: it must keep the sentences stating what each reference image is for. To describe the action only, use \"\u270e Prompt de l'action\" on the shot. \"\u21a9 Original prompt\" restores the compiled one, and the closing anchor block is always restored.",
+          es: "Este texto es el prompt enviado al motor, no una descripción del plano: debe conservar las frases que indican para qué sirve cada imagen de referencia. Para describir solo la acción, use «\u270e Prompt de l'action» en el plano. «\u21a9 Prompt original» restaura la compilación, y el bloque de anclaje final siempre se restablece.",
+          de: "Dieser Text ist der an die Engine gesendete Prompt, keine Einstellungsbeschreibung: Die Sätze, die den Zweck jedes Referenzbilds nennen, müssen erhalten bleiben. Für eine reine Handlungsbeschreibung „\u270e Prompt de l'action“ an der Einstellung verwenden. „\u21a9 Ursprünglicher Prompt“ stellt die Kompilierung wieder her, und der abschließende Ankerblock wird immer wiederhergestellt." },
       "Bloc à champs Minimax H3 : le ré-enrichissement ne réécrit que detailed_description, les définitions de sujets restent en place.":
         { en: "Minimax H3 field block: re-enrichment only rewrites detailed_description, the subject definitions stay in place.",
           es: "Bloque de campos Minimax H3: el reenriquecimiento solo reescribe detailed_description, las definiciones de sujetos permanecen.",
@@ -3923,6 +3923,19 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         .split(KEYFRAME_ANCHOR_SOLO).join(" ")
         .replace(/\s{2,}/g, " ").trim();
     }
+    // Le pendant : le bloc d'ancrage est remis s'il ne figure plus dans le texte. Il l'était
+    // déjà après un ré-enrichissement ; il l'est maintenant aussi sur un prompt tapé à la
+    // main. Un prompt de keyframe amputé de son ancrage ne rend pas un plan : Qwen-Edit
+    // recompose les planches de référence en collage — constaté sur le plan 4 du run GB10 du
+    // 2026-09-22, où le prompt avait été remplacé par la seule phrase d'action.
+    // Le texte de l'utilisateur n'est jamais réécrit : on ajoute, on ne recompile pas.
+    function ensureKeyframeAnchor(text, dual) {
+      const anchor = dual ? KEYFRAME_ANCHOR_DUAL : KEYFRAME_ANCHOR_SOLO;
+      const t = String(text || "").trim();
+      if (!t || t.includes(anchor)) return t;
+      addEvent("SYS", "Bloc d'ancrage remis au prompt de keyframe (il en était absent).", "sys");
+      return t + " " + anchor;
+    }
 
     // Ré-enrichit un prompt de keyframe édité à la main. `dual` = plan à deux sujets (choisit
     // le bloc d'ancrage à remettre). Deux filets, parce qu'un prompt Qwen-Edit amputé rend une
@@ -3957,15 +3970,45 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return stripPromptPadding(txt) + " " + anchorBlock;
     }
 
-    // Ré-enrichit le prompt d'une planche (Krea 2) : même consigne que le brief, donc même
-    // interdiction de négatif et même filtre de remplissage.
-    async function enrichSheetText(editedText) {
+    // Consigne d'enrichissement de la DESCRIPTION d'une planche — le seul morceau que gemma
+    // voit. Ce n'est PAS un prompt d'image : la composition, le fond et la lumière sont posés
+    // par le gabarit de planche. Avec KREA2_ENRICH_SYSTEM (consigne d'image unique, ordre
+    // sujet→style→lumière→optique→composition), gemma rendait une scène cinématographique
+    // complète qui écrasait la planche. D'où une consigne propre : décrire ce que le sujet
+    // EST, et rien de la scène autour.
+    const SHEET_DESC_ENRICH_SYSTEM = what => {
+      const subject = what === "location"
+        ? "ONE single location for an environment reference sheet"
+        : what === "other"
+          ? "ONE single non-human subject (animal, creature, robot or object) for a reference sheet"
+          : "ONE single person for a character reference sheet";
+      const covers = what === "location"
+        ? "the place itself, its architecture, its structures, its ground, its materials, its textures and its colors"
+        : what === "other"
+          ? "its species or nature, its body plan, its proportions, its size, its surface, its materials, its markings and its colors"
+          : "face, hair, age, build, skin, clothing and accessories";
+      const bans = what === "location"
+        ? "describe no character, no person, no animal and no action; "
+        : "describe no background, no location, no scene and no action; ";
+      const guard = what === "other"
+        ? "never give the subject human anatomy, a human face, a human posture or human clothing unless the user's text asks for it; "
+        : "";
+      return `You are a production designer writing the identity card of ${subject}. Rewrite the user's text into ONE English description of 25 to 60 words covering ONLY what it permanently looks like: ${covers}. STRICT RULES: keep every detail the user gave and contradict none of them; ${bans}${guard}describe no camera, no lens, no framing, no shot size, no lighting, no mood and no photographic style, the sheet sets all of those; use ONLY positive phrasing (never "no", "without", "avoid"); never write "reference sheet", "turnaround", "multi-view", "storyboard", "keyframe", "photo", "photograph", "masterpiece", "best quality", "8k" or "ultra detailed". Answer ONLY with JSON: {"description": "..."}`;
+    };
+
+    // Ré-enrichit le prompt d'une planche (Krea 2) en « strip-then-reappend » : le squelette
+    // de la planche est retiré AVANT l'appel et ré-apposé APRÈS, donc la composition
+    // multi-vues ne peut plus disparaître dans la réécriture de gemma. `kind` = "char"/"loc".
+    async function enrichSheetText(editedText, kind) {
+      const isChar = kind === "char";
+      const desc = stripSheetSkeleton(editedText, kind);
+      const what = isChar ? charKindOf(director?.charFields) : "location";
       try {
-        const out = await gemmaJSON(KREA2_ENRICH_SYSTEM, editedText);
-        const txt = fieldText(out.positive_prompt || out.prompt);
+        const out = await gemmaJSON(SHEET_DESC_ENRICH_SYSTEM(what), desc);
+        const txt = fieldText(out.description || out.positive_prompt || out.prompt);
         if (!txt || txt.length < 20) return editedText;
-        addEvent("OK", `Prompt de planche enrichi par ${OLLAMA_MODEL} (consigne Krea 2).`, "ok");
-        return stripPromptPadding(txt);
+        addEvent("OK", `Description de planche enrichie par ${OLLAMA_MODEL} (composition du gabarit conservée).`, "ok");
+        return wrapSheetDesc(stripPromptPadding(txt), kind);
       } catch (err) {
         addEvent("WARN", `Enrichissement Krea 2 indisponible (${err.message}) — prompt édité conservé.`, "warn");
         return editedText;
@@ -4714,9 +4757,17 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // reproduite au caractère près, ne la reformuler sous aucun prétexte. La branche à deux
     // sujets décale le décor sur la 3e entrée image (cf. submitKeyframeJob). Qwen-Edit tourne
     // à cfg 1 : tout est formulé POSITIVEMENT, le négatif n'est jamais encodé.
-    function compileKeyframePrompt(shot, descs) {
+    function compileKeyframePrompt(shot, descs, locDesc) {
       const list = (Array.isArray(descs) ? descs : [descs]).filter(Boolean);
       const charDesc = list[0] || "";
+      // Le décor était désigné UNIQUEMENT par « the second/third reference image ». Or cette
+      // entrée-là ne fait que du conditioning (piège n°10 : seule image1 alimente VAEEncode),
+      // et Qwen-Edit tourne à cfg 1 : sans un mot sur le lieu, il ne garde de la planche décor
+      // que son ambiance et invente la scène — un court en terre battue est ressorti en désert
+      // sur le run GB10 du 2026-09-22. Même remède que pour les cuts (piège n°9, ancrage
+      // double) et que dans compileRelayKeyframePrompt, qui le fait déjà : le lieu est nommé.
+      const loc = String(locDesc ?? director?.locDesc ?? "").trim();
+      const locHere = loc ? " The location is " + loc + "." : "";
       const cam = CAMERA_LIB[shot.camera] || CAMERA_LIB.medium;
       const light = LIGHTING_LIB[shot.lighting] || LIGHTING_LIB.golden_hour;
       const styleText = currentStyleText();
@@ -4728,20 +4779,22 @@ Answer ONLY with JSON: {"prompt": "..."}`;
           + list[0]
           + ", use the second reference image only as the appearance guide for one single other "
           + "character, " + list[1]
-          + ", and use the third reference image only as the guide for the environment. "
+          + ", and use the third reference image only as the guide for the environment"
+          + (loc ? ", " + loc : "") + ". "
           + "Create one brand-new photorealistic cinematic film still that places exactly one single "
           + "instance of each of those two characters together inside the environment of the third "
-          + "reference image: " + shot.action + ". Frame it as " + cam.frame + ".";
+          + "reference image: " + shot.action + ". Frame it as " + cam.frame + "." + locHere;
         if (emotion) s += " The characters' expressions and body language convey " + emotion + ".";
         s += " " + light.text;
         s += " " + KEYFRAME_ANCHOR_DUAL;
       } else {
         s = "Use the first reference image only as the appearance guide for one single character, "
           + charDesc
-          + ", and use the second reference image only as the guide for the environment. "
+          + ", and use the second reference image only as the guide for the environment"
+          + (loc ? ", " + loc : "") + ". "
           + "Create one brand-new photorealistic cinematic film still that places exactly one single "
           + "instance of that character inside the environment of the second reference image: "
-          + shot.action + ". Frame it as " + cam.frame + ".";
+          + shot.action + ". Frame it as " + cam.frame + "." + locHere;
         if (emotion) s += " The character's expression and body language convey " + emotion + ".";
         s += " " + light.text;
         s += " " + KEYFRAME_ANCHOR_SOLO;
@@ -5295,11 +5348,16 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Le prompt est compilé À PART du graphe : c'est le texte que l'éditeur de prompt montre
     // et, quand l'utilisateur l'a modifié, celui qui remplace la compilation (`promptOverride`).
-    function compileCharsheetPrompt(charFields, templateId) {
+    // `charsheetPromptFrom` prend la description DÉJÀ compilée : c'est le point d'entrée du
+    // « strip-then-reappend » des planches (sheetSkeleton), qui a besoin de fabriquer le même
+    // prompt autour d'une description sentinelle.
+    function charsheetPromptFrom(desc, kind, templateId) {
       const styleText = currentStyleText();
-      const kind = charKindOf(charFields);
       const layout = currentSheetLayout(templateId);
-      return `${layout.build(charDescFromFields(charFields), sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
+      return `${layout.build(desc, sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
+    }
+    function compileCharsheetPrompt(charFields, templateId) {
+      return charsheetPromptFrom(charDescFromFields(charFields), charKindOf(charFields), templateId);
     }
     function buildCharsheetGraph(charFields, negText, seed, width, height, loraName, promptOverride) {
       const { g, add } = makeGraphBuilder();
@@ -5316,6 +5374,34 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const styleText = currentStyleText();
       return `A professional photorealistic environment reference sheet of one single location, composited as a clean multi-view layout on a smooth seamless dark neutral background: ${locDesc}. Arranged neatly, the sheet shows several wide establishing photographs of the same location from different angles across the top, below them a row of medium shots of key structures, and along the bottom a cluster of tight close-up material and detail studies. The location is completely empty and deserted, showing only architecture, materials and scenery. Consistent art direction, matching lighting and color palette across every view. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
     }
+    // ── Squelette d'un prompt de planche : tout SAUF la description du sujet ─────
+    // La composition multi-vues, la clause anti-anthropomorphe et SHEET_CLEAN sont la part
+    // NON NÉGOCIABLE : sans elles Krea 2 rend une belle image unique et non une planche.
+    // C'est le point de passage du « strip-then-reappend » (piège n°21) pour les planches :
+    // gemma ne reçoit QUE la description, le code remet le squelette autour de sa sortie.
+    // Avant, le prompt entier partait à l'enrichissement et revenait en photo de scène —
+    // c'est ce qui rendait une photo de joueur de tennis au lieu d'une planche de sujet.
+    const SHEET_DESC_SENTINEL = "\u0001SHEETDESC\u0001";
+    function sheetSkeleton(kind) {
+      const full = kind === "char"
+        ? charsheetPromptFrom(SHEET_DESC_SENTINEL, charKindOf(director?.charFields))
+        : compileLocsheetPrompt(SHEET_DESC_SENTINEL);
+      const i = full.indexOf(SHEET_DESC_SENTINEL);
+      return { head: full.slice(0, i), tail: full.slice(i + SHEET_DESC_SENTINEL.length) };
+    }
+    // Ne rend QUE la description. Si le squelette n'est pas reconnu (l'utilisateur a réécrit
+    // le prompt de zéro dans la modale, ou le style a changé depuis la compilation), le texte
+    // ENTIER est pris pour la description : le repli va toujours dans le sens de la planche.
+    function stripSheetSkeleton(text, kind) {
+      const { head, tail } = sheetSkeleton(kind);
+      let t = String(text || "").trim();
+      const h = head.trimEnd(), tl = tail.trimEnd();
+      if (h && t.startsWith(h)) t = t.slice(h.length);
+      if (tl && t.endsWith(tl)) t = t.slice(0, -tl.length);
+      return t.replace(/^[\s:.,]+/, "").replace(/[\s.]+$/, "").trim();
+    }
+    const wrapSheetDesc = (desc, kind) => { const { head, tail } = sheetSkeleton(kind); return head + desc + tail; };
+
     function buildLocsheetGraph(locDesc, negText, seed, width, height, loraName, promptOverride) {
       const { g, add } = makeGraphBuilder();
       const kx = addKrea2Shared(add, loraName);
@@ -6290,6 +6376,16 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         ? director.seed + (director.charIdx ? 211 + director.charIdx : 0)
         : director.seed + 101;
       const seed = (lastGen ? lastGen.seed : baseSeed) + 1;
+      // Un sujet décrit UNIQUEMENT dans la modale ✎ Prompt laisserait ses champs vides — et
+      // `charDescFromFields` est ce que lisent les keyframes ET les cuts, qui partiraient donc
+      // avec une identité vide. On reverse la description du prompt dans le 1er champ quand
+      // il n'y en a aucune. Le prompt, lui, n'est pas touché : il part verbatim.
+      const fields = isChar ? director.charFields : director.locFields;
+      const keys = isChar ? charFieldKeys(fields) : LOC_FIELD_KEYS;
+      if (promptOverride && !(isChar ? charDescFromFields(fields) : locDescFromFields(fields))) {
+        const back = stripSheetSkeleton(promptOverride, kind);
+        if (back) { fields[keys[0]] = back; renderSheetMenu(kind); if (isChar) renderShotDNAList(); }
+      }
       const desc = isChar ? charDescFromFields(director.charFields) : locDescFromFields(director.locFields);
       const prompt = promptOverride || (isChar ? compileCharsheetPrompt(director.charFields) : compileLocsheetPrompt(desc));
       const variant = { file: null, inputName: null, seed, source: "generated", prompt,
@@ -6353,9 +6449,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
                                 : compileLocsheetPrompt(locDescFromFields(director.locFields));
         openPromptEditor({
           title: isChar ? "Prompt de la planche personnage" : "Prompt de la planche décor",
-          hint: "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement.",
+          hint: "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement. Un ré-enrichissement ne réécrit que la description du sujet — la composition de la planche est toujours remise après.",
           text: (active?.source === "generated" && active.prompt) || compiled,
-          enrich: enrichSheetText,
+          enrich: text => enrichSheetText(text, kind),
           apply: text => regenerateSheet(kind, text)
         });
       });
@@ -6676,10 +6772,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const compiled = compileKeyframePrompt(shot, subs.map(r => r.desc));
       openPromptEditor({
         title: "Prompt de la keyframe",
-        hint: "Qwen-Edit tourne à cfg 1 : aucun négatif n'est encodé, tout se formule positivement. Le bloc d'ancrage final est toujours remis après un ré-enrichissement.",
+        hint: "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passez par « ✎ Prompt de l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.",
         text: kf.prompt || compiled,
         enrich: text => enrichKeyframeText(text, dual),
-        apply: text => regenerateKeyframe(i, text)
+        apply: text => regenerateKeyframe(i, ensureKeyframeAnchor(text, dual))
       });
     }
 
