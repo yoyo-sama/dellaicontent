@@ -1859,6 +1859,7 @@
             <div class="generate-row">
               <div class="gb-field gb-wide" id="resumeWrap" style="display:none">
                 <button type="button" class="secondary-btn" id="resumeProjectBtn" style="display:none">Reprendre le projet</button>
+                <button type="button" class="secondary-btn" id="cancelProjectBtn" style="display:none; margin-top:8px">Annuler le projet</button>
               </div>
 
               <div class="gb-field gb-wide" id="marketsWrap" style="display:none">
@@ -1977,6 +1978,7 @@
         <button type="button" class="studio-nav-btn locked" data-section="video" disabled style="display:none">Vidéo</button>
         <div class="studio-nav-foot">
           <button type="button" class="primary-btn" id="directorValidateBtn" disabled>Valider les planches</button>
+          <button type="button" class="secondary-btn" id="studioCancelBtn" style="display:none">Annuler le projet</button>
           <button type="button" class="secondary-btn" id="studioNewBtn">Nouveau projet</button>
           <button type="button" class="secondary-btn" id="studioExitBtn">Quitter le studio</button>
           <p class="hint" id="studioJobs"></p>
@@ -2595,6 +2597,11 @@
       "⤢ Aperçu": { en: "⤢ Preview", es: "⤢ Vista previa", de: "⤢ Vorschau" },
       // ── LOT C : persistance de session ──
       "Reprendre le projet": { en: "Resume the project", es: "Reanudar el proyecto", de: "Projekt fortsetzen" },
+      "Annuler le projet": { en: "Cancel the project", es: "Cancelar el proyecto", de: "Projekt abbrechen" },
+      "Arrêter la génération en cours et vider la file de jobs ?":
+        { en: "Stop the generation in progress and clear the job queue?",
+          es: "¿Detener la generación en curso y vaciar la cola de trabajos?",
+          de: "Laufende Generierung stoppen und die Job-Warteschlange leeren?" },
       "Manquant": { en: "Missing", es: "Falta", de: "Fehlt" },
       "Supprimer définitivement ce projet et repartir de zéro ?":
         { en: "Permanently delete this project and start over?",
@@ -2942,6 +2949,7 @@
     // ── ComfyUI WebSocket + jobs ───────────────────────────────────
     const clientId = crypto.randomUUID();
     const jobs = {}; // prompt_id -> {el, statusEl, subEl, label, start}
+    const activeJobIds = new Set(); // prompt_ids soumis et pas encore terminés (pilote l'annulation)
     let ws = null;
 
     function connectWS() {
@@ -2966,6 +2974,7 @@
       } else if (msg.type === "executed" && job) {
         for (const f of extractFiles(d.output)) addAsset(f, job.label);
       } else if (msg.type === "execution_success" && job) {
+        if (!activeJobIds.delete(d.prompt_id)) return; // job déjà annulé : ne pas le repasser en Done
         job.statusEl.textContent = "Done";
         job.statusEl.className = "status done";
         const secs = ((Date.now() - job.start) / 1000).toFixed(1);
@@ -2975,6 +2984,7 @@
         collectHistory(d.prompt_id, job.label);
         updateStudioJobs(-1);
       } else if (msg.type === "execution_error" && job) {
+        if (!activeJobIds.delete(d.prompt_id)) return; // job déjà annulé : erreur attendue, ignorée
         job.statusEl.textContent = "Error";
         job.statusEl.className = "status error";
         addEvent("WARN", `Erreur d'exécution : ${d.exception_message || "voir logs ComfyUI"}`, "warn");
@@ -3306,6 +3316,7 @@
       el.querySelector(".sub").textContent = sub;
       jobList.prepend(el);
       jobs[promptId] = { el, statusEl: el.querySelector(".status"), label, start: Date.now() };
+      activeJobIds.add(promptId);
       while (jobList.children.length > 8) jobList.lastChild.remove();
       updateStudioJobs(1);
     }
@@ -3316,6 +3327,7 @@
       runningJobs = Math.max(0, runningJobs + delta);
       const el = $("studioJobs");
       if (el) el.textContent = runningJobs ? dyn("studioJobs", runningJobs) : "";
+      updateCancelButton();
     }
 
     // ── Generate ───────────────────────────────────────────────────
@@ -4942,11 +4954,16 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     }
 
     // ── Storyboard + Animatic v2 : orchestration multi-jobs côté page ──────
+    // Incrémenté par cancelProject() : les attentes lancées avant l'annulation ont gardé
+    // l'ancienne valeur et sortent de leur boucle au lieu de poller un job jamais rendu.
+    let cancelToken = 0;
     // Attend la complétion d'une liste de jobs (poll /history) → renvoie leurs entrées.
     async function waitForJobs(promptIds) {
       const pending = new Set(promptIds), done = {};
+      const token = cancelToken;
       while (pending.size) {
         await new Promise(r => setTimeout(r, 1500));
+        if (token !== cancelToken) throw new Error("Projet annulé.");
         for (const id of [...pending]) {
           let entry;
           try { entry = (await (await fetch(`${COMFY}/history/${id}`, { cache: "no-store" })).json())[id]; }
@@ -5629,8 +5646,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     let director = null;      // session Réalisateur en cours
 
     // Coquille studio : bascule vue classique ↔ studio (le header reste visible).
-    function enterStudio() { document.body.dataset.studio = "1"; }
-    function exitStudio() { delete document.body.dataset.studio; }
+    function enterStudio() { document.body.dataset.studio = "1"; updateCancelButton(); }
+    function exitStudio() { delete document.body.dataset.studio; updateCancelButton(); }
 
     const STUDIO_SECTIONS = { character: "studioCharacter", location: "studioLocation",
                               storyboard: "studioStoryboard", montage: "studioMontage",
@@ -7044,9 +7061,16 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     function updateResumeButton() {
       const b = $("resumeProjectBtn");
       if (!b) return;
-      const show = !!savedProjectCache && pipelineSelect.value === "storyboard_v2";
-      b.style.display = show ? "" : "none";
-      $("resumeWrap").style.display = show ? "" : "none";
+      b.style.display = !!savedProjectCache && pipelineSelect.value === "storyboard_v2" ? "" : "none";
+      updateResumeWrap();
+    }
+
+    // Le conteneur porte « Reprendre » ET « Annuler » : il ne s'affiche que si au moins
+    // l'un des deux est visible, sinon un cadre vide resterait dans le formulaire.
+    function updateResumeWrap() {
+      const vis = ["resumeProjectBtn", "cancelProjectBtn"]
+        .some(id => $(id) && $(id).style.display !== "none");
+      $("resumeWrap").style.display = vis ? "" : "none";
     }
 
     // Re-résout une référence fichier persistée : /view (pattern reupload) → blob +
@@ -7201,6 +7225,59 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         .catch(err => addEvent("WARN", `Restauration impossible : ${err.message}`, "warn"))
         .finally(() => { b.disabled = false; });
     });
+
+    // ── Annulation du projet en cours ──────────────────────────────────────────────
+    // Pendant de « Reprendre le projet » : arrête la génération. Trois effets — interrupt
+    // ComfyUI (job en train de tourner) + retrait de la file des jobs encore en attente,
+    // invalidation des waitForJobs en vol (cancelToken), fermeture de la session
+    // Réalisateur. Le projet persisté (clé "studioProject", LOT C) n'est PAS effacé : seul
+    // « Nouveau projet » du studio supprime la clé, donc annuler laisse « Reprendre » utilisable.
+    function updateCancelButton() {
+      const show = runningJobs > 0 || !!director;
+      // Formulaire : visible seulement hors studio (le studio a son propre bouton).
+      const b = $("cancelProjectBtn");
+      if (b) b.style.display = show ? "" : "none";
+      updateResumeWrap();
+      // Barre du studio : le seul emplacement atteignable pendant une session Réalisateur.
+      const sb = $("studioCancelBtn");
+      if (sb) sb.style.display = show ? "" : "none";
+    }
+
+    async function cancelProject() {
+      cancelToken++; // les attentes en vol lèveront « Projet annulé. »
+      const queued = [...activeJobIds];
+      activeJobIds.clear();
+      try {
+        await fetch(`${COMFY}/interrupt`, { method: "POST" });
+        if (queued.length)
+          await fetch(`${COMFY}/queue`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ delete: queued })
+          });
+      } catch (err) {
+        addEvent("WARN", `Annulation partielle — ComfyUI injoignable : ${err.message}`, "warn");
+      }
+      for (const id of queued) {
+        const job = jobs[id];
+        if (!job) continue;
+        job.statusEl.textContent = "Cancelled";
+        job.statusEl.className = "status fallback";
+        updateStudioJobs(-1);
+      }
+      $("stepInference").classList.remove("active");
+      resetDirectorZone(); // ferme le studio et libère la session (exitStudio inclus)
+      updateCancelButton();
+      addEvent("OK", `Projet annulé — ${queued.length} job(s) arrêté(s).`, "ok");
+    }
+
+    function onCancelClick(btnId) {
+      if (!confirm(tr("Arrêter la génération en cours et vider la file de jobs ?"))) return;
+      const b = $(btnId);
+      b.disabled = true;
+      cancelProject().finally(() => { b.disabled = false; });
+    }
+    $("cancelProjectBtn").addEventListener("click", () => onCancelClick("cancelProjectBtn"));
+    $("studioCancelBtn").addEventListener("click", () => onCancelClick("studioCancelBtn"));
 
     async function generateCampaignFull(seed) {
       if (!brief.value.trim()) throw new Error("Décrivez la campagne dans le brief avant de générer.");
