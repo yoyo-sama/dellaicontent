@@ -196,6 +196,24 @@
     return graph;
   }
 
+  // ── Qwen Image 2.1 : références supplémentaires de TextEncodeQwenImage21 ─────
+  // api/qwen21_i2i.json câble `images.image_1` ({{IMAGE}}) ; buildGraph ne substitue
+  // rien au-delà. Ce helper greffe une LoadImage par nom, à la suite, sous la clé autogrow
+  // "images.image_<N>" (1-indexée, contiguë). Toutes les références sont symétriques
+  // (conditioning seul, latent de départ vide déjà géré par le nœud) : pas de piège n°10
+  // ici. Plafond prouvé en rendu : 10 images au total — c'est à l'appelant de borner `names`.
+  function addQwen21Refs(graph, names) {
+    const enc = Object.values(graph).find(n => n.class_type === "TextEncodeQwenImage21");
+    if (!enc || !names) return graph;
+    let n = Object.keys(enc.inputs).filter(k => k.startsWith("images.image_")).length;
+    names.forEach((name, i) => {
+      const id = "q21ref" + (i + 1);
+      graph[id] = { class_type: "LoadImage", inputs: { image: name } };
+      enc.inputs[`images.image_${++n}`] = [id, 0];
+    });
+    return graph;
+  }
+
   const FLF2V_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0";
   const LTX25_FPS = 24;   // LTX 2.5 et Minimax H3 rendent en 24 fps (LTX 2.3 était en 25).
 
@@ -1020,6 +1038,7 @@
       buildFLF2VGraph, buildCampaignFullGraph, buildCharsheetGraph, buildLocsheetGraph, buildAnimaticGraph,
       addKrea2Shared, addKrea2Shot, addGrid, addLtx25Shared, addFLF2VChain, addVideoOutput, applyMinimaxTurbo,
       addMinimaxRefs, addQwenImage3,   // AJOUT Lot 5 : références additionnelles r2v / 3ᵉ fiche storyboard
+      addQwen21Refs,   // AJOUT LOT Qwen21 : références additionnelles Qwen Image 2.1 (Canvas)
       addH3StyleLora,   // LoRA de style Minimax H3, cumulable avec applyMinimaxTurbo (appeler APRÈS)
       // prompts / libs
       CAMERA_LIB, LIGHTING_LIB, STYLE_PACKS, KREA2_LORAS, H3_STYLE_LORAS, HOLD_MOTION, SHEET_CLEAN,

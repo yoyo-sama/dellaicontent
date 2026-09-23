@@ -788,10 +788,17 @@
       ]
     },
     "simple/qwen_edit": {
-      label: "Édition d'image", tech: "qwen_edit", grad: ["#fdf1dd", "#e8cf9f"], model: "Qwen-Edit 2509",
+      label: "Édition d'image", tech: "qwen_edit", grad: ["#fdf1dd", "#e8cf9f"],
+      // LOT Qwen21 : moteur 2.1 ajouté EN COEXISTENCE avec 2509 (défaut) — même schéma que
+      // "simple/video" (modelProp/modelWidget/modelValues, widget "moteur" de nodes-simple.js).
+      modelProp: "engine", modelWidget: "moteur", model: "Qwen-Edit 2509 / Qwen Image 2.1",
+      modelValues: [["qwen_edit_2509", "Qwen-Edit 2509"], ["qwen21", "Qwen Image 2.1"]],
       subject: "instruction", preview: "instruction",
-      meta: () => "Qwen-Edit 2509 · 1024×1024",
-      fields: [{ k: "instruction", w: "instruction", label: "Instruction d'édition", type: "textarea", enhance: ENHANCE.qwenInstruction }]
+      meta: n => n.properties.engine === "qwen21" ? "Qwen Image 2.1 · jusqu'à 10 réf." : "Qwen-Edit 2509 · 1024×1024",
+      fields: [
+        { k: "engine", w: "moteur", label: "Moteur", type: "select", values: () => [["qwen_edit_2509", "Qwen-Edit 2509"], ["qwen21", "Qwen Image 2.1"]] },
+        { k: "instruction", w: "instruction", label: "Instruction d'édition", type: "textarea", enhance: ENHANCE.qwenInstruction }
+      ]
     },
     "simple/video": {
       label: "Vidéo", tech: "video", grad: ["#1d2a55", "#0d1430"], video: true,
@@ -1054,9 +1061,11 @@
   // type de carte → { nom du slot d'entrée : type de carte Import à créer derrière }
   const PLUS_INPUTS = {
     "simple/video": { image: "image" },
-    "simple/qwen_edit": { image: "image" },
     // Slots DYNAMIQUES (autogrow) : le « + » se pose naturellement sur le slot libre du
     // groupe, puisqu'il n'y en a qu'un à la fois (growSlots de js/nodes-advanced.js).
+    // LOT Qwen21 : [ADV.SLOT_IMG_REF] = références 2.1 supplémentaires (jusqu'à 9, plafond
+    // câblé sur QwenEditNode en fin de nodes-advanced.js) — sans effet en mode 2509.
+    "simple/qwen_edit": { image: "image", [ADV.SLOT_IMG_REF]: "image" },
     "adv/r2v": { charsheet: "image", locsheet: "image", [ADV.SLOT_IMG_REF]: "image", [ADV.SLOT_VID_REF]: "video" }
   };
   function plusSlots(node) {

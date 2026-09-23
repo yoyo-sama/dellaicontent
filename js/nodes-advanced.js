@@ -781,6 +781,12 @@
   };
   LiteGraph.registerNodeType("adv/r2v", Ref2VideoNode);
 
+  // LOT Qwen21 : slot autogrow des références Qwen Image 2.1 sur QwenEditNode (js/nodes-simple.js,
+  // chargé AVANT ce fichier — d'où le câblage ici plutôt que dans son propre IIFE). Réutilise
+  // le même groupe SLOT_IMG_REF que Ref2VideoNode (même libellé "image ref +"), plafonné à 9
+  // (10 au total avec l'entrée fixe "image" = {{IMAGE}}), plafond prouvé en rendu (docs/NOUVEAUX-MODELES-QWEN21.md).
+  wireAutogrow(window.__simpleNodes.QwenEditNode, [[SLOT_IMG_REF, 9]]);
+
   // Accès pour les tests automatisés.
   window.__advancedNodes = { CharsheetNode, LocsheetNode, StoryboardNode, CutVideoNode, FinalVideoNode, Ref2VideoNode, upstreamNode,
     // Lot 5 : slots dynamiques (noms de groupes + plafonds + helpers), pour les tests.

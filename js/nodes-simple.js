@@ -164,12 +164,23 @@
   LiteGraph.registerNodeType("simple/krea2", Krea2Node);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // 2) Qwen-Edit 2509 — édition/localisation d'image
+  // 2) Qwen-Edit 2509 / Qwen Image 2.1 — édition/localisation d'image
   // ═══════════════════════════════════════════════════════════════════════
+  // LOT Qwen21 : moteur 2.1 ajouté EN COEXISTENCE avec 2509 (défaut, chemin figé au
+  // caractère près — voir generate() ci-dessous, branche "qwen_edit_2509" inchangée).
+  // Slot autogrow des références 2.1 supplémentaires ("image ref +", jusqu'à 9, plafond
+  // 10 au total avec l'entrée fixe "image") : le LITÉRAL doit rester identique à la
+  // constante SLOT_IMG_REF de js/nodes-advanced.js, qui câble le groupe en fin de fichier
+  // (nodes-simple.js est chargé AVANT nodes-advanced.js dans canvas.html : la constante
+  // n'existe pas encore ici, d'où le texte en dur plutôt qu'une référence à SLOT_IMG_REF).
+  const Q21_REF_SLOT = "image ref +";
   function QwenEditNode() {
     this.addInput("image", 0);
+    this.addInput(Q21_REF_SLOT, 0);   // slot libre en permanence en mode 2.1 (autogrow, câblé par nodes-advanced.js) ; sans effet en mode 2509
     this.addOutput("image", 0);
-    this.properties = { instruction: "add sunglasses on the character", src: "", outFile: null };
+    this.properties = { engine: "qwen_edit_2509", instruction: "add sunglasses on the character", src: "", outFile: null };
+    this.addWidget("combo", "moteur", this.properties.engine, v => { this.properties.engine = v; },
+      { values: ["qwen_edit_2509", "qwen21"] });
     this.addWidget("text", "instruction", this.properties.instruction, v => { this.properties.instruction = v; });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
     this.size = [320, 240];
@@ -191,18 +202,48 @@
     }
     const instruction = (this.properties.instruction || "").trim();
     if (!instruction) { setStatus(this, "error", T("Erreur : instruction vide.")); return; }
+    const qwen21 = this.properties.engine === "qwen21";
     setStatus(this, "running", T("Édition Qwen-Edit en cours…"));
     try {
       const q = `filename=${encodeURIComponent(upstream.filename)}&subfolder=${encodeURIComponent(upstream.subfolder || "")}&type=${upstream.type || "output"}`;
       const blob = await (await fetch(`${E.COMFY}/view?${q}`)).blob();
       const imgName = await E.uploadBlob(blob, upstream.filename.split("/").pop());
-      const raw = await E.getTemplate("api/qwen_edit_i2i.json");
-      const graph = E.buildGraph(raw, {
-        prompt: instruction, negative: "", seed: Math.floor(Math.random() * 1e15),
-        width: 1024, height: 1024, batch: 1, image: imgName
-      });
+      let graph, label;
+      // Mode 2509 (défaut) : chemin INCHANGÉ au caractère près — même template, mêmes
+      // width/height 1024×1024 en dur (ignorés par ce gabarit, cf. latent = VAEEncode de
+      // l'image), même label. Ne rien toucher ici.
+      if (!qwen21) {
+        const raw = await E.getTemplate("api/qwen_edit_i2i.json");
+        graph = E.buildGraph(raw, {
+          prompt: instruction, negative: "", seed: Math.floor(Math.random() * 1e15),
+          width: 1024, height: 1024, batch: 1, image: imgName
+        });
+        label = "Qwen-Edit 2509";
+      } else {
+        // Mode Qwen Image 2.1 : WIDTH/HEIGHT calculés depuis les dimensions RÉELLES de
+        // l'image d'entrée (jamais 1024×1024 en dur — ce gabarit fixe le latent de départ,
+        // contrairement à 2509, donc un ratio faux sort recadré au carré). Formule ~1 MP,
+        // multiples de 32 (même esprit que Engine.computeMPResolution), r = largeur/hauteur
+        // de l'image réellement chargée (docs/NOUVEAUX-MODELES-QWEN21.md, « Contrat pour
+        // les lots UI »).
+        const { w: iw, h: ih } = await E.imageSize(blob);
+        const r = iw / ih;
+        const width = Math.round(Math.sqrt(1024 * 1024 * r) / 32) * 32;
+        const height = Math.round(Math.sqrt(1024 * 1024 / r) / 32) * 32;
+        const raw = await E.getTemplate("api/qwen21_i2i.json");
+        graph = E.buildGraph(raw, {
+          prompt: instruction, negative: "", seed: Math.floor(Math.random() * 1e15),
+          width, height, batch: 1, image: imgName
+        });
+        // Références additionnelles : slot autogrow "image ref +" (Q21_REF_SLOT, câblé sur
+        // ce type par nodes-advanced.js), jusqu'à 9 — plafond prouvé en rendu 10 au total
+        // avec {{IMAGE}}. `addQwen21Refs` avec une liste vide laisse le graphe inchangé.
+        const extraNames = await window.__advancedNodes.refNamesFor(this, Q21_REF_SLOT);
+        E.addQwen21Refs(graph, extraNames);
+        label = `Qwen Image 2.1 · ${width}×${height} · ${extraNames.length + 1} réf.`;
+      }
       for (const n of Object.values(graph)) if (n.class_type === "SaveImage") n.inputs.filename_prefix = "canvas/qwen_edit";
-      const promptId = await E.submitGraph(graph, "Canvas · Qwen-Edit", "Qwen-Edit 2509", clientId);
+      const promptId = await E.submitGraph(graph, "Canvas · Qwen-Edit", label, clientId);
       E.registerJob(promptId, this);
       const entries = await E.waitForJobs([promptId]);
       const file = E.outputFiles(entries[promptId], ".png")[0];
