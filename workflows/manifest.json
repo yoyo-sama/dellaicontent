@@ -183,6 +183,16 @@
       "enrich": "builtin"
     },
     {
+      "id": "storyboard_v2_qwen21",
+      "label": "Krea 2 + Qwen Image 2.1 + LTX 2.5 — Charsheet, keyframes ancrées, animatic",
+      "pipeline": "storyboard_v2",
+      "model": "Krea 2 + Qwen Image 2.1 + LTX 2.5 22B",
+      "file": null,
+      "builder": "storyboard_v2",
+      "anchor": "api/qwen21_dual.json",
+      "enrich": "builtin"
+    },
+    {
       "id": "campaign_full",
       "label": "Krea 2 + LTX 2.5 — Posters, thumbnails et teaser",
       "pipeline": "campaign_full",

@@ -1967,19 +1967,20 @@
             </div>
 
             <div class="form-stack" id="refExtrasWrap" style="display:none; margin-top:22px">
-              <h3 class="section-title">Références supplémentaires (Minimax H3)</h3>
-              <p class="hint">En plus des fiches personnage/décor générées automatiquement (ref_image_0/1). Aucune obligatoire.</p>
+              <h3 class="section-title">Références supplémentaires</h3>
+              <p class="hint r2v-only">En plus des fiches personnage/décor générées automatiquement (ref_image_0/1). Aucune obligatoire.</p>
+              <p class="hint q21-only" style="display:none">Ajoutées à chaque keyframe Qwen Image 2.1, après les planches : &lt;image3&gt;, &lt;image4&gt;… (un rang plus loin sur un plan à deux sujets). Nommez-les dans l'action du plan.</p>
               <label>
                 Images de référence supplémentaires (max 7)
                 <input type="file" id="refImagesInput" accept="image/*" multiple />
               </label>
-              <p class="hint">Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.</p>
-              <div class="ref-subjects" id="refSubjects"></div>
-              <label>
+              <p class="hint r2v-only">Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.</p>
+              <div class="ref-subjects r2v-only" id="refSubjects"></div>
+              <label class="r2v-only">
                 Vidéos de référence (max 3)
                 <input type="file" id="refVideosInput" accept="video/*" multiple />
               </label>
-              <label>
+              <label class="r2v-only">
                 Audios de référence (max 3)
                 <input type="file" id="refAudiosInput" accept="audio/*" multiple />
               </label>
@@ -2339,6 +2340,11 @@
       "Insérer le label de ce sujet dans le brief": {
         en: "Insert this subject's label into the brief", es: "Insertar la etiqueta de este sujeto en el brief",
         de: "Label dieses Subjekts in das Briefing einfügen" },
+      "Références supplémentaires": { en: "Additional references", es: "Referencias adicionales", de: "Zusätzliche Referenzen" },
+      "Ajoutées à chaque keyframe Qwen Image 2.1, après les planches : <image3>, <image4>… (un rang plus loin sur un plan à deux sujets). Nommez-les dans l'action du plan.": {
+        en: "Added to every Qwen Image 2.1 keyframe, after the sheets: <image3>, <image4>… (one rank further on a two-subject shot). Name them in the shot's action.",
+        es: "Se añaden a cada keyframe Qwen Image 2.1, tras las fichas: <image3>, <image4>… (un puesto más allá en un plano con dos sujetos). Nómbrelas en la acción del plano.",
+        de: "Werden jedem Qwen-Image-2.1-Keyframe nach den Blättern angefügt: <image3>, <image4>… (bei einer Einstellung mit zwei Subjekten eine Stelle weiter). Nennen Sie sie in der Aktion der Einstellung." },
       "Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.": {
         en: "Each image gets a subject number, carried into the prompt automatically.",
         es: "Cada imagen recibe un número de sujeto, incorporado automáticamente al prompt.",
@@ -2888,6 +2894,14 @@
       const lastOk = isH3LastFrameWorkflow(wf) && $("imageInputWrap").style.display !== "none";
       $("lastImageWrap").style.display = lastOk ? "" : "none";
       if (!lastOk) $("lastImageInput").value = "";
+      // Références supplémentaires (#refExtrasWrap, contrôle "refs" de reference2video) :
+      // montrées aussi sur storyboard_v2 quand le moteur d'ancrage est Qwen Image 2.1, qui
+      // les consomme (submitKeyframeJob). Qwen-Edit 2509 n'en consomme aucune : masquées.
+      // Un seul contrôle, un seul plafond (7) ; seules les lignes propres à H3 changent.
+      const q21 = wf?.anchor === "api/qwen21_dual.json";
+      if (pipelineSelect.value === "storyboard_v2") $("refExtrasWrap").style.display = q21 ? "" : "none";
+      document.querySelectorAll("#refExtrasWrap .r2v-only").forEach(el => { el.style.display = q21 ? "none" : ""; });
+      document.querySelectorAll("#refExtrasWrap .q21-only").forEach(el => { el.style.display = q21 ? "" : "none"; });
       // Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a pas de
       // placeholder {{NEGATIVE_PROMPT}} (piège n°16) : champ désactivé plutôt que sans effet.
       const krea2 = isKrea2Workflow(wf);
@@ -4394,6 +4408,24 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return graph;
     }
 
+    // ── Qwen Image 2.1 : références supplémentaires de TextEncodeQwenImage21 (portage
+    // verbatim de Engine.addQwen21Refs, js/engine.js — index.html ne charge pas engine.js,
+    // qui ouvrirait un 2ᵉ WebSocket ComfyUI) ─────────────────────────────────────────
+    // Greffe une LoadImage par nom sous la clé autogrow "images.image_<N>", à la suite des
+    // entrées du gabarit (1-indexée, contiguë — le prompt les désigne <imageN>). Plafond
+    // prouvé en rendu : 10 images au total — c'est à l'appelant de borner `names`.
+    function addQwen21Refs(graph, names) {
+      const enc = Object.values(graph).find(n => n.class_type === "TextEncodeQwenImage21");
+      if (!enc || !names) return graph;
+      let n = Object.keys(enc.inputs).filter(k => k.startsWith("images.image_")).length;
+      names.forEach((name, i) => {
+        const id = "q21ref" + (i + 1);
+        graph[id] = { class_type: "LoadImage", inputs: { image: name } };
+        enc.inputs[`images.image_${++n}`] = [id, 0];
+      });
+      return graph;
+    }
+
     const FLF2V_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0";
     const LTX25_FPS = 24;   // LTX 2.5 et Minimax H3 rendent en 24 fps (LTX 2.3 était en 25).
 
@@ -5493,10 +5525,19 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         prompt: promptOverride || compileKeyframePrompt(shot, refs.map(r => r.desc)), negative: negText,
         seed, image: refs[0]?.name, image2: refs[1] ? refs[1].name : locName, width, height, batch: 1
       });
-      if (refs[1]) addKeyframeThirdRef(g, locName);
+      // Moteur Qwen Image 2.1 (gabarit api/qwen21_dual.json) : pas de limite à 3 images ni de
+      // piège n°10 (latent vide, références symétriques). Le décor d'un plan à 2 sujets passe
+      // en <image3> via addQwen21Refs (addKeyframeThirdRef vise TextEncodeQwenImageEditPlus,
+      // absent ici), puis les références supplémentaires : la MÊME liste que Minimax H3 r2v
+      // (#refImagesInput, collectRefExtras, plafond 7) — au pire 3 + 7 = 10, plafond prouvé.
+      // ponytail: ré-upload de la liste à chaque keyframe (overwrite, mêmes noms) — la mettre
+      // en cache sur `director` si le nombre de plans × références devient sensible.
+      const q21 = Object.values(g).some(node => node.class_type === "TextEncodeQwenImage21");
+      if (q21) addQwen21Refs(g, (refs[1] ? [locName] : []).concat((await collectRefExtras()).images));
+      else if (refs[1]) addKeyframeThirdRef(g, locName);
       for (const node of Object.values(g))
         if (node.class_type === "SaveImage") node.inputs.filename_prefix = `studio/story/key_${String(idx + 1).padStart(2, "0")}`;
-      return submitGraph(g, `Storyboard · keyframe ${idx + 1}/${n}`, `Qwen-Edit ancré · seed ${seed}`);
+      return submitGraph(g, `Storyboard · keyframe ${idx + 1}/${n}`, `${q21 ? "Qwen Image 2.1" : "Qwen-Edit"} ancré · seed ${seed}`);
     }
     async function submitGridJob(keys) {
       const { g: gridG, add: gridAdd } = makeGraphBuilder();
