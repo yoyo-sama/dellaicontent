@@ -4,6 +4,15 @@ Document de cadrage (`/architect`, 2026-09-22). **Rien n'est implémenté** : ce
 périmètre et les tâches pour une planification (`tour-de-controle`) ultérieure, pas encore
 lancée.
 
+> **Obsolète sur le point des fichiers modèles.** Ce document cite encore les deux
+> text-encoders `qwen3.5_9b_qwen_image_2.1_pe_t2i`/`pe_i2i` comme cible d'intégration
+> (section « Motivation » et tâche 5 plus bas). La qualification réelle (2026-09-22/23) a
+> établi que ce sont des LLM de réécriture de prompt, pas des encodeurs : câblés comme
+> encodeur ils rendent du bruit pur. Le seul encodeur qualifié et livré est
+> `qwen3vl_8b_int8_convrot.safetensors`. **Source de vérité sur ce qui a réellement été
+> qualifié et livré : `docs/NOUVEAUX-MODELES-QWEN21.md`** (et son résumé dans
+> `TOUR-DE-CONTROLE-CHANGELOG.md`, entrée v1.2.0).
+
 ## Motivation
 
 Qwen Image 2.1 est déjà présent sur le disque ComfyUI (`diffusion_models/qwen_image_2.1_int8_convrot.safetensors`

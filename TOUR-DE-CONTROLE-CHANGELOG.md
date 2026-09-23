@@ -1,5 +1,29 @@
 # Tour de contrôle — changelog
 
+## 2026-09-23 — v1.2.0 — Qwen Image 2.1, en coexistence avec Qwen-Edit 2509
+
+Cadrage initial (`/architect`, `docs/QWEN-IMAGE-2.1-ROADMAP.md`) puis qualification réelle et intégration (4 commits). Le livré diffère du cadrage sur plusieurs points importants — voir plus bas, le compte-rendu complet est `docs/NOUVEAUX-MODELES-QWEN21.md`.
+
+### Qualification
+
+Les deux fichiers modèles annoncés au cadrage (`qwen3.5_9b_..._pe_t2i`/`pe_i2i`) ne sont **pas** des encodeurs mais des LLM de réécriture de prompt : câblés comme encodeur ils rendent du bruit pur avec un job ComfyUI `success` (piège n°14 typique). Le vrai encodeur, qualifié par comparaison de rendus : `qwen3vl_8b_int8_convrot.safetensors`. Qualifié aussi sur rendu comparatif contre 2509, mêmes seeds, même prompt compilé par l'app : dual charsheet+locsheet en une passe native (mieux que 2509 sur tous les critères — un seul exemplaire du sujet, action suivie, cadrage suivi), multi-référence fidèle jusqu'à 10 images, texte incrusté exact (2509 fautif), plafond storyboard 2 planches + 7 références prouvé (identité et décor tiennent simultanément). Deux sujets par plan : aucun des deux moteurs n'est fiable au-delà de 2 — le plafond existant n'est pas relevé.
+
+### Modèles
+
+`scripts/models.txt` : les 3 fichiers réellement référencés par les gabarits (`qwen_image_2.1_int8_convrot.safetensors`, `qwen3vl_8b_int8_convrot.safetensors`, `qwen_image_2.1_vae_bf16.safetensors`) — pas les `pe_t2i`/`pe_i2i` du cadrage initial, écartés par la qualification.
+
+### Canvas — carte « Édition d'image »
+
+`QwenEditNode` gagne une propriété `engine` (2509 par défaut, chemin inchangé au caractère près ; `qwen21` en option). Mode 2.1 : gabarit `api/qwen21_i2i.json`, `WIDTH`/`HEIGHT` calculés depuis les dimensions réelles de l'image d'entrée (jamais 1024×1024 en dur — ce gabarit fixe son latent de départ, un ratio faux sort recadré au carré). Références supplémentaires par le slot autogrow déjà écrit pour `reference2video` : jusqu'à 10 au total.
+
+### Studio storyboard — choix du moteur d'ancrage des keyframes
+
+Nouvelle entrée manifest `storyboard_v2_qwen21` (même pipeline `storyboard_v2`, `anchor: api/qwen21_dual.json`) : le moteur se choisit comme un modèle de plus dans le menu, 2509 reste l'entrée par défaut. Le décor d'un plan à 2 sujets passe en `<image3>` via `addQwen21Refs` (porté verbatim dans `index.html`, qui ne charge pas `js/engine.js`) plutôt que `addKeyframeThirdRef` (qui vise un nœud absent du gabarit 2.1), suivi des références supplémentaires du contrôle déjà utilisé par Minimax H3 r2v — même liste, même plafond 7, désormais pleinement consommé en moteur 2.1 (il ne l'était pas, et ne l'est toujours pas, en moteur 2509). `reference2video` ne reçoit aucun sélecteur : ce pipeline n'a pas d'étape d'ancrage (un seul job Minimax H3 direct).
+
+### Nuance à retenir (AGENTS.md)
+
+Le plafond « 2 sujets par plan » n'a plus la même origine selon le moteur : plafond du **nœud** en 2509 (`TextEncodeQwenImageEditPlus`, 3 entrées image max), plafond de **fiabilité constatée au rendu** en 2.1 (`TextEncodeQwenImage21` accepte jusqu'à 16 entrées, 10 prouvées, mais les deux moteurs échouent pareillement au-delà de 2 sujets). Ne pas confondre les deux en lisant le piège.
+
 ## 2026-09-22 (suite) — v1.1.0 — Le studio storyboard, de la planche à l'animatic
 
 Première version numérotée depuis la v1.0.8 (2026-09-09), qui ne couvrait que le déploiement. Tout ce qui a été fait depuis porte sur l'application elle-même, et principalement sur le studio storyboard. C'est aussi la première fois que des pièces de ce chantier sont **constatées en rendu réel** chez l'utilisateur, et non seulement en headless.
