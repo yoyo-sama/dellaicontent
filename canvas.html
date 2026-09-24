@@ -149,7 +149,9 @@
 
   .sep { height:1px; background:var(--border); margin:12px 0 10px; }
   .icon-row { display:flex; gap:8px; }
-  .icon-btn { flex:1; text-align:center; border:1px solid var(--border); border-radius:10px;
+  /* <button> depuis C9 : `font:inherit` (avant `font-size`) et `margin:0` gomment les valeurs par
+     défaut du navigateur, pour un rendu identique à l'ancien <div>. */
+  .icon-btn { flex:1; margin:0; font:inherit; text-align:center; border:1px solid var(--border); border-radius:10px;
               padding:6px 0; font-size:14px; cursor:pointer; background:var(--card-2); color:var(--text-2); }
   .icon-btn:hover { border-color:var(--brand); color:var(--brand); }
   /* État actif du bascule Image/Vidéo (mode avancé) : mêmes tokens que .usecase.open
@@ -166,6 +168,34 @@
   .row { border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
   .row > label { display:block; font-size:10.5px; color:var(--text-2); margin-bottom:4px; }
   .actions { margin-top:14px; display:flex; flex-direction:column; gap:8px; }
+
+  /* Focus clavier visible sur les commandes des panneaux et de la barre de feuilles. */
+  .panel button:focus-visible, .panel .rail-pill:focus-visible, #sheetBar button:focus-visible
+    { outline:2px solid var(--brand); outline-offset:2px; }
+
+  /* ── Sous 768 px : palette et Propriétés deviennent des feuilles basculantes (C1) ──
+     Une seule feuille ouverte à la fois, `body[data-sheet]` ∈ {palette, props, absent}, posé par
+     setSheet() ; la barre #sheetBar (2 boutons) est le seul élément fixe permanent, le canvas
+     occupe tout l'écran. --gal-h = hauteur du tiroir replié de js/canvas-gallery.js (#cgDrawer,
+     40px) : la barre se pose juste au-dessus pour ne pas le recouvrir. Au-dessus de 767 px, la
+     barre est masquée et rien de ce bloc ne s'applique. */
+  :root { --bar-h:52px; --gal-h:40px; }
+  #sheetBar { display:none; }
+  @media (max-width:767px) {
+    #sheetBar { display:flex; position:fixed; left:0; right:0; bottom:var(--gal-h); height:var(--bar-h);
+                z-index:21; gap:8px; padding:4px 8px; background:var(--card-2); border-top:1px solid var(--border); }
+    #sheetBar button { flex:1; min-height:44px; margin:0; font:inherit; font-size:12.5px; font-weight:700;
+                       border:1px solid var(--border); border-radius:10px; cursor:pointer;
+                       background:var(--card-2); color:var(--text); }
+    #sheetBar button[aria-expanded="true"] { border-color:var(--brand); color:var(--brand); background:var(--accent-soft); }
+    #sheetBar button:disabled { color:var(--text-2); background:var(--disabled); cursor:default; }
+    #palette, #props { left:8px; right:8px; width:auto; top:auto; max-height:55vh;
+                       bottom:calc(var(--gal-h) + var(--bar-h) + 8px); }
+    body:not([data-sheet="palette"]) #palette, body:not([data-sheet="props"]) #props { display:none; }
+    /* Cibles tactiles >= 44 px. */
+    .icon-btn, .rail-pill, .disclosure, .btn-primary, .btn-outline, .usecase-opt,
+    .panel select, .panel input[type=text], .panel input[type=number] { min-height:44px; }
+  }
 </style>
 <!-- Thème posé sur la racine du document AVANT le premier rendu. Le gros bloc de script
      de fin de page s'exécute après le chargement de litegraph (js/vendor/) et des 3 js/ locaux :
@@ -244,8 +274,8 @@
   <div id="advBlock" hidden>
     <div class="field">
       <div class="icon-row">
-        <div class="icon-btn open" id="advCatImage">Image</div>
-        <div class="icon-btn" id="advCatVideo">Vidéo</div>
+        <button type="button" class="icon-btn open" id="advCatImage" aria-pressed="true">Image</button>
+        <button type="button" class="icon-btn" id="advCatVideo" aria-pressed="false">Vidéo</button>
       </div>
     </div>
     <div class="field">
@@ -280,9 +310,9 @@
        (index.html, `themeBtn`). Le lien de sortie vers index.html (⌂) est retiré : sa
        fonction est reprise par la pilule "Studio" sous le logo (cf. .rail-switch). -->
   <div class="icon-row">
-    <div class="icon-btn" id="themeBtn" title="Thème clair / sombre">🌙</div>
-    <div class="icon-btn" id="btnFit" title="Recadrer la vue">⤢</div>
-    <div class="icon-btn" id="btnClear" title="Vider le canvas">🗑</div>
+    <button type="button" class="icon-btn" id="themeBtn" title="Thème clair / sombre">🌙</button>
+    <button type="button" class="icon-btn" id="btnFit" title="Recadrer la vue">⤢</button>
+    <button type="button" class="icon-btn" id="btnClear" title="Vider le canvas">🗑</button>
   </div>
 </aside>
 
@@ -299,6 +329,13 @@
     <button id="btnDup" class="btn-outline">Dupliquer</button>
   </div>
 </aside>
+
+<!-- Barre de feuilles : visible sous 768 px seulement (CSS). « Propriétés » n'est actif que si une
+     carte est sélectionnée (#props non caché). -->
+<nav id="sheetBar">
+  <button type="button" id="sheetMenu" aria-expanded="false" aria-controls="palette">Menu</button>
+  <button type="button" id="sheetProps" aria-expanded="false" aria-controls="props" disabled>Propriétés</button>
+</nav>
 
 <div id="stage">
   <canvas id="lgcanvas"></canvas>
@@ -366,8 +403,12 @@
     "+ Nouvelle carte": { en: "+ New card", es: "+ Nueva tarjeta", de: "+ Neue Karte" },
     "Langue": { en: "Language", es: "Idioma", de: "Sprache" },
     "Thème clair / sombre": { en: "Light / dark theme", es: "Tema claro / oscuro", de: "Helles / dunkles Thema" },
-    "Recadrer la vue": { en: "Reset the view", es: "Reencuadrar la vista", de: "Ansicht zurücksetzen" },
+    // EN/DE corrigées (C8) : ⤢ recadre désormais sur les cartes au lieu de remettre la vue à zéro.
+    "Recadrer la vue": { en: "Fit view to cards", es: "Reencuadrar la vista", de: "Ansicht an Karten anpassen" },
     "Vider le canvas": { en: "Clear the canvas", es: "Vaciar el lienzo", de: "Leinwand leeren" },
+    // Barre de feuilles (sous 768 px).
+    "Menu": { en: "Menu", es: "Menú", de: "Menü" },
+    "Propriétés": { en: "Properties", es: "Propiedades", de: "Eigenschaften" },
 
     // ── Panneau droit ──
     "Propriétés — carte sélectionnée": { en: "Properties — selected card", es: "Propiedades — tarjeta seleccionada", de: "Eigenschaften — ausgewählte Karte" },
@@ -508,6 +549,8 @@
       if (el.title) {
         const orig = el.__origTitle ?? (el.__origTitle = el.title);
         if (I18N[orig]) el.title = tr(orig);
+        // Nom accessible des boutons-icônes (emoji seul) : leur title traduit.
+        if (el.classList.contains("icon-btn")) el.setAttribute("aria-label", el.title);
       }
     }
   }
@@ -536,6 +579,21 @@
 
   const canvasEl = document.getElementById("lgcanvas");
   const mediaLayer = document.getElementById("mediaLayer");
+  // ── Feuilles basculantes sous 768 px (C1) ──
+  // Même seuil que le @media du <style> : `MOBILE.matches` est relu à chaque appel, jamais figé.
+  // `body[data-sheet]` ("palette" | "props" | absent) est l'UNIQUE état : le CSS n'affiche que la
+  // feuille nommée. Sur ordinateur il est sans effet (aucune règle hors @media).
+  const MOBILE = matchMedia("(max-width: 767px)");
+  const sheetMenu = document.getElementById("sheetMenu");
+  const sheetProps = document.getElementById("sheetProps");
+  function setSheet(name) {
+    document.body.dataset.sheet = name;
+    sheetMenu.setAttribute("aria-expanded", String(name === "palette"));
+    sheetProps.setAttribute("aria-expanded", String(name === "props"));
+  }
+  const toggleSheet = name => setSheet(document.body.dataset.sheet === name ? "" : name);
+  sheetMenu.onclick = () => toggleSheet("palette");
+  sheetProps.onclick = () => toggleSheet("props");
   const FOOTER_H = 24;   // hauteur (en unités graphe) du pied de carte, réservée sous la vignette
   // Marge haute (en unités graphe) laissée libre par l'overlay média, pour que les connecteurs
   // d'entrée/sortie dessinés par litegraph juste sous le titre restent visibles ET cliquables :
@@ -1181,11 +1239,11 @@
   lgcanvas.render_curved_connections = true;   // oriente les flèches le long de la spline
   lgcanvas.render_connections_border = false;  // supprime le liseré noir (thème sombre d'origine)
 
-  function resize() {
-    const r = canvasEl.parentElement.getBoundingClientRect();
-    canvasEl.width = r.width; canvasEl.height = r.height;
-    lgcanvas.resize();
-  }
+  // Sans argument, lgcanvas.resize() prend la taille de #stage, redimensionne le canvas ET son
+  // bgcanvas et redessine — MAIS seulement si la taille a changé. Ne jamais écrire canvasEl.width
+  // avant : cela vidait le canvas puis faisait sortir resize() sans rien repeindre (les cartes
+  // disparaissaient après un changement de taille sans rechargement, ex. rotation d'une tablette).
+  function resize() { lgcanvas.resize(); }
   window.addEventListener("resize", resize);
   resize();
 
@@ -1363,6 +1421,8 @@
     translateTree(pipelineSelect);
     advCatImage.classList.toggle("open", cat === "image");
     advCatVideo.classList.toggle("open", cat === "video");
+    advCatImage.setAttribute("aria-pressed", String(cat === "image"));
+    advCatVideo.setAttribute("aria-pressed", String(cat === "video"));
     refreshModelSelect();
   }
   advCatImage.onclick = () => applyPipelineCategory("image");
@@ -1378,6 +1438,7 @@
     if (s.modelValues) setProp(n, s.modelProp, s.modelWidget, modelSelect.value);
     lgcanvas.selectNode(n);
     lgcanvas.onSelectionChange(lgcanvas.selected_nodes);
+    if (MOBILE.matches) fitView();
   };
 
   // ── Cas d'usage (haut du panneau) ────────────────────────────────────────
@@ -1407,6 +1468,7 @@
     let last = null;
     for (const type of arguments) last = addNode(type);
     if (last) { lgcanvas.selectNode(last); lgcanvas.onSelectionChange(lgcanvas.selected_nodes); }
+    if (MOBILE.matches) fitView();
   }
 
   document.getElementById("ucPoster").onclick = () => { setTeaserOpen(false); placeCards("simple/krea2"); };
@@ -1422,7 +1484,10 @@
   document.getElementById("ucTeaserImage").onclick = () => {
     const video = addNode("simple/video");
     addImportCard("image", video, 0);
-    setTimeout(() => { lgcanvas.selectNode(video); lgcanvas.onSelectionChange(lgcanvas.selected_nodes); }, 0);
+    setTimeout(() => {
+      lgcanvas.selectNode(video); lgcanvas.onSelectionChange(lgcanvas.selected_nodes);
+      if (MOBILE.matches) fitView();   // après la sélection : la feuille Propriétés est alors ouverte
+    }, 0);
   };
   // « Je pars de fiches Personnage/Décor » : Charsheet + Locsheet → Ref2Video.
   document.getElementById("ucTeaserSheets").onclick = () => {
@@ -1432,6 +1497,7 @@
     charsheet.connect(0, r2v, 0);
     locsheet.connect(0, r2v, 1);
     lgcanvas.selectNode(r2v); lgcanvas.onSelectionChange(lgcanvas.selected_nodes);
+    if (MOBILE.matches) fitView();
   };
   // Trailer complet : Charsheet + Locsheet → Storyboard → CutVideo → FinalVideo.
   document.getElementById("ucTrailer").onclick = () => {
@@ -1446,6 +1512,7 @@
     storyboard.connect(0, cutvideo, 0);
     cutvideo.connect(0, finalVideo, 0);
     lgcanvas.selectNode(finalVideo); lgcanvas.onSelectionChange(lgcanvas.selected_nodes);
+    if (MOBILE.matches) fitView();
   };
 
   advToggle.onclick = () => {
@@ -1455,10 +1522,30 @@
     advToggle.setAttribute("aria-expanded", open ? "true" : "false");
   };
 
-  document.getElementById("btnFit").onclick = () => {
-    lgcanvas.ds.offset[0] = 0; lgcanvas.ds.offset[1] = 0; lgcanvas.ds.scale = 1;
+  // ⤢ : cadre la vue sur la boîte englobante des cartes (barre de titre comprise), dans la zone
+  // que les panneaux laissent libre. Échelle = ce qui tient, jamais au-delà de 1 ni sous 0,25 ;
+  // centrage par ds.offset (écran = (graphe + offset) × échelle). Graphe vide : vue d'origine.
+  // Zone libre : au-dessus de 767 px, entre le bord droit de #palette et le bord gauche de #props
+  // (s'il est visible) et au-dessus du tiroir de galerie ; sous 768 px, tout l'écran au-dessus de la
+  // feuille ouverte (ou de la barre #sheetBar).
+  function fitView() {
+    const ds = lgcanvas.ds, M = 24, top = el => el ? el.getBoundingClientRect().top - M : Infinity;
+    if (!graph._nodes.length) { ds.offset[0] = 0; ds.offset[1] = 0; ds.scale = 1; lgcanvas.setDirty(true, true); return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of graph._nodes) {
+      const b = n.getBounding();
+      x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[0] + b[2]); y1 = Math.max(y1, b[1] + b[3]);
+    }
+    const L = MOBILE.matches ? M : document.getElementById("palette").getBoundingClientRect().right + M;
+    const R = MOBILE.matches || propsEl.hidden ? innerWidth - M : propsEl.getBoundingClientRect().left - M;
+    const B = Math.min(innerHeight - M, MOBILE.matches ? top(document.getElementById(document.body.dataset.sheet) || document.getElementById("sheetBar")) : top(document.getElementById("cgDrawer")));
+    const s = Math.max(0.25, Math.min((R - L) / (x1 - x0), (B - M) / (y1 - y0), 1));
+    ds.scale = s;
+    ds.offset[0] = (L + R) / 2 / s - (x0 + x1) / 2;
+    ds.offset[1] = (M + B) / 2 / s - (y0 + y1) / 2;
     lgcanvas.setDirty(true, true);
-  };
+  }
+  document.getElementById("btnFit").onclick = fitView;
   document.getElementById("btnClear").onclick = () => {
     // Confirmation AVANT toute suppression (même pattern que l'app de prod :
     // `confirm(tr(...))`, texte source en français). Annuler ⇒ rien n'est touché.
@@ -1524,10 +1611,18 @@
   }
 
   function showProps(node) {
+    const prev = selected;
     selected = node;
-    if (!node) { propsEl.hidden = true; fieldsEl.innerHTML = ""; return; }
+    if (!node) {
+      propsEl.hidden = true; fieldsEl.innerHTML = ""; sheetProps.disabled = true;
+      if (document.body.dataset.sheet === "props") setSheet("");
+      return;
+    }
     const s = skin(node);
-    propsEl.hidden = false;
+    propsEl.hidden = false; sheetProps.disabled = false;
+    // Sous 768 px, une NOUVELLE carte sélectionnée ouvre sa feuille (et ferme la palette). Un
+    // re-rendu de la même carte (changement de langue, de moteur) ne rouvre rien.
+    if (MOBILE.matches && node !== prev) setSheet("props");
     titleEl.textContent = node.getTitle();
     typeEl.textContent = s.tech + " · " + (s.modelValues
       ? (s.modelValues.find(m => m[0] === node.properties[s.modelProp]) || ["", s.model])[1]
@@ -1695,6 +1790,10 @@
   langSelect.value = LANG;
   langSelect.addEventListener("change", () => applyLang(langSelect.value));
   applyLang(LANG);
+
+  // État initial des feuilles (sous 768 px seulement) : palette ouverte si le graphe est vide, sinon
+  // aucune feuille et la vue est cadrée sur les cartes sauvegardées.
+  if (MOBILE.matches) { setSheet(graph._nodes.length ? "" : "palette"); fitView(); }
 
   // Accès pour les tests automatisés.
   window.__canvas = { graph, lgcanvas, save, addNode, STORAGE_KEY, LANG_KEY, THEME_KEY,
