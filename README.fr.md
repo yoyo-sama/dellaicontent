@@ -134,13 +134,13 @@ curl http://localhost:11434/api/version          # Ollama vivant
 ### Modèles à télécharger
 
 Chaque fichier va dans `~/comfyui-spark/basedir/models/<dossier>/` (chemin de la stack
-ComfyUI ; adaptez si vos modèles vivent ailleurs). `install.sh` télécharge automatiquement les 19
-fichiers ci-dessous depuis `scripts/models.txt` (source de vérité — mêmes URLs, même ordre) ;
+ComfyUI ; adaptez si vos modèles vivent ailleurs). `install.sh` télécharge automatiquement les 22
+fichiers ci-dessous depuis `scripts/models.txt` (source de vérité — mêmes URLs) ;
 la liste manuelle qui suit est équivalente pour qui préfère `curl`/navigateur.
 
-#### Pipelines actuels (Krea 2, Qwen-Edit, LTX 2.5, Minimax H3)
+#### Pipelines actuels (Krea 2, Qwen-Edit, Qwen Image 2.1, LTX 2.5, Minimax H3)
 
-19 fichiers, URLs vérifiées par requête HTTP réelle sur Hugging Face (`resolve/main/...`,
+22 fichiers, URLs vérifiées par requête HTTP réelle sur Hugging Face (`resolve/main/...`,
 tailles exactes en octets dans `scripts/models.txt`).
 
 | Modèle / pipeline | Fichier | Dossier cible | Taille | URL |
@@ -148,10 +148,9 @@ tailles exactes en octets dans `scripts/models.txt`).
 | Qwen-Edit | `qwen_image_edit_2509_fp8_e4m3fn.safetensors` | `diffusion_models/` | 19 Go | [resolve/main](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors) |
 | Qwen-Edit (encodeur) | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `text_encoders/` | 8,7 Go | [resolve/main](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors) |
 | Qwen-Edit (VAE, partagé Krea 2) | `qwen_image_vae.safetensors` | `vae/` | 243 Mo | [resolve/main](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors) |
-| Qwen-Edit (LoRA Lightning 4 steps) | `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors` | `loras/` | 810 Mo | [resolve/main](https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors) |
+| Qwen-Edit (LoRA Lightning 4 steps) | `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors` | `loras/Qwen/` | 810 Mo | [resolve/main](https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors) |
 | Krea 2 (transformer) | `krea2_turbo_fp8_scaled.safetensors` | `diffusion_models/` | 13 Go | [resolve/main](https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors) |
 | Krea 2 (encodeur) | `qwen3vl_4b_fp8_scaled.safetensors` | `text_encoders/` | 4,9 Go | [resolve/main](https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors) |
-| Krea 2 (VAE, partagé Qwen-Edit) | `qwen_image_vae.safetensors` | `vae/` | 243 Mo | [resolve/main](https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors) |
 | LTX 2.5 (transformer distillé) ⚠️ gated | `ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors` | `diffusion_models/` | 21 Go | [resolve/main](https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors) |
 | LTX 2.5 (VAE vidéo) ⚠️ gated | `ltx-2.5-video-vae-bf16.safetensors` | `vae/` | 1,4 Go | [resolve/main](https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors) |
 | LTX 2.5 (VAE audio) ⚠️ gated | `ltx-2.5-audio-vae-bf16.safetensors` | `vae/` | 348 Mo | [resolve/main](https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-audio-vae-bf16.safetensors) |
@@ -165,6 +164,9 @@ tailles exactes en octets dans `scripts/models.txt`).
 | Minimax H3 (VAE audio) | `minimax_h3_audio_vae_fp32.safetensors` | `vae/` | 578 Mo | [resolve/main](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors) |
 | Minimax H3 (LoRA turbo, t2v/i2v/r2v) ⚠️ reupload communautaire | `minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors` | `loras/H3/` | 592 Mo | [resolve/main](https://huggingface.co/koongrizzly/MiniMax_H3_int4_W4A8_ConvRot_Pruned/resolve/main/loras/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors) |
 | Minimax H3 (LoRA turbo 4 steps, t2v/i2v uniquement — requise pour l'option 4 steps de l'UI) | `minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors` | `loras/H3/` | 1,9 Go | [resolve/main](https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors) |
+| Qwen Image 2.1 (transformer) | `qwen_image_2.1_int8_convrot.safetensors` | `diffusion_models/` | 6,8 Go | [resolve/main](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors) |
+| Qwen Image 2.1 (encodeur) | `qwen3vl_8b_int8_convrot.safetensors` | `text_encoders/` | 8,7 Go | [resolve/main](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors) |
+| Qwen Image 2.1 (VAE) | `qwen_image_2.1_vae_bf16.safetensors` | `vae/` | 644 Mo | [resolve/main](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors) |
 
 > **Réserve 1 — LTX 2.5 "gated"** (5 fichiers marqués ⚠️ gated ci-dessus) : le dépôt
 > [`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5) est à accès restreint sur
@@ -306,7 +308,7 @@ install.sh                  ← installation/mise à jour idempotente en une com
 docker-compose.yml          ← app seule : nginx (8090) + updater (8093)
 docker/stacks/*.yml         ← gabarits des stacks voisines : ~/comfyui-spark et ~/ollama
 docker/userscripts/         ← scripts déployés dans le conteneur ComfyUI par install.sh (dont comfy_kitchen)
-scripts/models.txt          ← 19 modèles requis : dossier|fichier|taille|URL (source de vérité pour install.sh et le README)
+scripts/models.txt          ← 22 modèles requis : dossier|fichier|taille|URL (source de vérité pour install.sh et le README)
 workflows/
   manifest.json             ← alimente les menus Pipeline/Modèle de l'app
   api/*.json                ← templates API mono-branche avec placeholders {{PROMPT}}…

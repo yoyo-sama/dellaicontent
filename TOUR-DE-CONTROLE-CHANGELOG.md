@@ -1,5 +1,70 @@
 # Tour de contrôle — changelog
 
+## 2026-09-24 (suite) — Vague 2 des revues du 2026-09-23 : infra, Canvas, storyboard, E/S, nettoyage, dédoublonnage
+
+Cahier des charges : `docs/CODE-REVIEW-OPTIMISATIONS.md` (état de chaque trouvaille renseigné en
+fin de section). Sept lots, commits locaux, non poussés. Planification et vérification : Opus
+(Fable indisponible). Exécution : Sonnet pour 2-INFRA, 2B, 2C, 2D et doc ; Opus pour 2A et 2E.
+
+### Lots et résultats
+- **2-INFRA** — `90a0122` (I4, I5 volet nginx, M10 volet outils, M11, M12, M16, M17, K5, `[FAIL]` audio
+  de `validate.py`) : `/update/` sans tampon de requête, read_timeout 600 s ; `/ollama/` 300 s ;
+  `/comfy/` 500m ; `updateAvailable` faux hors `main` ou si le SHA distant est déjà ancêtre de HEAD ;
+  `/status` en cache 60 s ; `/apply` refusé hors `main` ; `install.sh` télécharge vers `.part` puis `mv`,
+  jeton HF via `curl -K -` ; doublon `qwen_image_vae` retiré de `scripts/models.txt` ; index des modèles
+  par chemin relatif à la catégorie, fps 24 par défaut.
+- **2A** — `f6a13c3` (I6-I10, M18, M19 a-c, M20) : statut par keyframe et par cut (un échec ne coûte
+  que son plan, relançable par 🔄), `cancelProject` interrompt par `prompt_id`, bouton d'étape 2 masqué
+  quand des keyframes existent, relais lisant explicitement le sujet 1, segment relais `continue` sans
+  frame de transition refusé, objectURLs révoquées, gardes de session. Banc : 20 cas, 17 échouent avant, 20 passent après.
+- **2B** — `dc7b5d8` (I5 volet gemmaJSON, I11, I12, M3-M8, M21) : job perdu détecté (« Job … perdu
+  (ComfyUI redémarré ?) » après 2 tours d'absence de `/history` et `/queue`), resynchronisation à la
+  reconnexion WebSocket, `execution_interrupted` traité, `saveLocal`, `assetPrompts` purgé, LoRA
+  téléversée visible sans rechargement, `gemmaJSON` lève « ollama <code> », `submitGraph`/`uploadBlob`
+  dédoublonnés, moniteur en pause onglet masqué, uploads `overwrite=false`, clé Gemini en en-tête. Banc : 29 PASS après, 15 FAIL avant.
+- **2C** — `8037bde` (M1, M2, M9, M10 volet JS, K1, K2, K3) : chaîne Auto morte supprimée
+  (`js/engine.js` −218 lignes, `Engine` 63 → 54 clés, `soulAnchors` supprimé), `capH3Prompt` rogne
+  `detailed_description`, `{{FRAMES}}` à 24 fps par défaut, i18n, docs.
+- **2D** — `0dc544f` + `dd86b67` (M13, M14, K4, M15) : plus d'écriture DOM au repos (`graph.start()`
+  retiré), état sauvegardé illisible et quota localStorage plein tolérés, palette d'états unique dans
+  `js/nodes-simple.js`, litegraph.js 0.7.18 et son CSS vendorisés dans `js/vendor/` (plus de jsdelivr).
+  Banc : 0 écriture DOM au repos sur 3 s contre 1260 avant ; état illisible (JSON tronqué, structure invalide) et quota plein tolérés.
+- **2E** — `aff8a12` (I14) : `index.html` charge `js/engine.js` et en déstructure 25 fonctions
+  (liste dans `docs/ARCHITECTURE.md` § Code partagé Studio/Canvas) ; `gemmaJSON(system, user, images)`,
+  `waitForJobs(ids, isCancelled)`, WebSocket de l'engine ouverte au premier job suivi ; `Engine` = 57 clés.
+  Preuves : 37 scénarios, 112 corps `/prompt` (407 243 o) et 219 uploads comparés avant/après, 17 corps
+  ollama identiques octet pour octet, 25 fonctions comparées, témoin négatif ; rendus réels : t2i
+  Studio, relais H3 à 2 sujets, carte t2i Canvas.
+- **doc** — ce lot : `docs/ARCHITECTURE.md`, `AGENTS.md`, `README.md`/`README.fr.md` (doublon VAE retiré,
+  modèles Qwen Image 2.1 ajoutés, 22 fichiers), état de chaque trouvaille, ce changelog.
+
+### Écarts assumés
+- **M4** : les messages de journal de `submitGraph` remplacent ceux des anciennes copies.
+- **M16** : pas de `git fetch` dans l'updater (il tourne en root et salirait `.git`) ; le SHA distant
+  vient de `git ls-remote`, comparé par `git merge-base --is-ancestor`.
+- **M18** : traité par un refus, pas par un repli silencieux en coupure.
+- **M19 (d)/(e)** non faits : l'aperçu et la séquence relisent ces URL, les révoquer les casserait.
+- **I13** non traité : porter ou non les corrections de prompt au Canvas reste à décider par l'utilisateur.
+- **2D** : le banc a soumis par erreur un job Krea 2 réel ; le PNG produit a été supprimé à la demande
+  de l'utilisateur.
+- **2B** a été interrompu par la limite de dépense mensuelle, puis repris.
+- Décisions : litegraph.css vendorisé ; un état Canvas illisible est supprimé sans sauvegarde.
+- Reste dupliqué Studio/Canvas : `resolveImageJob`, tout ce qui porte du texte de prompt, la WebSocket et
+  `handleWS`, `LTX25_FPS` (2 exemplaires, à garder égaux). `resolveImageJob` subsiste aussi, sans appelant,
+  dans `js/engine.js` (M2 l'y listait).
+
+### Incidents et leçons
+- Les setters de style ne sont pas sur `CSSStyleDeclaration.prototype` dans ce Chromium : pour compter les
+  écritures DOM, envelopper `HTMLElement.prototype.style` par un Proxy.
+- Un banc qui clique « Générer » doit bloquer `/comfy/prompt`, sans quoi il soumet un vrai job (2D).
+- Un banc CDP qui réutilise un profil Chrome persistant peut servir un `engine.js` périmé depuis le cache
+  HTTP : profil vierge à chaque comparaison. `python3 -m http.server` n'envoie pas `Cache-Control`.
+
+### Reste à faire
+- Vagues 3 et 4 (UX, `docs/CODE-REVIEW-ERGONOMIE.md`) ; décisions Q1, Q2, Q4, Q8, Q9 en attente.
+- I13 (voir plus haut).
+- Changelog de clôture et bump de version (`VERSION`) en fin de chantier.
+
 ## 2026-09-24 — Vague 1 des revues du 2026-09-23 : exposition réseau et 3 bugs critiques
 
 Cahier des charges : `docs/CODE-REVIEW-OPTIMISATIONS.md` (43 trouvailles) et

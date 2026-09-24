@@ -67,6 +67,8 @@ const loraEntry = Object.entries(graph).find(([, n]) =>
 À appliquer aux deux copies (`index.html` L4327 et `js/engine.js` L80), puis corriger la phrase de
 LESSONS L94.
 
+**État (2026-09-24)** : corrigé — commit `91bbd90`
+
 ### C2 — Canvas : les cartes « Vidéo » et « Génération vidéo » en moteur Minimax H3 soumettent un graphe invalide depuis le 2026-09-22 — **régression**
 
 Depuis `0241cbb` (2026-09-22), `workflows/api/minimax_h3_i2v.json` câble `last_frame` sur un
@@ -91,6 +93,8 @@ Effet pratique inchangé : les deux cartes H3 i2v du Canvas sont inutilisables (
 `E.buildGraph(...)` dans les deux branches H3 (`E.applyMinimaxLastFrame(graph, false)`).
 Illustre directement le coût de la duplication Studio/Canvas (voir I14).
 
+**État (2026-09-24)** : corrigé — commit `91bbd90`
+
 ### C3 — `scripts/models.txt` : une installation neuve place la LoRA Lightning là où aucun gabarit ne la cherche — **régression du correctif du piège n°14**
 
 `scripts/models.txt` L4 :
@@ -112,6 +116,8 @@ que les deux copies existent (**vérifié** : `loras/Qwen-Image-Edit-…` et
 (le script crée déjà `$target_dir`). Voir aussi M11 : `validate.py`/`onboard.py` n'auraient pas
 détecté l'écart.
 
+**État (2026-09-24)** : corrigé — commit `91bbd90`
+
 ---
 
 ## IMPORTANT
@@ -131,6 +137,8 @@ n'empêche qu'un `git remote set-url https://<token>@…` fuie demain.
 location ~ /\. { deny all; }
 location ~ ^/(tools|docker|scripts)/ { deny all; }
 ```
+
+**État (2026-09-24)** : corrigé — commit `b2700a0`
 
 ### I2 — ComfyUI et Ollama exposés sur toutes les interfaces, ComfyUI en `SECURITY_LEVEL: weak` + CORS `*` — **dérive** du commentaire de `nginx.conf`
 
@@ -157,6 +165,8 @@ exécution de code sur le GB10) et supprimer des modèles Ollama (`DELETE /api/d
 Hors `install.sh`, les stacks déjà déployées (`~/comfyui-spark/compose.yaml`) sont à corriger à la
 main (`cp` seulement si absent, `install.sh` L193).
 
+**État (2026-09-24)** : corrigé — commit `b2700a0`
+
 ### I3 — `docker/updater/server.py` : téléversement LoRA sans protection CSRF, écrasement silencieux, `.part` orphelin
 
 `_handle_lora_upload` (L90-135) :
@@ -174,6 +184,8 @@ main (`cp` seulement si absent, `install.sh` L193).
 navigateurs actuels l'envoient) ; `if os.path.exists(final_path): 409` ; `os.remove(part_path)` dans
 l'`except` ; `tempfile.mkstemp(dir=dest_dir, suffix=".part")` au lieu d'un nom fixe.
 
+**État (2026-09-24)** : corrigé — commit `b2700a0`
+
 ### I4 — `nginx.conf` `/update/` : un LoRA de plusieurs Go est d'abord bufferisé en entier dans le conteneur nginx
 
 `location /update/` (L33-38) relève `client_max_body_size` à 10g mais garde
@@ -184,6 +196,8 @@ et une barre de progression XHR qui atteint 100 % puis reste muette pendant tout
 
 **Correction** : `proxy_request_buffering off;` (+ `proxy_read_timeout 600s;`) dans
 `location /update/`. Le serveur Python lit déjà le corps en flux par blocs de 1 Mo.
+
+**État (2026-09-24)** : corrigé — commit `90a0122`
 
 ### I5 — `nginx.conf` `/ollama/` : timeout de lecture par défaut (60 s) sur des appels `stream:false`
 
@@ -197,6 +211,8 @@ avec la cause.
 
 **Correction** : `proxy_read_timeout 300s;` dans `location /ollama/`, et `if (!res.ok) throw new
 Error(\`ollama ${res.status}\`)` après le second `fetch` de `gemmaJSON` (les deux copies).
+
+**État (2026-09-24)** : corrigé — commit `90a0122` (volet nginx : `proxy_read_timeout 300s`) et commit `dc7b5d8` (volet `gemmaJSON` : « ollama <code> »)
 
 ### I6 — `cancelProject` interrompt n'importe quel job en cours, pas seulement ceux du projet
 
@@ -214,6 +230,8 @@ await Promise.all(queued.map(id => fetch(`${COMFY}/interrupt`, {
 ```
 
 (le `POST /queue {delete}` existant reste pour les jobs en attente).
+
+**État (2026-09-24)** : corrigé — commit `f6a13c3`
 
 ### I7 — Étape 2 du storyboard : un échec laisse des keyframes « Génération… » pour toujours
 
@@ -236,6 +254,8 @@ ids.map((id, i) => trackKeyframeCompletion(i, id).catch(err => {
 
 et un `try/catch` autour de chaque `submitKeyframeJob` qui pose `status = "error"` sur ce plan.
 
+**État (2026-09-24)** : corrigé — commit `f6a13c3`
+
 ### I8 — « Générer les keyframes » réapparaît actif après une reprise de projet et efface keyframes verrouillées et montage sans confirmation
 
 `updateGateState` (L6556) remet `#directorKeyframesBtn` visible dès que les planches sont validées,
@@ -252,6 +272,8 @@ chaque fin de keyframe : bouton mort à l'écran.
 **Correction** : `$("directorKeyframesBtn").style.display = unlocked && !director?.keyframes ? "" : "none";`
 — une régénération passe déjà par les cartes, plan par plan.
 
+**État (2026-09-24)** : corrigé — commit `f6a13c3`
+
 ### I9 — Montage : un seul cut en échec fait perdre tous les autres
 
 `generateCuts` (L6926-6937) soumet les N cuts puis attend `waitForJobs(ids)` en bloc. Au premier
@@ -262,6 +284,8 @@ pendant que les cuts restants continuent de tourner sans être collectés.
 
 **Correction** : même motif que les keyframes — une attente par cut, `director.cuts[k] =
 { …, status: "error" }` en cas d'échec pour que « 🔄 Re-rendre ce plan » fonctionne sur lui seul.
+
+**État (2026-09-24)** : corrigé — commit `f6a13c3`
 
 ### I10 — Prompt Relay : l'identité du personnage dépend de l'onglet de sujet affiché
 
@@ -279,6 +303,8 @@ Rendu plausible et faux, sans signal.
 **Correction** : dans `relayContext`/`renderRelaySegment`, lire explicitement
 `const c = director.chars[0]` (`charDescFromFields(c.fields)`, `c.variants[c.active]?.inputName`).
 
+**État (2026-09-24)** : corrigé — commit `f6a13c3`
+
 ### I11 — `waitForJobs` attend à l'infini un job qui n'existe plus
 
 `index.html` L5226-5242 et `js/engine.js` L672-686 : tant que `/history/<id>` ne renvoie rien, la
@@ -290,6 +316,8 @@ l'interface ComfyUI ou depuis un autre onglet → attente éternelle toutes les 
 **Correction** : quand l'entrée est absente, vérifier `/queue` (une requête, déjà utilisée par
 `pollMonitor`) ; absent de `queue_running` et `queue_pending` deux fois de suite → lever
 « job perdu (ComfyUI redémarré ?) ».
+
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
 
 ### I12 — `localStorage` : `assetPrompts` n'est jamais purgé, et les écritures ne sont pas protégées
 
@@ -305,6 +333,8 @@ quota (~5 Mo) atteint :
 
 **Correction** : dans `saveAssetPrompts`, ne garder que les clés présentes dans `galleryAssets`
 (+ `cloud:*` de la session), et `try/catch` autour des `setItem` de `persistAsset`/`markDeleted`.
+
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
 
 ### I13 — Canvas : aucune des corrections de prompt qualifiées depuis le 2026-09-21 n'y a été portée — **dérive** (à trancher)
 
@@ -325,6 +355,8 @@ s'appliquent au Canvas. Si oui, les fonctions existent déjà dans `index.html` 
 `stripPromptPadding`) et se portent sans les modifier. Sinon, l'écrire dans `ARCHITECTURE.md` (« Canvas
 = formulations antérieures au 2026-09-21, non qualifiées ») pour que personne ne s'y fie.
 
+**État (2026-09-24)** : non corrigé — décision de l'utilisateur en attente (porter ou non les corrections de prompt au Canvas)
+
 ### I14 — Duplication Studio / Canvas : une vingtaine de fonctions « portées verbatim » à maintenir deux fois
 
 `index.html` recopie depuis `js/engine.js` : `buildGraph`, `getTemplate`, `extractFiles`,
@@ -344,6 +376,8 @@ et remplacer les copies par `Engine.xxx`. Gain : ~300 lignes en moins et un seul
 Risque : modéré (le Studio n'a pas de tests de non-régression automatisés) — à faire après C1/C2,
 avec la capture headless habituelle des deux apps.
 
+**État (2026-09-24)** : corrigé — commit `aff8a12`
+
 ---
 
 ## MINEUR
@@ -356,6 +390,8 @@ L5950-5966 (fiches gemma + planches + `setSoulAnchors`) sont inatteignables. `se
 (L3044) n'a pas d'autre appelant : `soulAnchors` vaut toujours `null` et le repli de
 `currentAnchors` (L3055) est mort. À supprimer (~25 lignes).
 
+**État (2026-09-24)** : corrigé — commit `8037bde`
+
 ### M2 — `js/engine.js` : ~230 lignes sans appelant, dont un « mode Auto » interdit par AGENTS
 
 Sans aucune référence hors commentaires dans `canvas.html` et `js/nodes-*.js` (**vérifié** par
@@ -366,11 +402,15 @@ abandonné depuis le 2026-09-21), `buildFLF2VGraph`, `addFLF2VChain`, `addLtx25S
 `addLtx25Enhance`, `addVideoOutput`, `resolveImageJob`, `HOLD_MOTION`, `FLF2V_SIGMAS`. À retirer, ainsi
 que leurs clés dans `global.Engine`.
 
+**État (2026-09-24)** : corrigé — commit `8037bde`, à l'exception de `resolveImageJob`, toujours défini et exporté par `js/engine.js` (sans appelant hors commentaire)
+
 ### M3 — `index.html` : `callOllama` double `gemmaJSON`
 
 `callOllama` (L3686-3702, seul appelant `enrichBrief`) refait ce que fait `gemmaJSON` (L5011-5028), avec
 un paramètre au nom inversé (`withThink = true` pose `think: false`). `enrichBrief` (L3890-3891) relance
 en outre l'appel sur **toute** erreur, réseau compris. Remplacer par `gemmaJSON(system, user)`.
+
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
 
 ### M4 — `index.html` : `POST /prompt` et upload écrits trois fois
 
@@ -380,12 +420,16 @@ en outre l'appel sur **toute** erreur, réseau compris. Remplacer par `gemmaJSON
   sont identiques au message d'erreur près → `uploadBlob` seul.
 - `reupload` (L5255) reconstruit à la main l'URL de `viewURL` (L4859).
 
+**État (2026-09-24)** : corrigé — commit `dc7b5d8` (les messages de journal de `submitGraph` remplacent ceux des anciennes copies)
+
 ### M5 — Moniteur : Ollama affiché « Ready » quand il est arrêté ; polling en onglet caché
 
 `pollMonitor` L4123-4128 : `await fetch(\`${OLLAMA}/api/version\`)` ne teste pas `res.ok`. Ollama
 arrêté → nginx renvoie 502 → la promesse se résout → « Ready ». Corriger par
 `if (!(await fetch(…)).ok) throw 0;`. Le même poll (3 requêtes toutes les 4 s, L8084) tourne aussi
 onglet masqué : `if (document.hidden) return;` en tête.
+
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
 
 ### M6 — Une LoRA téléversée n'apparaît dans les sélecteurs qu'après rechargement
 
@@ -396,6 +440,8 @@ direct à chaque appel ») laissent croire l'inverse. Extraire le `.then` en `re
 (`KREA2_LORAS.length = 1; H3_STYLE_LORAS.length = 1;` puis `push`, ce qui préserve les références
 partagées) et l'appeler après un téléversement réussi.
 
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
+
 ### M7 — WebSocket : `execution_interrupted` ignoré, pas de resynchronisation à la reconnexion
 
 `handleWS` (L3087-3115) ne traite pas `execution_interrupted` (interruption depuis l'interface ComfyUI
@@ -405,6 +451,8 @@ affiché. `jobs` (L3072) n'est jamais purgé et retient des nœuds DOM déjà re
 Traiter `execution_interrupted` comme `execution_error` ; dans `ws.onopen`, relire `/history/<id>`
 pour chaque id de `activeJobIds` ; `delete jobs[id]` en fin de job.
 
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
+
 ### M8 — Uploads en `overwrite: true` avec le nom du fichier utilisateur
 
 `uploadInputImage` L3484, `uploadRefFile` L3497, `uploadBlob` L8018, `js/engine.js` L801. Deux images
@@ -413,12 +461,16 @@ première dans `input/` pendant que le premier job attend dans la file → il es
 image. Le code lit déjà le nom renvoyé (`d.name`) : passer `overwrite` à `"false"` suffit, ComfyUI
 renomme. (Pour `reupload`, les noms de sortie sont uniques : sans effet.)
 
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
+
 ### M9 — `capH3Prompt` coupe la fin, c'est-à-dire ce qu'il prétend protéger
 
 L5840-5844 : `text.slice(0, H3_PROMPT_CHARS)` retire `non_diegetic_music`, `overall_soundscape`, et
 peut couper un jeton `<Subject N` au milieu — le commentaire L5837-5839 dit vouloir éviter
 précisément la perte des champs de fin. Tronquer plutôt `detailed_description` (seul champ libre) de
 l'excédent avant d'assembler. Probabilité faible (7 000 caractères), d'où « mineur ».
+
+**État (2026-09-24)** : corrigé — commit `8037bde`
 
 ### M10 — `{{FRAMES}}` calculé à 25 fps par défaut alors que LTX 2.5 rend en 24 — dérive latente du « piège de fps silencieux »
 
@@ -428,6 +480,8 @@ l'excédent avant d'assembler. Probabilité faible (7 000 caractères), d'où «
 gabarit LTX 2.5 onboardé sans `--fps 24` repartirait sur le décompte à 25 fps que LESSONS (« Piège de
 fps silencieux ») a éliminé partout ailleurs. Remplacer 25 par 24 (`LTX25_FPS`) aux trois endroits.
 
+**État (2026-09-24)** : corrigé — commit `90a0122` (outils : `validate.py`/`onboard.py`, fps 24 par défaut) et commit `8037bde` (JS : `{{FRAMES}}` à 24 fps dans `buildGraph`)
+
 ### M11 — `validate.py` / `onboard.py` ne comparent que le nom de base des modèles
 
 `tools/validate.py` L121-126 et L152-157, `tools/onboard.py` L246-261 : l'index contient les noms de
@@ -436,6 +490,8 @@ référence `Qwen/X.safetensors` passe si `X.safetensors` existe **n'importe où
 c'est exactement le cas de C3 et de la dérive du piège n°14, que l'outil ne peut donc pas voir.
 Indexer les chemins relatifs à chaque dossier de catégorie
 (`os.path.relpath(path, os.path.join(MODELS_DIR, <catégorie>))`) et comparer `ival` tel quel.
+
+**État (2026-09-24)** : corrigé — commit `90a0122`
 
 ### M12 — `install.sh` : téléchargement directement sous le nom final
 
@@ -447,6 +503,8 @@ Télécharger vers `"$target_path.part"` (reprise sur le `.part` uniquement) pui
 `HF_TOKEN` passe en argument de `curl` (L459-461), donc visible dans `ps` : préférer
 `curl -K <(printf 'header = "Authorization: Bearer %s"\n' "$HF_TOKEN")`.
 
+**État (2026-09-24)** : corrigé — commit `90a0122`
+
 ### M13 — Canvas : travail DOM à chaque frame, même au repos
 
 `syncOverlays` (`canvas.html` L1199-1220) réécrit `width`, `height` et `transform` de chaque overlay
@@ -455,12 +513,16 @@ et, via `updateLiveProps` (L1615-1619), le `textContent` du statut à chaque `re
 boucle d'exécution de litegraph alors qu'aucun nœud n'a d'`onExecute`. Mémoriser la dernière valeur
 écrite et n'écrire que si elle change ; supprimer `graph.start()`.
 
+**État (2026-09-24)** : corrigé — commit `0dc544f`
+
 ### M14 — Canvas : un état sauvegardé illisible bloque tout le démarrage
 
 `canvas.html` L1231-1232 : `graph.configure(JSON.parse(saved))` sans `try`. Un JSON tronqué (quota,
 onglet tué pendant l'écriture) lève dans l'IIFE principale : plus d'UI, et la seule réparation est
 DevTools. `save()` (L1223) n'est pas protégé non plus. `try { … } catch { localStorage.removeItem(STORAGE_KEY); }`
 avec un message.
+
+**État (2026-09-24)** : corrigé — commit `0dc544f`
 
 ### M15 — Canvas dépend de jsdelivr pour litegraph, sans empreinte SRI
 
@@ -470,6 +532,8 @@ police). Sans attribut `integrity`, un CDN compromis exécute du code sur la mê
 (accès à `localStorage`, à `/update/*`). Vendoriser le fichier dans `js/vendor/` (≈ 300 Ko), ou au
 minimum ajouter `integrity` + `crossorigin`. Non documenté dans `AGENTS.md` (« pas de dépendances côté
 frontend »).
+
+**État (2026-09-24)** : corrigé — commit `0dc544f` + `dd86b67`
 
 ### M16 — Updater : « mise à jour disponible » vrai dès que le HEAD local diffère de `origin/main`
 
@@ -481,11 +545,15 @@ le réseau à chaque chargement de page, sans cache. Tester
 `git merge-base --is-ancestor <remote> HEAD` (après un `fetch`), refuser `/apply` hors de `main`, et
 mettre le résultat de `/status` en cache une minute.
 
+**État (2026-09-24)** : corrigé — commit `90a0122` (sans `git fetch` : l'updater tourne en root)
+
 ### M17 — `nginx.conf` `/comfy/` : 50 Mo maximum par upload
 
 L23 : `client_max_body_size 50m`. Les vidéos de référence r2v (`#refVideosInput`) et les imports vidéo
 du Canvas dépassent vite 50 Mo ; nginx répond 413 et l'UI affiche « Upload … refusé par ComfyUI »,
 qui accuse le mauvais composant. Relever à 500m (ComfyUI n'a pas de limite plus basse par défaut).
+
+**État (2026-09-24)** : corrigé — commit `90a0122`
 
 ### M18 — Relay : une liaison 🔗 « continue » devient silencieusement une coupure
 
@@ -495,6 +563,8 @@ segment passe par une keyframe Qwen-Edit — ce que LESSONS n°22 décrit comme 
 visible — alors que l'utilisateur a demandé la continuité frame-exacte. Ajouter un `addEvent("WARN", …)`
 ou refuser le rendu en demandant de re-générer le segment précédent.
 
+**État (2026-09-24)** : corrigé — commit `f6a13c3` (refus du segment en mode `continue` sans frame de transition, pas de repli silencieux en coupure)
+
 ### M19 — Blobs et objectURLs jamais libérés
 
 Variantes de planches (`resolveVariantJob` L6189), keyframes (`trackKeyframeCompletion` L6748),
@@ -502,6 +572,8 @@ restauration (`resolveFileRef` L7802), actifs cloud (L3836) : chaque rendu garde
 1920×1088 + un objectURL jamais révoqués, y compris après `resetDirectorZone`. Sur une longue session
 de régénérations la mémoire de l'onglet croît sans borne. `URL.revokeObjectURL` au remplacement d'une
 variante non active et dans `resetDirectorZone` ; ne garder le blob que pour la variante active.
+
+**État (2026-09-24)** : partiellement corrigé — commit `f6a13c3` pour les variantes de planches, les keyframes et la restauration (a-c) ; non corrigé pour (d)/(e) : l'aperçu et la séquence relisent ces URL, les révoquer les casserait
 
 ### M20 — Attentes orphelines : garde de session manquante dans `trackKeyframeCompletion` et `generateCuts`
 
@@ -512,6 +584,8 @@ plus probable : `WARN Cannot set properties of null` quand l'ancien job finit ap
 écriture du résultat dans la session suivante. Capturer `const d = director` en entrée et sortir si
 `director !== d`, comme `resolveVariantJob`.
 
+**État (2026-09-24)** : corrigé — commit `f6a13c3`
+
 ### M21 — Clé Gemini passée en paramètre d'URL
 
 `generateViaGemini` L3788 : `…:generateContent?key=${encodeURIComponent(key)}`. La règle projet
@@ -520,6 +594,8 @@ plus probable : `WARN Cannot set properties of null` quand l'ancien job finit ap
 `localStorage` est en place (L3720-3722) ; le Canvas n'a pas de clé. Mais une clé en query string
 apparaît dans les onglets Réseau, les exports HAR et les journaux de tout proxy. L'API accepte l'en-tête
 `x-goog-api-key` : l'utiliser.
+
+**État (2026-09-24)** : corrigé — commit `dc7b5d8`
 
 ---
 
@@ -530,9 +606,13 @@ apparaît dans les onglets Réseau, les exports HAR et les journaux de tout prox
 `index.html` L2543 (`{ en, es, de }`) et L2594 (`{ en, es }`) : la seconde écrase la première dans le
 littéral objet. **Vérifié** (seule clé dupliquée du dictionnaire). Supprimer L2594.
 
+**État (2026-09-24)** : corrigé — commit `8037bde`
+
 ### K2 — `renderSheetLoraSelect` ne traduit pas « Aucun »
 
 L2949 : `${l}` au lieu de `${tr(l)}` (`renderLoraSelect` L2943 le fait).
+
+**État (2026-09-24)** : corrigé — commit `8037bde`
 
 ### K3 — Documentation en retard sur le code
 
@@ -545,6 +625,8 @@ L2949 : `${l}` au lieu de `${tr(l)}` (`renderLoraSelect` L2943 le fait).
 - `js/engine.js` L717-740 : renvois vers `ai-content-studio-cockpit/…/LOT-D-MEGAPIXELS.md`, absent de
   ce dépôt.
 
+**État (2026-09-24)** : corrigé — commit `8037bde` (`LESSONS.md` L94 : commit `91bbd90`)
+
 ### K4 — Trois palettes `STATUS_COLOR` et des helpers de dessin morts
 
 `js/nodes-simple.js` L32 et `js/nodes-advanced.js` L41 (`error: "#a33"`, `idle: "#666"`) contre
@@ -554,10 +636,14 @@ L2949 : `${l}` au lieu de `${tr(l)}` (`renderLoraSelect` L2943 le fait).
 (L1139-1149) et ne servent plus ; `setStatus`/`buildOverlay` sont copiés à l'identique entre les deux
 fichiers alors que `window.__simpleNodes` pourrait les exporter comme il exporte déjà `upstreamFile`.
 
+**État (2026-09-24)** : corrigé — commit `0dc544f`
+
 ### K5 — `scripts/models.txt` : `qwen_image_vae.safetensors` listé deux fois
 
 L3 et L7 (deux URLs, même fichier, même taille) : la seconde ligne est toujours un `SKIP`. En garder
 une.
+
+**État (2026-09-24)** : corrigé — commit `90a0122`
 
 ---
 
