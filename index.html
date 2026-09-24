@@ -388,22 +388,15 @@
 
     .studio-main { overflow: hidden; }
 
-    /* Barre haute compacte : rail de profils + onglets en pilules, sans hero. */
+    /* Barre haute : « Qu'est-ce que tu veux produire ? » + 4 cartes d'objectif, sur le
+       modèle .usecase du Canvas (titre + description toujours visible + ligne métier). */
     .top-bar {
       padding: 18px 28px;
       border-bottom: 1px solid var(--border-light);
     }
 
-    /* ── Rail de profils métiers (icônes, libellé au survol/sélection) ── */
-    .profile-bar {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px 14px;
-    }
-
-    .profile-lead {
-      margin: 0;
+    .usecase-lead {
+      margin: 0 0 10px;
       font-size: 11px;
       letter-spacing: 0.06em;
       text-transform: uppercase;
@@ -411,86 +404,40 @@
       color: var(--text-2);
     }
 
-    .profile-rail { display: flex; flex-wrap: wrap; gap: 8px; }
+    .usecases { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 
-    .profile-card {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      cursor: pointer;
-      min-width: 42px;
-      min-height: 42px;
-      justify-content: center;
-      padding: 8px 10px;
-      border-radius: 12px;
-      border: 1px solid var(--border-light);
-      background: var(--card-2);
-      color: var(--text-2);
-      font: inherit;
-      transition: color 0.2s ease, background 0.2s ease;
-    }
-
-    .profile-card:hover { background: var(--selected); color: var(--highlight); }
-
-    .profile-card.active {
-      background: var(--selected);
-      color: var(--highlight);
-      border-color: transparent;
-      box-shadow: none;
-    }
-
-    .profile-icon { font-size: 20px; line-height: 1; }
-
-    .profile-name {
-      max-width: 0;
-      overflow: hidden;
-      white-space: nowrap;
-      opacity: 0;
-      font-size: 12px;
-      font-weight: 700;
-      transition: max-width 0.22s ease, opacity 0.18s ease, margin-left 0.22s ease;
-    }
-
-    .profile-card:hover .profile-name,
-    .profile-card.active .profile-name { max-width: 260px; opacity: 1; margin-left: 8px; }
-
-    /* Onglets de scénario : pilules horizontales dans une piste unique. */
-    .scenario-tabs {
-      display: inline-flex;
-      grid-template-columns: none;
-      background: var(--card-2);
-      padding: 4px;
-      border-radius: 999px;
-      gap: 4px;
-      margin-top: 14px;
-      width: fit-content;
-    }
-
-    .scenario-tab {
+    .usecase {
+      display: block;
+      width: 100%;
+      min-height: 44px;
       text-align: left;
-      border: none;
-      color: var(--text);
-      background: transparent;
-      border-radius: 999px;
-      padding: 10px 20px;
       cursor: pointer;
-      box-shadow: none;
-      transition: background 0.2s ease, color 0.2s ease;
+      padding: 12px 14px;
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      background: var(--card-2);
+      color: var(--text);
+      transition: border-color 0.18s ease, background 0.18s ease;
     }
-
-    .scenario-tab:hover { transform: none; box-shadow: none; background: var(--selected); }
-
-    .scenario-tab.active {
-      background: var(--grad);
-      color: var(--on-grad);
-      box-shadow: none;
+    .usecase:hover { border-color: var(--highlight); }
+    .usecase[aria-pressed="true"] {
+      border-color: var(--highlight);
+      box-shadow: inset 0 0 0 1px var(--highlight);
+      background: var(--selected);
     }
-
-    .scenario-tab.active strong { color: var(--on-grad); }
-
-    .scenario-tab strong { display: block; font-size: 13px; font-weight: 600; margin: 0; }
-
-    .scenario-tab span { display: none; }
+    /* --text-2 sur --selected tombe sous 4,5:1 en clair : texte plein sur la carte active. */
+    .usecase[aria-pressed="true"] > span, .usecase[aria-pressed="true"] > small { color: var(--text); }
+    .usecase:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+    .usecase > strong { display: block; font-size: 13.5px; font-weight: 700; margin-bottom: 4px; }
+    .usecase > span { display: block; font-size: 12px; line-height: 1.4; color: var(--text-2); }
+    .usecase > small {
+      display: block;
+      margin-top: 8px;
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
 
     /* La barre Generate occupe toute la largeur : contrôles sur une ligne, galerie en dessous. */
     .studio-body {
@@ -572,7 +519,9 @@
     .generate-bar .gb-field { flex: 0 1 165px; min-width: 130px; }
     .generate-bar .tpl-field { flex: 1 1 100%; }
     .generate-bar .gb-wide { flex: 0 1 240px; }
-    .generate-bar .gb-go { flex: 0 0 auto; padding: 13px 22px; }
+    .generate-bar .check-row { flex: 1 1 100%; }
+    /* Action principale : dernière ligne de la barre, pleine largeur. */
+    .generate-bar .gb-go { flex: 1 1 100%; padding: 14px 22px; font-size: 14.5px; }
 
     .generate-row {
       display: flex;
@@ -1309,11 +1258,9 @@
       .pipeline-flow, .two-cols, .actions {
         grid-template-columns: 1fr;
       }
-      .scenario-tabs { flex-wrap: wrap; border-radius: var(--radius); }
       /* Barre Generate : repli en colonne (chaque contrôle sur sa ligne) */
       .generate-bar .gb-prompt,
-      .generate-bar .gb-field,
-      .generate-bar .gb-go { flex-basis: 100%; }
+      .generate-bar .gb-field { flex-basis: 100%; }
       .gallery-header { flex-wrap: wrap; }
       .top-bar { padding: 16px; }
       .studio-body { padding: 16px; }
@@ -1765,40 +1712,27 @@
     <main class="layout">
       <section class="studio-main">
         <div class="top-bar">
-          <div class="profile-bar">
-            <p class="profile-lead">Je démarre en tant que…</p>
-            <div class="profile-rail" role="group" aria-label="Profils métiers">
-              <button type="button" class="profile-card" data-profile="director">
-                <span class="profile-icon" aria-hidden="true">🎬</span>
-                <span class="profile-name">Réalisateur / Storyboard artist</span>
-              </button>
-              <button type="button" class="profile-card" data-profile="art">
-                <span class="profile-icon" aria-hidden="true">🎨</span>
-                <span class="profile-name">Directeur artistique / Motion designer</span>
-              </button>
-              <button type="button" class="profile-card" data-profile="social">
-                <span class="profile-icon" aria-hidden="true">📣</span>
-                <span class="profile-name">Social media / Marketing</span>
-              </button>
-              <button type="button" class="profile-card" data-profile="post">
-                <span class="profile-icon" aria-hidden="true">🎞️</span>
-                <span class="profile-name">Monteur / Post-production</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="scenario-tabs" role="tablist" aria-label="Scénarios">
-            <button class="scenario-tab active" data-scenario="campaign">
-              <strong>Campaign Generator</strong>
-              <span>Brief marketing vers posters, thumbnails et teaser vidéo.</span>
+          <p class="usecase-lead" id="usecaseLead">Qu'est-ce que tu veux produire ?</p>
+          <div class="usecases" role="group" aria-labelledby="usecaseLead">
+            <button type="button" class="usecase" data-scenario="campaign" data-pipeline="text2image" aria-pressed="true">
+              <strong>Affiche / visuel</strong>
+              <span>Une image fixe soignée à partir de ta description.</span>
+              <small>Directeur artistique / Motion designer</small>
             </button>
-            <button class="scenario-tab" data-scenario="storyboard">
-              <strong>Storyboard + Animatic</strong>
-              <span>Script ou scène vers keyframes, plans et animatic court.</span>
+            <button type="button" class="usecase" data-scenario="campaign" data-pipeline="campaign_full" aria-pressed="false">
+              <strong>Pub courte / campagne</strong>
+              <span>Affiches, miniatures et un teaser vidéo à partir d'un seul brief.</span>
+              <small>Social media / Marketing</small>
             </button>
-            <button class="scenario-tab" data-scenario="localization">
-              <strong>Localized Assets</strong>
-              <span>Asset maître vers variantes régionales et formats sociaux.</span>
+            <button type="button" class="usecase" data-scenario="storyboard" data-pipeline="storyboard_v2" aria-pressed="false">
+              <strong>Trailer narratif (plusieurs plans)</strong>
+              <span>Tu valides d'abord les planches personnage et décor, puis chaque plan.</span>
+              <small>Réalisateur / Storyboard artist</small>
+            </button>
+            <button type="button" class="usecase" data-scenario="localization" data-pipeline="image2image" aria-pressed="false">
+              <strong>Déclinaisons locales</strong>
+              <span>Adapte une image existante à plusieurs marchés.</span>
+              <small>Monteur / Post-production</small>
             </button>
           </div>
         </div>
@@ -1875,7 +1809,7 @@
                 <input type="number" id="videoDuration" min="1" max="10" value="5" />
               </label>
               <label class="gb-field" id="shotCountWrap" style="display:none">
-                Nombre de cases
+                Nombre de plans
                 <input type="number" id="shotCount" min="4" max="16" value="6" />
               </label>
               <label class="gb-field" id="holdWrap" style="display:none">
@@ -1899,7 +1833,11 @@
                 <input type="file" id="lastImageInput" accept="image/*"
                   title="Fournie, la vidéo se termine dessus ; laissée vide, le clip part de la première image comme avant." />
               </label>
-              <button class="primary-btn gb-go" id="generateBtn">Generate</button>
+              <label id="audioWrap" class="check-row" style="display:none">
+                <input type="checkbox" id="audioToggle" checked />
+                <span>Générer l'audio — ambiance sonore issue du prompt (natif LTX 2.5 / Minimax H3)</span>
+              </label>
+              <button class="primary-btn gb-go" id="generateBtn">Générer</button>
             </div>
 
             <div class="generate-row">
@@ -1913,11 +1851,6 @@
                 <div class="market-chips" id="marketChips"></div>
                 <p class="hint">Un job par marché sélectionné, avec adaptation culturelle du prompt. Aucun sélectionné = prompt tel quel.</p>
               </div>
-
-              <label id="audioWrap" class="check-row" style="display:none">
-                <input type="checkbox" id="audioToggle" checked />
-                <span>Générer l'audio — ambiance sonore issue du prompt (natif LTX 2.5 / Minimax H3)</span>
-              </label>
 
               <label id="turboWrap" class="check-row" style="display:none">
                 <input type="checkbox" id="turboToggle" checked />
@@ -2322,14 +2255,19 @@
         { en: "100% local AI creative studio: text2image, image2image, image2video and text2video generated by ComfyUI on the GB10, prompt enrichment by a local LLM via Ollama.",
           es: "Estudio creativo de IA 100 % local: text2image, image2image, image2video y text2video generados por ComfyUI en el GB10, enriquecimiento de prompts con un LLM local vía Ollama.",
           de: "Zu 100 % lokales KI-Kreativstudio: text2image, image2image, image2video und text2video mit ComfyUI auf dem GB10, Prompt-Anreicherung durch ein lokales LLM via Ollama." },
-      "Brief marketing vers posters, thumbnails et teaser vidéo.":
-        { en: "Marketing brief to posters, thumbnails and video teaser.", es: "Brief de marketing a pósters, miniaturas y teaser de vídeo.", de: "Marketing-Briefing zu Postern, Thumbnails und Video-Teaser." },
-      "Script ou scène vers keyframes, plans et animatic court.":
-        { en: "Script or scene to keyframes, shots and short animatic.", es: "Guion o escena a keyframes, planos y animatic corto.", de: "Drehbuch oder Szene zu Keyframes, Einstellungen und kurzem Animatic." },
-      "Asset maître vers variantes régionales et formats sociaux.":
-        { en: "Master asset to regional variants and social formats.", es: "Asset maestro a variantes regionales y formatos sociales.", de: "Master-Asset zu regionalen Varianten und Social-Formaten." },
-      "Je démarre en tant que…":
-        { en: "I'm starting as…", es: "Empiezo como…", de: "Ich starte als…" },
+      "Qu'est-ce que tu veux produire ?": { en: "What do you want to produce?", es: "¿Qué quieres producir?", de: "Was möchtest du produzieren?" },
+      "Affiche / visuel": { en: "Poster / visual", es: "Póster / visual", de: "Poster / Visual" },
+      "Une image fixe soignée à partir de ta description.":
+        { en: "A polished still image from your description.", es: "Una imagen fija cuidada a partir de tu descripción.", de: "Ein sorgfältiges Standbild aus deiner Beschreibung." },
+      "Pub courte / campagne": { en: "Short ad / campaign", es: "Anuncio corto / campaña", de: "Kurzer Spot / Kampagne" },
+      "Affiches, miniatures et un teaser vidéo à partir d'un seul brief.":
+        { en: "Posters, thumbnails and a video teaser from a single brief.", es: "Pósters, miniaturas y un teaser de vídeo a partir de un solo brief.", de: "Poster, Thumbnails und ein Video-Teaser aus einem einzigen Briefing." },
+      "Trailer narratif (plusieurs plans)": { en: "Story trailer (several shots)", es: "Tráiler narrativo (varios planos)", de: "Story-Trailer (mehrere Einstellungen)" },
+      "Tu valides d'abord les planches personnage et décor, puis chaque plan.":
+        { en: "You first approve the character and location sheets, then each shot.", es: "Primero validas las láminas de personaje y decorado, luego cada plano.", de: "Du gibst zuerst die Figuren- und Schauplatzbögen frei, dann jede Einstellung." },
+      "Déclinaisons locales": { en: "Local variants", es: "Versiones locales", de: "Lokale Varianten" },
+      "Adapte une image existante à plusieurs marchés.":
+        { en: "Adapt an existing image to several markets.", es: "Adapta una imagen existente a varios mercados.", de: "Passe ein vorhandenes Bild an mehrere Märkte an." },
       "Réalisateur / Storyboard artist":
         { en: "Director / Storyboard artist", es: "Director / Artista de storyboard", de: "Regisseur / Storyboard-Artist" },
       "Directeur artistique / Motion designer":
@@ -2355,11 +2293,19 @@
       "Style (LoRA)": { en: "Style (LoRA)", es: "Estilo (LoRA)", de: "Stil (LoRA)" },
       "Variantes": { en: "Variants", es: "Variantes", de: "Varianten" },
       "Durée vidéo (s)": { en: "Video length (s)", es: "Duración del vídeo (s)", de: "Videolänge (s)" },
-      "Nombre de cases": { en: "Number of panels", es: "Número de viñetas", de: "Anzahl der Panels" },
+      "Nombre de plans": { en: "Number of shots", es: "Número de planos", de: "Anzahl der Einstellungen" },
       "Tenue du plan final (s) — 0 pour aucun clip de tenue": {
         en: "Final shot hold (s) — 0 for no hold clip", es: "Mantener plano final (s) — 0 para ningún clip de sostenido",
         de: "Schlussbild halten (s) — 0 für keinen Halteclip" },
-      "Generate": { fr: "Générer", es: "Generar", de: "Generieren" },
+      "Générer": { en: "Generate", es: "Generar", de: "Generieren" },
+      "Générer les images": { en: "Generate images", es: "Generar las imágenes", de: "Bilder generieren" },
+      "Générer les variantes": { en: "Generate variants", es: "Generar las variantes", de: "Varianten generieren" },
+      "Générer la vidéo": { en: "Generate video", es: "Generar el vídeo", de: "Video generieren" },
+      "Générer l'animatic": { en: "Generate animatic", es: "Generar el animatic", de: "Animatic generieren" },
+      "Générer les planches (étape 1/3)": { en: "Generate sheets (step 1/3)", es: "Generar las láminas (paso 1/3)", de: "Bögen generieren (Schritt 1/3)" },
+      "Générer les planches (étape 1/2)": { en: "Generate sheets (step 1/2)", es: "Generar las láminas (paso 1/2)", de: "Bögen generieren (Schritt 1/2)" },
+      "Lancer la campagne (affiches + miniatures + teaser)":
+        { en: "Launch campaign (posters + thumbnails + teaser)", es: "Lanzar la campaña (pósters + miniaturas + teaser)", de: "Kampagne starten (Poster + Thumbnails + Teaser)" },
       "Enrichir le brief (LLM)": { en: "Enrich brief (LLM)", es: "Enriquecer el brief (LLM)", de: "Briefing anreichern (LLM)" },
       "Use Fallback Asset": { fr: "Utiliser l'asset de secours", es: "Usar asset de respaldo", de: "Fallback-Asset verwenden" },
       "Animatic multi-images (FLF2V)": { en: "Multi-image animatic (FLF2V)", es: "Animatic multi-imagen (FLF2V)", de: "Multi-Bild-Animatic (FLF2V)" },
@@ -2683,10 +2629,10 @@
       tabVideos: { fr: n => `Vidéos (${n})`, en: n => `Videos (${n})`, es: n => `Vídeos (${n})`, de: n => `Videos (${n})` },
       openConsole: { fr: l => `Ouvrir ${l}`, en: l => `Open ${l}`, es: l => `Abrir ${l}`, de: l => `${l} öffnen` },
       seqGen: {
-        fr: (s, t) => `${s} segment(s), ~${t} s — lancez avec Generate`,
-        en: (s, t) => `${s} segment(s), ~${t} s — press Generate to run`,
-        es: (s, t) => `${s} segmento(s), ~${t} s — pulse Generate para lanzar`,
-        de: (s, t) => `${s} Segment(e), ~${t} s — mit Generate starten` },
+        fr: (s, t) => `${s} segment(s), ~${t} s — lance avec « Générer l'animatic »`,
+        en: (s, t) => `${s} segment(s), ~${t} s — press “Generate animatic” to run`,
+        es: (s, t) => `${s} segmento(s), ~${t} s — pulsa «Generar el animatic» para lanzar`,
+        de: (s, t) => `${s} Segment(e), ~${t} s — starte mit „Animatic generieren“` },
       activeSheet: {
         fr: (i, n) => `planche ${i}/${n} active — c'est elle qui servira d'ancrage`,
         en: (i, n) => `sheet ${i}/${n} active — this is the one used as the anchor`,
@@ -2763,6 +2709,7 @@
       renderSheetLoraSelect();
       refreshSoulId();
       refreshSubjectUI();
+      refreshGenerateLabel();
       if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); renderRelay(); }
     });
 
@@ -2825,7 +2772,10 @@
       const controls = def?.controls || [];
       for (const [name, wrapId] of Object.entries(CONTROL_WRAPS))
         $(wrapId).style.display = controls.includes(name) ? "" : "none";
-      if (controls.includes("seq")) ensureMotionBrief();
+      // Le brief n'est jamais écrit par l'app : l'exemple n'est qu'un placeholder (S1).
+      brief.placeholder = controls.includes("seq") ? MOTION_BRIEF : SCENARIOS[activeScenario].prompt;
+      document.querySelectorAll(".usecase").forEach(c => c.setAttribute("aria-pressed", c.dataset.pipeline === p));
+      refreshGenerateLabel();
       if (p !== updateModelOptions.lastPipeline) {
         if (def?.defaults?.duration) $("videoDuration").value = def.defaults.duration;
         resetDirectorZone(); // changement de pipeline = fin de la session Réalisateur en cours
@@ -2837,15 +2787,22 @@
       refreshSoulId(); // pastille d'identité : visible seulement sur storyboard_v2 / reference2video
     }
 
-    // Animatic : le brief est un prompt de MOUVEMENT. Si l'utilisateur a laissé un
-    // prompt de scénario par défaut (contenu d'image), il polluerait les segments.
+    // Animatic : le brief est un prompt de MOUVEMENT, d'où un exemple de placeholder dédié.
+    // Exemples en anglais, jamais clés I18N (translateTree réécrirait le placeholder).
     const MOTION_BRIEF = "Smooth cinematic camera transition between the key frames, consistent subject, style and lighting, natural motion.";
-    function ensureMotionBrief() {
-      const cur = brief.value.trim();
-      if (Object.values(SCENARIOS).some(s => s.prompt === cur)) {
-        brief.value = MOTION_BRIEF;
-        addEvent("SYS", "Brief remplacé par un prompt de mouvement (pipeline Animatic) — décrivez le mouvement, pas le contenu.", "sys");
-      }
+
+    // Libellé du bouton principal : dit ce que le clic va lancer (S6).
+    const GENERATE_LABELS = {
+      text2image: "Générer les images", image2image: "Générer les variantes",
+      text2video: "Générer la vidéo", image2video: "Générer la vidéo",
+      sequence2video: "Générer l'animatic", storyboard_v2: "Générer les planches (étape 1/3)",
+      campaign_full: "Lancer la campagne (affiches + miniatures + teaser)"
+    };
+    function refreshGenerateLabel() {
+      const p = pipelineSelect.value;
+      $("generateBtn").textContent = tr(p === "reference2video"
+        ? ($("skipSheetsToggle").checked ? "Générer la vidéo" : "Générer les planches (étape 1/2)")
+        : GENERATE_LABELS[p] || "Générer");
     }
 
     function currentWorkflow() {
@@ -2924,61 +2881,24 @@
     $("turboToggle").addEventListener("change", updateTurboControls);
     // getTemplate/buildGraph (gabarits api/*.json + placeholders) : js/engine.js.
 
-    // ── Scenario tabs ──────────────────────────────────────────────
-    document.querySelectorAll(".scenario-tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        document.querySelectorAll(".scenario-tab").forEach(t => t.classList.remove("active"));
-        tab.classList.add("active");
-        activeScenario = tab.dataset.scenario;
-        const s = SCENARIOS[activeScenario];
-        brief.value = s.prompt;
-        routeLabel.textContent = s.route;
-        refreshPipelineOptions();
-        if ([...pipelineSelect.options].some(o => o.value === s.pipeline)) {
-          pipelineSelect.value = s.pipeline;
-          updateModelOptions();
-        }
-        addEvent("REQ", `Scenario loaded: ${s.route}.`, "req");
-      });
-    });
-    brief.value = SCENARIOS.campaign.prompt;
-
-    // ── Profils métiers ────────────────────────────────────────────
-    // Couche de PRÉSENTATION au-dessus des scénarios : un profil ne fait que
-    // cliquer l'onglet scénario correspondant (routing inchangé) puis présélectionner
-    // le pipeline le plus utile au métier. Aucun état de génération propre.
-    const PROFILES = {
-      director: { scenario: "storyboard", pipeline: "storyboard_v2" },
-      art: { scenario: "campaign", pipeline: "text2image" },
-      social: { scenario: "campaign", pipeline: "campaign_full" },
-      post: { scenario: "localization", pipeline: "image2image", gallery: true }
-    };
-    let applyingProfile = false;
-
-    function setActiveProfile(id) {
-      document.querySelectorAll(".profile-card").forEach(c =>
-        c.classList.toggle("active", c.dataset.profile === id));
+    // ── Cartes d'objectif ──────────────────────────────────────────
+    // Une carte = un préréglage scénario + pipeline (les profils métiers d'avant). Aucun job,
+    // aucun appel gemma/cloud, et le brief n'est jamais touché. La carte active se déduit du
+    // pipeline courant dans updateModelOptions.
+    function selectScenario(scenario, pipeline = SCENARIOS[scenario].pipeline) {
+      activeScenario = scenario;
+      routeLabel.textContent = SCENARIOS[scenario].route;
+      refreshPipelineOptions();
+      if ([...pipelineSelect.options].some(o => o.value === pipeline)) {
+        pipelineSelect.value = pipeline;
+        updateModelOptions();
+      }
+      addEvent("REQ", `Scenario loaded: ${SCENARIOS[scenario].route} / ${pipelineSelect.value}.`, "req");
     }
-
-    document.querySelectorAll(".profile-card").forEach(card => {
-      card.addEventListener("click", () => {
-        const p = PROFILES[card.dataset.profile];
-        if (!p) return;
-        applyingProfile = true;
-        document.querySelector(`.scenario-tab[data-scenario="${p.scenario}"]`)?.click();
-        applyingProfile = false;
-        setActiveProfile(card.dataset.profile);
-        if ([...pipelineSelect.options].some(o => o.value === p.pipeline)) {
-          pipelineSelect.value = p.pipeline;
-          updateModelOptions();
-        }
-        if (p.gallery) $("galleryBlock")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        addEvent("REQ", `Profile: ${card.dataset.profile} → ${p.scenario} / ${p.pipeline}.`, "req");
-      });
-    });
-    // Choisir un scénario à la main sort du profil (les libellés ne correspondent plus).
-    document.querySelectorAll(".scenario-tab").forEach(tab =>
-      tab.addEventListener("click", () => { if (!applyingProfile) setActiveProfile(null); }));
+    document.querySelectorAll(".usecase").forEach(card => card.addEventListener("click", () => {
+      selectScenario(card.dataset.scenario, card.dataset.pipeline);
+      if (card.dataset.scenario === "localization") $("galleryBlock")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
 
     // ── Pastille d'identité (planches ancrées) ─────────────────────
     // AFFICHAGE PUR d'un état déjà produit ailleurs : planches actives de la session
@@ -3303,8 +3223,7 @@
         seqBtn.title = "Ajouter à l'animatic multi-images";
         seqBtn.addEventListener("click", () => {
           addSeqImage({ name: filename, url });
-          if (activeScenario !== "storyboard")
-            document.querySelector('.scenario-tab[data-scenario="storyboard"]')?.click();
+          if (activeScenario !== "storyboard") selectScenario("storyboard");
           if (pipelineSelect.value !== "sequence2video" &&
               [...pipelineSelect.options].some(o => o.value === "sequence2video")) {
             pipelineSelect.value = "sequence2video";
@@ -3445,6 +3364,13 @@
     $("generateBtn").addEventListener("click", async () => {
       const wf = currentWorkflow();
       if (!wf) { addEvent("WARN", "Aucun workflow sélectionné.", "warn"); return; }
+      // Brief vide : rien ne part (l'exemple du placeholder n'est jamais un prompt). Seule
+      // exception, les déclinaisons par marché, dont le prompt vient des marchés choisis.
+      if (!brief.value.trim() && !(wf.pipeline === "image2image" && selectedMarkets.size)) {
+        addEvent("WARN", "Brief vide : décris ce que tu veux obtenir avant de générer.", "warn");
+        brief.focus();
+        return;
+      }
       const btn = $("generateBtn");
       btn.disabled = true;
       try {
@@ -5355,6 +5281,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     function refreshSubjectUI() { renderSubjectChips(); renderRefSubjects(); }
     $("refImagesInput").addEventListener("change", refreshSubjectUI);
     $("skipSheetsToggle").addEventListener("change", refreshSubjectUI);
+    $("skipSheetsToggle").addEventListener("change", refreshGenerateLabel);
 
     // ── Description des images sources par gemma4:e4b en vision ────────────────────
     // Sans ça, sur le chemin « Ignorer les fiches » comme sur les références
@@ -7520,8 +7447,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
       if (!p) { updateResumeButton(); return; }
       const wf = manifest.workflows.find(w => w.id === p.wfId);
       // Sélection scénario + pipeline (mêmes chemins que l'UI).
-      if (activeScenario !== "storyboard")
-        document.querySelector('.scenario-tab[data-scenario="storyboard"]')?.click();
+      if (activeScenario !== "storyboard") selectScenario("storyboard");
       if (pipelineSelect.value !== "storyboard_v2" &&
           [...pipelineSelect.options].some(o => o.value === "storyboard_v2")) {
         pipelineSelect.value = "storyboard_v2";
