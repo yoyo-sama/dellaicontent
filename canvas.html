@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Content Studio — Canvas</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css" integrity="sha256-VlzujVTn39FilfDsexn5EKc5wPQtUmMZjjQWo4pgBrM=" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap">
@@ -167,7 +167,7 @@
   .actions { margin-top:14px; display:flex; flex-direction:column; gap:8px; }
 </style>
 <!-- Thème posé sur la racine du document AVANT le premier rendu. Le gros bloc de script
-     de fin de page s'exécute après le chargement de litegraph (CDN) et des 3 js/ locaux :
+     de fin de page s'exécute après le chargement de litegraph (js/vendor/) et des 3 js/ locaux :
      y poser le thème laisserait un flash de thème clair sur les panneaux. Même règle de
      valeur par défaut que l'app de prod (ai-content-studio/index.html) : localStorage
      sinon `prefers-color-scheme`. Pas de 3ᵉ mode « auto » — la préférence système n'est
@@ -304,7 +304,8 @@
   <div id="mediaLayer"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
+<!-- litegraph.js 0.7.18, build/litegraph.min.js, source npm via cdn.jsdelivr.net, sha256-amvRSABXEHuNwStAcwuIr7AXKevL8FVc1n9aIp84FYk= -->
+<script src="js/vendor/litegraph.min.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/nodes-simple.js"></script>
 <script src="js/nodes-advanced.js"></script>
@@ -382,6 +383,7 @@
     "Enrichissement…": { en: "Enhancing…", es: "Enriqueciendo…", de: "Anreichern…" },
     "Enrichissement impossible : ": { en: "Enhancement failed: ", es: "Enriquecimiento imposible: ", de: "Anreicherung fehlgeschlagen: " },
     "réponse sans champ ": { en: "response missing field ", es: "respuesta sin campo ", de: "Antwort ohne Feld " },
+    "L'état sauvegardé du canvas était illisible : le canvas repart vide.": { en: "The saved canvas state was unreadable: the canvas starts empty.", es: "El estado guardado del lienzo era ilegible: el lienzo empieza vacío.", de: "Der gespeicherte Zustand der Leinwand war unlesbar: Die Leinwand startet leer." },
     "Supprimer toutes les cartes du canvas ? Cette action est irréversible.": { en: "Delete every card on the canvas? This action cannot be undone.", es: "¿Eliminar todas las tarjetas del lienzo? Esta acción es irreversible.", de: "Alle Karten der Leinwand löschen? Diese Aktion ist unwiderruflich." },
 
     // ── Noms de cartes (CARDS[x].label) ──
@@ -866,7 +868,7 @@
     image: ["simple/krea2", "simple/qwen_edit", "adv/charsheet", "adv/locsheet", "adv/storyboard", "simple/import"],
     video: ["simple/video", "adv/cutvideo", "adv/final_video", "adv/r2v", "simple/import"]
   };
-  const STATUS_COLOR = { idle: "#94a3b8", running: "#c98a1b", error: "#c0392b", done: "#2a7d2a" };
+  const STATUS_COLOR = window.__simpleNodes.STATUS_COLOR;   // palette unique, définie dans js/nodes-simple.js
   const skin = n => CARDS[n.type] || CARDS["test/note"];
 
   // ── Couleurs des cartes DESSINÉES au canvas ────────────────────────────────
@@ -1142,7 +1144,7 @@
     Ctor.prototype.onDrawTitleBar = onDrawTitleBar;
     Ctor.prototype.onDrawTitleBox = onDrawTitleBox;
     Ctor.prototype.onDrawTitle = onDrawTitle;
-    Ctor.prototype.onDrawBackground = onDrawBackground;   // remplace le corps noir + statut du Lot 2/3
+    Ctor.prototype.onDrawBackground = onDrawBackground;   // seul onDrawBackground des 10 types (js/nodes-*.js n'en posent plus)
     Ctor.prototype.onDrawForeground = onDrawForeground;
     Ctor.prototype.getTitle = getTitle;
     if (PLUS_INPUTS[type]) Ctor.prototype.onMouseDown = onMouseDownPlus;
@@ -1185,7 +1187,6 @@
   }
   window.addEventListener("resize", resize);
   resize();
-  graph.start();
 
   // ── Synchronisation des overlays DOM avec la vue litegraph ───────────────
   // Coordonnées écran = (position graphe + ds.offset) * ds.scale — la même
@@ -1204,15 +1205,20 @@
       // Tant qu'aucun résultat n'est généré (`src` vide) l'overlay est masqué : c'est la
       // vignette dégradée peinte sur le canvas qui occupe la zone. Dès que generate()
       // pose `src` et rappelle buildOverlay(), l'overlay reprend exactement sa place.
+      // Au repos, rien n'est réécrit : la géométrie appliquée est mémorisée sur `box` (relire
+      // `style.transform` ne convient pas, la sérialisation du navigateur diffère de la chaîne
+      // écrite). Un overlay recréé par buildOverlay() part sans clé et est donc réécrit.
       if (node.flags.collapsed || !(node.properties && node.properties.src)) {
-        box.style.display = "none"; continue;
+        if (box._k !== "hidden") { box.style.display = "none"; box._k = "hidden"; }
+        continue;
       }
-      box.style.display = "";
       const top = overlayTopMargin(node);
-      box.style.width = node.size[0] + "px";
-      box.style.height = Math.max(0, node.size[1] - FOOTER_H - top) + "px";
-      box.style.transform =
-        "translate(" + ((node.pos[0] + ox) * s) + "px," + ((node.pos[1] + top + oy) * s) + "px) scale(" + s + ")";
+      const w = node.size[0] + "px", h = Math.max(0, node.size[1] - FOOTER_H - top) + "px";
+      const t = "translate(" + ((node.pos[0] + ox) * s) + "px," + ((node.pos[1] + top + oy) * s) + "px) scale(" + s + ")";
+      const k = w + "|" + h + "|" + t;
+      if (box._k === k) continue;
+      box._k = k;
+      box.style.display = ""; box.style.width = w; box.style.height = h; box.style.transform = t;
     }
     if (selected) updateLiveProps();
     requestAnimationFrame(syncOverlays);
@@ -1220,7 +1226,11 @@
   requestAnimationFrame(syncOverlays);
 
   // ── Persistance localStorage ─────────────────────────────────────────────
-  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(graph.serialize())); }
+  // Appelée à chaque mouseup : un quota plein ne doit ni lever ni alerter.
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(graph.serialize())); }
+    catch (e) { console.warn("Canvas : sauvegarde impossible", e); }
+  }
   graph.onNodeAdded = function (n) { hideSlotLabels(n); save(); };
   graph.onNodeRemoved = save;
   graph.onConnectionChange = save;
@@ -1229,7 +1239,18 @@
   canvasEl.addEventListener("mouseup", save);
 
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) graph.configure(JSON.parse(saved));
+  if (saved) {
+    try {
+      const state = JSON.parse(saved);
+      // litegraph n'échoue pas sur `{"nodes":"x"}` : il fabrique une carte fantôme.
+      if (state.nodes && !Array.isArray(state.nodes)) throw new Error("nodes n'est pas un tableau");
+      graph.configure(state);
+    } catch (e) {
+      console.warn("Canvas : état sauvegardé illisible", e);
+      graph.clear(); mediaLayer.innerHTML = ""; localStorage.removeItem(STORAGE_KEY);
+      alert(tr("L'état sauvegardé du canvas était illisible : le canvas repart vide."));
+    }
+  }
   graph._nodes.forEach(hideSlotLabels);
 
   // ── Palette ──────────────────────────────────────────────────────────────
@@ -1478,10 +1499,10 @@
     btn.textContent = tr("✨ Enrichir (LLM)");
     // Ollama peut être indisponible (conteneur arrêté, modèle absent) et gemma peut
     // renvoyer un JSON sans la clé attendue : l'erreur s'affiche ici, sous le bouton.
-    // Aucun nœud n'expose de méthode `setStatus` (c'est une fonction locale à
-    // js/nodes-simple.js et js/nodes-advanced.js) — d'où le message inline.
+    // `setStatus` (js/nodes-simple.js) pose l'état d'une CARTE, pas un message du panneau —
+    // d'où le message inline, qui reprend seulement la couleur d'erreur de la palette.
     const err = document.createElement("div");
-    err.style.cssText = "font-size:10.5px;color:#a33;margin-top:4px";
+    err.style.cssText = "font-size:10.5px;margin-top:4px;color:" + STATUS_COLOR.error;
     btn.onclick = async () => {
       const label = btn.textContent;
       btn.disabled = true; btn.textContent = tr("Enrichissement…"); err.textContent = "";
@@ -1614,8 +1635,11 @@
   // (reconstruire écraserait la saisie en cours).
   function updateLiveProps() {
     if (!selected) return;
-    statusEl.style.color = STATUS_COLOR[selected.status] || "#94a3b8";
-    statusEl.textContent = selected.statusMsg || (selected.status ? selected.status : "");
+    const color = STATUS_COLOR[selected.status] || "#94a3b8";
+    const text = selected.statusMsg || (selected.status ? selected.status : "");
+    // `style.color` relu serait normalisé en rgb(...) : on compare à la dernière valeur écrite.
+    if (statusEl._c !== color) { statusEl.style.color = color; statusEl._c = color; }
+    if (statusEl.textContent !== text) statusEl.textContent = text;
   }
 
   lgcanvas.onSelectionChange = function (sel) {

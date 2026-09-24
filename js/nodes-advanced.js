@@ -9,9 +9,8 @@
 // fonction constructeur + prototype, `LiteGraph.registerNodeType`, états
 // idle/running/error/done (couleur de titre + ligne de statut), overlay DOM
 // `this.overlay`/`this.mediaEl` repris par `syncOverlays()` de canvas.html.
-// Les helpers setStatus/drawStatus/buildOverlay sont recopiés à l'identique depuis
-// nodes-simple.js : ils y sont privés (non exportés) et le Lot 2 est intouchable.
-// `upstreamFile` est en revanche RÉUTILISÉ tel quel via `window.__simpleNodes`.
+// Les helpers setStatus/buildOverlay/removeOverlay/upstreamFile (et la palette STATUS_COLOR
+// qu'utilise setStatus) sont REPRIS tels quels de nodes-simple.js via `window.__simpleNodes`.
 //
 // Logique métier : AUCUNE réimplémentation. Tout passe par window.Engine (js/engine.js) —
 // characterSheetFromBrief / locationSheetFromBrief / shotListFromBrief / submitCharsheetJob /
@@ -27,8 +26,8 @@
 (function () {
   "use strict";
   const E = window.Engine;
-  const upstreamFile = window.__simpleNodes.upstreamFile;  // Lot 2, réutilisé tel quel
-  const mediaLayer = document.getElementById("mediaLayer");
+  // Lot 2, réutilisés tels quels
+  const { upstreamFile, setStatus, buildOverlay, removeOverlay } = window.__simpleNodes;
   const clientId = E.clientId;   // partagé avec engine.js/nodes-simple.js : c'est le clientId
   // de LA connexion WebSocket de progression, un id local ne recevrait aucun message.
   const MODEL_LABEL = "Krea 2 / Qwen-Edit / LTX 2.5";
@@ -37,67 +36,12 @@
   // petit passe-plat, qui retombe sur le texte source français si elle n'existe pas.
   const T = k => (window.tr ? window.tr(k) : k);
 
-  // ── Helpers d'état + overlay (copie conforme de nodes-simple.js, privés là-bas) ─────
-  const STATUS_COLOR = { idle: "#666", running: "#c98a1b", error: "#a33", done: "#2a7d2a" };
-  function setStatus(node, status, msg) {
-    node.status = status;
-    node.statusMsg = msg || "";
-    node.boxcolor = STATUS_COLOR[status] || STATUS_COLOR.idle;
-    node.color = node.boxcolor;
-    // Hors "running", plus de barre : un état atteint sans passer par le WebSocket
-    // (erreur locale avant envoi) laisserait sinon une barre figée à moitié pleine.
-    if (status !== "running") node.progress = null;
-    node.setDirtyCanvas(true, true);
-  }
-  function drawStatus(node, ctx) {
-    if (!node.statusMsg) return;
-    ctx.fillStyle = STATUS_COLOR[node.status] || "#999";
-    ctx.font = "11px system-ui, sans-serif";
-    ctx.fillText(node.statusMsg.slice(0, 60), 6, 12);
-    // Barre de progression alimentée par le WebSocket ComfyUI (Engine.registerJob),
-    // juste sous la ligne de statut — pas de zone nouvelle, rien qui chevauche l'overlay.
-    if (node.status === "running" && typeof node.progress === "number") {
-      const w = Math.max(0, node.size[0] - 12);
-      const pct = Math.max(0, Math.min(100, node.progress));
-      ctx.fillStyle = STATUS_COLOR.running;
-      ctx.fillRect(6, 16, w * pct / 100, 3);
-    }
-  }
-  function buildOverlay(node) {
-    if (node.overlay) node.overlay.remove();
-    const box = document.createElement("div");
-    box.className = "media-overlay";
-    box.dataset.nodeId = String(node.id);
-    const src = node.properties.src || "";
-    const isVideoName = f => /\.(mp4|webm|mov)$/i.test(f || "");
-    let el;
-    if (isVideoName(node.properties.outFile && node.properties.outFile.filename) || isVideoName(src)) {
-      el = document.createElement("video");
-      el.src = src; el.controls = true; el.loop = true; el.playsInline = true; el.preload = "metadata";
-    } else {
-      el = document.createElement("img");
-      el.src = src; el.alt = "";
-    }
-    box.appendChild(el);
-    mediaLayer.appendChild(box);
-    node.overlay = box;
-    node.mediaEl = el;
-  }
-  function removeOverlay(node) {
-    if (node.overlay) { node.overlay.remove(); node.overlay = null; }
-  }
-  function drawEmptyBody(node, ctx) {
-    if (node.flags.collapsed) return;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, node.size[0], node.size[1]);
-  }
-  // Câblage des 6 hooks litegraph, identique pour les 5 nœuds de ce fichier.
+  // Câblage des 4 hooks litegraph, identique pour les 5 nœuds de ce fichier.
   function wireCommon(Ctor) {
     Ctor.prototype.onAdded = function () { buildOverlay(this); };
     Ctor.prototype.onRemoved = function () { removeOverlay(this); };
     Ctor.prototype.onConfigure = function () { buildOverlay(this); setStatus(this, this.status || "idle", this.statusMsg || ""); };
     Ctor.prototype.buildOverlay = function () { buildOverlay(this); };
-    Ctor.prototype.onDrawBackground = function (ctx) { drawEmptyBody(this, ctx); drawStatus(this, ctx); };
   }
   // Nœud amont connecté sur `slot` (upstreamFile ne rend que le fichier ; le storyboard a
   // aussi besoin des descriptions charDesc/locDesc portées par le nœud amont).

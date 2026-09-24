@@ -27,9 +27,10 @@
 
   // ── États visuels communs (idle / running / error / done) ────────────────
   // this.status ∈ "idle" | "running" | "error" | "done" ; this.statusMsg = texte court.
-  // Rendu simple : couleur du titre du nœud (this.color/this.boxcolor, lus par litegraph
-  // à chaque frame) + libellé du bouton "Générer" + ligne de texte dessinée sous le titre.
-  const STATUS_COLOR = { idle: "#666", running: "#c98a1b", error: "#a33", done: "#2a7d2a" };
+  // Rendu : couleur du titre du nœud (this.color/this.boxcolor, lus par litegraph à chaque
+  // frame) + libellé du bouton "Générer" ; le texte et la barre de progression sont dessinés
+  // par l'habillage de canvas.html (onDrawForeground), avec cette même palette.
+  const STATUS_COLOR = { idle: "#94a3b8", running: "#c98a1b", error: "#c0392b", done: "#2a7d2a" };
   function setStatus(node, status, msg) {
     node.status = status;
     node.statusMsg = msg || "";
@@ -39,21 +40,6 @@
     // (erreur locale avant envoi) laisserait sinon une barre figée à moitié pleine.
     if (status !== "running") node.progress = null;
     node.setDirtyCanvas(true, true);
-  }
-  // Dessine le statut sous le titre du nœud (au-dessus du corps/overlay).
-  function drawStatus(node, ctx) {
-    if (!node.statusMsg) return;
-    ctx.fillStyle = STATUS_COLOR[node.status] || "#999";
-    ctx.font = "11px system-ui, sans-serif";
-    ctx.fillText(node.statusMsg.slice(0, 60), 6, 12);
-    // Barre de progression alimentée par le WebSocket ComfyUI (Engine.registerJob),
-    // juste sous la ligne de statut — pas de zone nouvelle, rien qui chevauche l'overlay.
-    if (node.status === "running" && typeof node.progress === "number") {
-      const w = Math.max(0, node.size[0] - 12);
-      const pct = Math.max(0, Math.min(100, node.progress));
-      ctx.fillStyle = STATUS_COLOR.running;
-      ctx.fillRect(6, 16, w * pct / 100, 3);
-    }
   }
 
   // Résout la sortie amont d'un nœud connecté sur l'entrée `slot` (0). Convention :
@@ -96,11 +82,6 @@
   function removeOverlay(node) {
     if (node.overlay) { node.overlay.remove(); node.overlay = null; }
   }
-  function drawEmptyBody(node, ctx) {
-    if (node.flags.collapsed) return;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, node.size[0], node.size[1]);
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // 1) Krea 2 — texte → image
@@ -132,7 +113,6 @@
   Krea2Node.prototype.onRemoved = function () { removeOverlay(this); };
   Krea2Node.prototype.onConfigure = function () { buildOverlay(this); setStatus(this, this.status || "idle", this.statusMsg || ""); };
   Krea2Node.prototype.buildOverlay = function () { buildOverlay(this); };
-  Krea2Node.prototype.onDrawBackground = function (ctx) { drawEmptyBody(this, ctx); drawStatus(this, ctx); };
 
   Krea2Node.prototype.generate = async function () {
     const prompt = (this.properties.prompt || "").trim();
@@ -191,7 +171,6 @@
   QwenEditNode.prototype.onRemoved = function () { removeOverlay(this); };
   QwenEditNode.prototype.onConfigure = function () { buildOverlay(this); setStatus(this, this.status || "idle", this.statusMsg || ""); };
   QwenEditNode.prototype.buildOverlay = function () { buildOverlay(this); };
-  QwenEditNode.prototype.onDrawBackground = function (ctx) { drawEmptyBody(this, ctx); drawStatus(this, ctx); };
 
   QwenEditNode.prototype.generate = async function () {
     const upstream = upstreamFile(this, 0);
@@ -303,7 +282,6 @@
   VideoNode.prototype.onRemoved = function () { removeOverlay(this); };
   VideoNode.prototype.onConfigure = function () { buildOverlay(this); setStatus(this, this.status || "idle", this.statusMsg || ""); };
   VideoNode.prototype.buildOverlay = function () { buildOverlay(this); };
-  VideoNode.prototype.onDrawBackground = function (ctx) { drawEmptyBody(this, ctx); drawStatus(this, ctx); };
 
   VideoNode.prototype.generate = async function () {
     const upstream = upstreamFile(this, 0);
@@ -384,7 +362,6 @@
   ImportNode.prototype.onRemoved = function () { removeOverlay(this); };
   ImportNode.prototype.onConfigure = function () { buildOverlay(this); setStatus(this, this.status || "idle", this.statusMsg || ""); };
   ImportNode.prototype.buildOverlay = function () { buildOverlay(this); };
-  ImportNode.prototype.onDrawBackground = function (ctx) { drawEmptyBody(this, ctx); drawStatus(this, ctx); };
 
   // Appelée depuis le panneau de propriétés de canvas.html (champ « Fichier local ») :
   // les widgets litegraph n'y sont ni peints ni cliquables (drawNodeWidgets neutralisé).
@@ -404,6 +381,6 @@
   };
   LiteGraph.registerNodeType("simple/import", ImportNode);
 
-  // Accès pour les tests automatisés.
-  window.__simpleNodes = { Krea2Node, QwenEditNode, VideoNode, ImportNode, upstreamFile, RATIOS };
+  // Partagé avec nodes-advanced.js et canvas.html (palette, états, overlay) + tests automatisés.
+  window.__simpleNodes = { Krea2Node, QwenEditNode, VideoNode, ImportNode, upstreamFile, STATUS_COLOR, setStatus, buildOverlay, removeOverlay, RATIOS };
 })();
