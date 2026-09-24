@@ -485,6 +485,15 @@
     "Cinématique": { en: "Cinematic", es: "Cinematográfico", de: "Filmisch" },
     "Film noir": { en: "Film noir", es: "Cine negro", de: "Film noir" },
     "Documentaire": { en: "Documentary", es: "Documental", de: "Dokumentarisch" },
+    "Éditorial": { en: "Editorial", es: "Editorial", de: "Editorial" },
+    "Argentique 35 mm": { en: "35 mm film", es: "Analógico 35 mm", de: "Analog 35 mm" },
+    "Cinéma d'auteur": { en: "Arthouse cinema", es: "Cine de autor", de: "Autorenkino" },
+    "SF blockbuster": { en: "Sci-fi blockbuster", es: "Blockbuster de ciencia ficción", de: "Sci-Fi-Blockbuster" },
+    "Luxe discret": { en: "Quiet luxury", es: "Lujo discreto", de: "Dezenter Luxus" },
+    "Packshot produit": { en: "Product packshot", es: "Packshot de producto", de: "Produkt-Packshot" },
+    "Sérigraphie": { en: "Screen print", es: "Serigrafía", de: "Siebdruck" },
+    "Peinture à l'huile": { en: "Oil painting", es: "Pintura al óleo", de: "Ölgemälde" },
+    "Onirique": { en: "Dreamlike", es: "Onírico", de: "Traumhaft" },
     "Réalisme": { en: "Realism", es: "Realismo", de: "Realismus" },
     "Vieillissement": { en: "Ageing", es: "Envejecimiento", de: "Alterung" },
 
@@ -492,6 +501,7 @@
     "Erreur : ": { en: "Error: ", es: "Error: ", de: "Fehler: " },
     "Terminé : ": { en: "Done: ", es: "Terminado: ", de: "Fertig: " },
     "en cours…": { en: "running…", es: "en curso…", de: "läuft…" },
+    "Prompt H3 tronqué à 7 000 caractères (plafond du modèle).": { en: "H3 prompt truncated to 7,000 characters (model limit).", es: "Prompt H3 truncado a 7 000 caracteres (límite del modelo).", de: "H3-Prompt auf 7.000 Zeichen gekürzt (Modellgrenze)." },
     "Erreur : prompt vide.": { en: "Error: empty prompt.", es: "Error: prompt vacío.", de: "Fehler: leerer Prompt." },
     "Erreur : instruction vide.": { en: "Error: empty instruction.", es: "Error: instrucción vacía.", de: "Fehler: leere Anweisung." },
     "Erreur : brief vide.": { en: "Error: empty brief.", es: "Error: brief vacío.", de: "Fehler: leeres Briefing." },
@@ -725,9 +735,10 @@
   // ici. Chacun impose à gemma la clé de sortie ATTENDUE — TOUJOURS `f.k` du champ, d'où
   // {"prompt": …} pour k:"prompt", {"instruction": …} pour k:"instruction", etc.
   const ENHANCE = {
-    // Krea 2 : cfg tel que le négatif n'est jamais encodé (piège n°16) → tout doit être
-    // formulé positivement, d'où l'absence de toute consigne de type « éviter … ».
-    krea2Prompt: "Tu es un ingénieur de prompts pour un modèle de diffusion texte→image (Krea 2). Réécris le brief de l'utilisateur en un prompt riche et précis en anglais (sujet, style, éclairage, composition, ambiance), sans inventer de contrainte technique. Réponds UNIQUEMENT en JSON : {\"prompt\": \"...\"}.",
+    // Krea 2 : consigne du Studio (js/engine.js, clé de sortie {"prompt"}). cfg tel que le négatif
+    // n'est jamais encodé (piège n°16) → tout est formulé positivement ; le remplissage que gemma
+    // glisse malgré l'interdiction est retiré de la sortie (stripPromptPadding, cf. addEnhanceButton).
+    krea2Prompt: window.Engine.KREA2_ENRICH_SYSTEM,
     // Minimax H3 i2v uniquement. LTX 2.5 est volontairement EXCLU (cf. le `enhance` de
     // simple/video) : son graphe embarque déjà `TextGenerateLTX2Prompt` à cfg 1, un second
     // enrichissement côté client ferait double emploi — même arbitrage que le cockpit
@@ -736,8 +747,8 @@
     // Qwen-Edit : interdiction explicite du vocabulaire « storyboard/keyframe/panel », qui
     // fait dessiner une planche annotée au lieu d'éditer l'image (AGENTS.md, pièges).
     qwenInstruction: "Tu es un ingénieur de prompts pour un modèle d'édition d'image (Qwen-Edit). Réécris l'instruction de l'utilisateur en une consigne d'édition claire et positive en anglais (décris le résultat voulu, jamais ce qu'il faut éviter). N'utilise JAMAIS les mots \"storyboard\", \"keyframe\", \"panel\" ou équivalents — ils font dessiner une planche annotée au lieu d'éditer l'image. Réponds UNIQUEMENT en JSON : {\"instruction\": \"...\"}.",
-    // r2v : personnage et décor sont préfixés automatiquement au brief par
-    // `generateReference2Video` — les redécrire ici les dupliquerait dans le prompt final.
+    // r2v : personnage et décor sont posés automatiquement dans le bloc subject_definitions de la
+    // grammaire Ref2VA (Ref2VideoNode) — les redécrire ici les dupliquerait dans le prompt final.
     r2vBrief: "Tu es un ingénieur de prompts pour Minimax H3 reference2video. Le personnage et le décor sont DÉJÀ décrits séparément et ajoutés automatiquement avant ton texte — ne les redécris pas. Réécris uniquement l'action/le contexte/l'ambiance du brief de l'utilisateur, en anglais, sans inventer de nouveau personnage ou lieu. N'utilise pas de balises entre chevrons ni de syntaxe de référence d'image. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}.",
     // Fiches + storyboard : ce brief est ENSUITE repassé à gemma par
     // characterSheetFromBrief/locationSheetFromBrief/shotListFromBrief pour en extraire des
@@ -1599,8 +1610,9 @@
         const txt = typeof out?.[f.k] === "string" ? out[f.k].trim() : "";
         if (!txt) throw new Error(tr("réponse sans champ ") + `"${f.k}"`);
         // Le champ n'est écrasé QU'en cas de succès : sur erreur, le texte saisi survit.
-        inp.value = txt;
-        setProp(node, f.k, f.w, txt);
+        const clean = system === window.Engine.KREA2_ENRICH_SYSTEM ? window.Engine.stripPromptPadding(txt) : txt;
+        inp.value = clean;
+        setProp(node, f.k, f.w, clean);
       } catch (e) {
         err.textContent = tr("Enrichissement impossible : ") + e.message;
       } finally {

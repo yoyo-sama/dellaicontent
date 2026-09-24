@@ -299,8 +299,15 @@
       const [width, height] = E.computeMPResolution(parseFloat(this.properties.mp), this.properties.ratio, unit);
       const templateFile = this.properties.engine === "minimax_h3" ? "api/minimax_h3_i2v.json" : "api/ltx25_i2v.json";
       const raw = await E.getTemplate(templateFile);
+      // Minimax H3 : phrase d'alignement temporel en tête (la première image est l'instant 0),
+      // invariant du modèle ; les mots de l'utilisateur partent tels quels derrière (LESSONS
+      // n°20). LTX 2.5 : texte inchangé.
+      let capped = false;
+      const prompt = this.properties.engine === "minimax_h3"
+        ? E.capH3Prompt(E.h3Alignment(false, this.properties.duration) + "\n\n" + this.properties.prompt, () => { capped = true; })
+        : this.properties.prompt;
       const graph = E.buildGraph(raw, {
-        prompt: this.properties.prompt, negative: this.properties.negative,
+        prompt, negative: this.properties.negative,
         seed: Math.floor(Math.random() * 1e15), width, height, batch: 1,
         duration: this.properties.duration, image: imgName
       });
@@ -332,7 +339,7 @@
       this.properties.outFile = file;
       this.properties.src = E.viewURL(file);
       buildOverlay(this);
-      setStatus(this, "done", T("Terminé : ") + file.filename);
+      setStatus(this, "done", T("Terminé : ") + file.filename + (capped ? " " + T("Prompt H3 tronqué à 7 000 caractères (plafond du modèle).") : ""));
     } catch (e) {
       setStatus(this, "error", T("Erreur : ") + e.message);
     }

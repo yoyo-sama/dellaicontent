@@ -169,8 +169,11 @@
       this.properties.charDesc = charDesc;
       const seed = this.properties.seed || randSeed();
       setStatus(this, "running", T("Planche personnage (Krea 2) en cours…"));
+      // `kind` (human / other) est tranché par gemma, comme dans le Studio (piège n°17) : sans
+      // lui, un animal sortait de la planche humaine en « costume ». Humain ou champ absent =
+      // planche identique à l'ancienne.
       const promptId = await E.submitCharsheetJob({
-        charDesc, negative: "", seed, width: 1920, height: 1088,
+        charDesc, kind: fields.kind, negative: "", seed, width: 1920, height: 1088,
         styleId: this.properties.style, lora: this.properties.lora, modelLabel: MODEL_LABEL, clientId
       });
       E.registerJob(promptId, this);
@@ -402,8 +405,9 @@
     this.addOutput("cuts", 0);
     // `negative` (défaut "" = comportement d'avant) n'a d'effet que sur LTX 2.5, seul
     // template à porter un {{NEGATIVE_PROMPT}} réellement encodé. Le prompt POSITIF, lui,
-    // reste produit automatiquement par `compileCutPrompt` (ancrage scène + personnage +
-    // décor + mouvement, piège n°9) : aucun champ prompt manuel sur cette carte.
+    // reste produit automatiquement (`compileCutPromptFor` : ancrage scène + personnage +
+    // décor + mouvement, piège n°9 ; en grammaire H3 pour le moteur Minimax H3) : aucun champ
+    // prompt manuel sur cette carte.
     // `lora` : LoRA de style Minimax H3, cumulable avec turbo (cf. Engine.addH3StyleLora) —
     // n'a d'effet que sur la branche engine === "minimax_h3" (i2v), jamais sur la branche
     // minimax_h3_r2v (checkpoint ref2va différent — même restriction que la LoRA turbo
@@ -464,6 +468,9 @@
       charDesc: p.charDesc || "", locDesc: p.locDesc || "", negative: this.properties.negative || "",
       styleId: p.styleId || "none", modelLabel: MODEL_LABEL, clientId
     };
+    // Plafond H3 (7 000 caractères) : le Studio l'écrit au journal, ici il rejoint le statut final.
+    let capped = false;
+    const onWarn = () => { capped = true; };
     const kindLabel = engine === "minimax_h3_r2v" ? label : `${label} i2v`;
     setStatus(this, "running", `${T("Cuts")} ${kindLabel} (0/${shots.length})…`);
     try {
@@ -482,7 +489,9 @@
         if (engine === "minimax_h3") {
           const sz = E.videoSizeFor(await E.imageSize(blob));
           const g = E.buildGraph(tplRaw, {
-            prompt: E.compileCutPrompt(shots[k], base.charDesc, base.locDesc, null, base.styleId),
+            // Cut H3 en grammaire (alignement temporel + 6 champs, LESSONS n°19/n°20) : un seul
+            // personnage + le décor, sur la keyframe (<Picture 1>), sans image de fin.
+            prompt: E.compileCutPromptFor(shots[k], base.charDesc, base.locDesc, null, "minimax_h3", duration, false, base.styleId, onWarn),
             negative: "", seed: seed + 31 + k, width: sz.w, height: sz.h, batch: 1,
             duration, image: keyObj.name
           });
@@ -546,7 +555,7 @@
       this.properties.outFile = cutFiles[0];
       this.properties.src = E.viewURL(cutFiles[0]);
       buildOverlay(this);
-      setStatus(this, "done", `${T("Terminé : ")}${cutNames.length} ${T("cuts prêts.")}`);
+      setStatus(this, "done", `${T("Terminé : ")}${cutNames.length} ${T("cuts prêts.")}${capped ? " " + T("Prompt H3 tronqué à 7 000 caractères (plafond du modèle).") : ""}`);
     } catch (e) {
       setStatus(this, "error", T("Erreur : ") + e.message);
     }
@@ -695,9 +704,17 @@
       const [width, height] = E.computeMPResolution(parseFloat(this.properties.mp), this.properties.ratio, 32);
       const seed = this.properties.seed || randSeed();
       const raw = await E.getTemplate("api/minimax_h3_r2v.json");
-      // Prompt ancré identique à Engine.generateReference2Video (charDesc. locDesc. brief).
+      // Grammaire Ref2VA, comme le Studio (pipeline reference2video) : ref_image_0 = personnage,
+      // ref_image_1 = décor, puis une « référence » par image ajoutée — sans description, le
+      // Canvas n'a pas de vision. Les vidéos/audios de référence n'ont pas de sujet (idem Studio).
+      let capped = false;
+      const body = (this.properties.brief || "").trim();
+      const subjects = E.h3AssignSubjects([{ kind: "character", desc: charDesc }, { kind: "environment", desc: locDesc },
+        ...refs.images.map(() => ({ kind: "reference", desc: "" }))]);
+      const prompt = E.capH3Prompt(E.buildH3RefPrompt({ subjects, summary: E.h3Summary(body), body: E.h3RefBody(subjects, body) }),
+        () => { capped = true; });
       const graph = E.buildGraph(raw, {
-        prompt: `${charDesc}. ${locDesc}. ${(this.properties.brief || "").trim()}`, negative: "",
+        prompt, negative: "",
         seed: seed + 201, width, height, batch: 1, duration: this.properties.duration,
         image: charName, image2: locName
       });
@@ -718,7 +735,7 @@
       this.properties.outFile = file;
       this.properties.src = E.viewURL(file);
       buildOverlay(this);
-      setStatus(this, "done", T("Terminé : ") + file.filename);
+      setStatus(this, "done", T("Terminé : ") + file.filename + (capped ? " " + T("Prompt H3 tronqué à 7 000 caractères (plafond du modèle).") : ""));
     } catch (e) {
       setStatus(this, "error", T("Erreur : ") + e.message);
     }
