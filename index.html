@@ -524,6 +524,7 @@
     .generate-bar .gb-field { flex: 0 1 165px; min-width: 130px; }
     .generate-bar .tpl-field { flex: 1 1 100%; }
     .generate-bar .gb-wide { flex: 0 1 240px; }
+    .generate-bar #marketsWrap { flex: 1 1 100%; }
     .generate-bar .check-row { flex: 1 1 100%; }
     /* Action principale : dernière ligne de la barre, pleine largeur. */
     .generate-bar .gb-go { flex: 1 1 100%; padding: 14px 22px; font-size: 14.5px; }
@@ -537,7 +538,6 @@
     }
     .generate-row:empty { display: none; }
     .generate-row .gb-wide { flex: 1 1 260px; }
-    .generate-row .check-row { flex: 1 1 260px; }
 
     .generate-more { margin-top: 12px; }
     .generate-more > summary {
@@ -931,7 +931,7 @@
     .sb-steps li[aria-current="step"] { color: var(--highlight); font-weight: 700; }
     #sbJobs { font-weight: 600; font-variant-numeric: tabular-nums; }
     #sbGpu { margin-left: auto; font-variant-numeric: tabular-nums; }
-    @media screen and (max-width: 760px) {
+    @media screen and (max-width: 767px) {
       .sb-thumb { width: 44px; height: 44px; }
     }
 
@@ -1253,12 +1253,48 @@
       .panel .pipeline-flow { grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); }
     }
 
-    @media screen and (max-width: 760px) {
+    @media screen and (max-width: 767px) {
       .app-shell { padding: 14px; flex-wrap: wrap; }
-      /* Mobile : pas de place pour deux colonnes — le rail ouvert prend toute la
-         largeur et le studio passe dessous plutôt que d'être écrasé. */
-      .app-rail.expanded { flex-basis: 100%; width: 100%; max-height: none; overflow: visible; }
-      .app-rail.expanded ~ .app-content { flex-basis: 100%; }
+      /* S4 : le rail devient une barre horizontale dans le flux (plus de recouvrement au
+         défilement) ; un panneau ouvert passe sous la rangée d'icônes, pleine largeur. */
+      .app-rail, .app-rail.expanded {
+        position: static;
+        flex: 1 0 100%;
+        width: 100%;
+        max-height: none;
+        overflow: visible;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 0;
+      }
+      .rail-top { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+      .flyout { flex: 1 0 100%; order: 1; margin: 0; }
+      .app-content { flex-basis: 100%; }
+      /* S4 : en-tête compact — logo et réglages sur une ligne, titre sur la suivante. */
+      .portal-header { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 0 0 12px; }
+      .brand { margin-left: 0; grid-column: 1; grid-row: 1; justify-content: flex-start; }
+      .powered { grid-column: 2; grid-row: 1; }
+      .powered-text, .eyebrow { display: none; }
+      .header-controls { margin-top: 0; }
+      .title-block { grid-column: 1 / -1; grid-row: 2; }
+      h1 { font-size: 22px; }
+      /* Objectif : deux cartes par rangée, sans la ligne métier (le formulaire remonte). */
+      .usecases { grid-template-columns: 1fr 1fr; }
+      .usecase > small { display: none; }
+      /* S14 : le panneau couvre au moins l'écran, pour qu'une section courte (Montage) puisse atteindre le haut. */
+      #studioShell > #studioPanel { min-height: 100vh; }
+      /* S14 : actions de projet en bas de la colonne, à l'écart des onglets. */
+      #studioShell > .studio-project-actions {
+        grid-column: 1;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        padding-top: 16px;
+        border-top: 1px solid var(--border-light);
+      }
+      /* S19 : cibles tactiles de 44 px. */
+      button, select, summary, a.control-btn, .rail-btn, label.check-row, input:not([type="checkbox"]) { min-height: 44px; }
+      .header-controls button { width: 44px; height: 44px; }
       .pipeline-flow, .two-cols, .actions {
         grid-template-columns: 1fr;
       }
@@ -1272,6 +1308,7 @@
     }
 
     @media screen and (max-width: 460px) {
+      .rail-top { flex-basis: 100%; }
       .seq-item { grid-template-columns: 44px 1fr auto; }
       .seq-item .seq-ctl { grid-column: 2 / -1; justify-content: flex-end; }
     }
@@ -1320,6 +1357,7 @@
     .studio-nav-btn.locked::after { content: " 🔒"; float: right; }
     .studio-nav-foot { margin-top: auto; display: grid; gap: 8px; }
     .studio-nav-foot .primary-btn, .studio-nav-foot .secondary-btn { padding: 11px 12px; font-size: 11px; }
+    .studio-project-actions { display: grid; gap: 8px; }
     #studioPanel {
       min-width: 0;
       min-height: 0;
@@ -1536,7 +1574,9 @@
       #studioNav { grid-row: auto; grid-column: 1; flex-direction: row; flex-wrap: wrap; align-items: center; overflow: visible; }
       #studioNav .section-title { flex: 1 0 100%; margin: 0 0 6px; }
       #studioNav > .hint { flex: 1 0 100%; }
-      .studio-nav-foot { margin-top: 4px; flex: 1 0 100%; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: center; }
+      .studio-nav-foot { margin-top: 4px; flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; }
+      .studio-nav-foot > * { flex: 1 1 150px; }
+      .studio-nav-foot > .studio-project-actions { flex: 2 1 308px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
       #studioPanel, #studioTimeline { grid-column: 1; }
       #studioPanel { overflow: visible; }
       .sheet-layout { grid-template-columns: 1fr; }
@@ -1702,7 +1742,7 @@
         <div class="eyebrow">Media and Entertainment · GB10 Demo App</div>
       </div>
       <div class="powered">
-        Powered by Dell Pro Max GB10
+        <span class="powered-text">Powered by Dell Pro Max GB10</span>
         <div class="header-controls">
           <select id="langSelect" title="Langue / Language">
             <option value="fr">FR</option>
@@ -1852,19 +1892,6 @@
                 <input type="file" id="lastImageInput" accept="image/*"
                   title="Fournie, la vidéo se termine dessus ; laissée vide, le clip part de la première image comme avant." />
               </label>
-              <label id="audioWrap" class="check-row" style="display:none">
-                <input type="checkbox" id="audioToggle" checked />
-                <span>Générer l'audio — ambiance sonore issue du prompt (natif LTX 2.5 / Minimax H3)</span>
-              </label>
-              <button class="primary-btn gb-go" id="generateBtn">Générer</button>
-            </div>
-
-            <div class="generate-row">
-              <div class="gb-field gb-wide" id="resumeWrap" style="display:none">
-                <button type="button" class="secondary-btn" id="resumeProjectBtn" style="display:none">Reprendre le projet</button>
-                <button type="button" class="secondary-btn" id="cancelProjectBtn" style="display:none; margin-top:8px">Annuler le projet</button>
-              </div>
-
               <div class="gb-field gb-wide" id="marketsWrap" style="display:none">
                 <label>Marchés cibles — Localized Assets</label>
                 <div class="market-chips" id="marketChips"></div>
@@ -1889,6 +1916,19 @@
                 <input type="checkbox" id="skipSheetsToggle" />
                 <span>Ignorer les fiches, mes références seulement — utilise les 2 premières images de « Images de référence supplémentaires » comme ref_image_0/1</span>
               </label>
+
+              <label id="audioWrap" class="check-row" style="display:none">
+                <input type="checkbox" id="audioToggle" checked />
+                <span>Générer l'audio — ambiance sonore issue du prompt (natif LTX 2.5 / Minimax H3)</span>
+              </label>
+              <button class="primary-btn gb-go" id="generateBtn">Générer</button>
+            </div>
+
+            <div class="generate-row">
+              <div class="gb-field gb-wide" id="resumeWrap" style="display:none">
+                <button type="button" class="secondary-btn" id="resumeProjectBtn" style="display:none">Reprendre le projet</button>
+                <button type="button" class="secondary-btn" id="cancelProjectBtn" style="display:none; margin-top:8px">Annuler le projet</button>
+              </div>
             </div>
 
             <details class="generate-more">
@@ -1977,9 +2017,11 @@
         <button type="button" class="studio-nav-btn locked" data-section="video" disabled style="display:none">Vidéo</button>
         <div class="studio-nav-foot">
           <button type="button" class="primary-btn" id="directorValidateBtn" disabled>Valider les planches</button>
-          <button type="button" class="secondary-btn" id="studioCancelBtn" style="display:none">Annuler le projet</button>
-          <button type="button" class="secondary-btn" id="studioNewBtn">Nouveau projet</button>
-          <button type="button" class="secondary-btn" id="studioExitBtn">Quitter le studio</button>
+          <div class="studio-project-actions">
+            <button type="button" class="secondary-btn" id="studioCancelBtn" style="display:none">Annuler le projet</button>
+            <button type="button" class="secondary-btn" id="studioNewBtn">Nouveau projet</button>
+            <button type="button" class="secondary-btn" id="studioExitBtn">Quitter le studio</button>
+          </div>
         </div>
       </nav>
 
@@ -5670,8 +5712,19 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       document.querySelector('#studioNav [data-section="relay"]').style.display = isR2V ? "none" : "";
       document.querySelector('#studioNav [data-section="video"]').style.display = isR2V ? "" : "none";
     }
+    // Même seuil que le @media du <style> : `MOBILE.matches` est relu à chaque appel, jamais figé.
+    const MOBILE = matchMedia("(max-width: 767px)");
+    // S14 : sous 768 px, choisir une section fait défiler jusqu'à elle (la nav occupe le haut de l'écran).
     document.querySelectorAll("#studioNav .studio-nav-btn").forEach(btn =>
-      btn.addEventListener("click", () => selectStudioSection(btn.dataset.section)));
+      btn.addEventListener("click", () => {
+        selectStudioSection(btn.dataset.section);
+        if (MOBILE.matches) $(STUDIO_SECTIONS[btn.dataset.section]).scrollIntoView({ block: "start" });
+      }));
+    // S14 : sous 768 px, Annuler / Nouveau / Quitter passent en bas du studio, à l'écart des onglets.
+    const projectActions = document.querySelector(".studio-project-actions");
+    const placeProjectActions = () => (MOBILE.matches ? $("studioShell") : document.querySelector(".studio-nav-foot")).append(projectActions);
+    placeProjectActions();
+    MOBILE.addEventListener("change", placeProjectActions);
     // « Nouveau projet » : seul point qui EFFACE le projet persisté (LOT C) — quitter le
     // studio ou changer de pipeline (resetDirectorZone) ne supprime jamais la clé.
     $("studioNewBtn").addEventListener("click", () => {
