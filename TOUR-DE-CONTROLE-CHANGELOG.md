@@ -1,5 +1,57 @@
 # Tour de contrôle — changelog
 
+## 2026-09-24 — Vague 1 des revues du 2026-09-23 : exposition réseau et 3 bugs critiques
+
+Cahier des charges : `docs/CODE-REVIEW-OPTIMISATIONS.md` (43 trouvailles) et
+`docs/CODE-REVIEW-ERGONOMIE.md` (34), commit `1f50fff`. Vague 1 = ce qui était urgent ou critique.
+Planifiée par Opus (Fable ayant atteint sa limite de dépense), deux lots séquentiels car ils
+touchent tous deux `index.html` et que le premier recrée le conteneur ComfyUI dont le second a
+besoin pour ses rendus.
+
+### Lot 1B — exposition réseau (I1, I2, I3) — `b2700a0`
+- **nginx** : plus aucun fichier interne servi (`.git/`, `.env`, `.claude/`, `tools/`, `docker/`,
+  `scripts/` → 403, vérifié en localhost et en IP LAN). Les locations de proxy passent en `^~` : une
+  location regex l'emporterait sinon sur un préfixe simple.
+- **ComfyUI** : publié uniquement sur `127.0.0.1:8188`, `SECURITY_LEVEL: normal`, retrait de
+  `--enable-cors-header` (le middleware « origin only » de ComfyUI s'active alors ; le proxy
+  same-origin de `:8090` le passe, WebSocket comprise, vérifié par handshake HTTP 101 depuis deux
+  origines). Gabarits `docker/stacks/*.yml` et stack déployée `~/comfyui-spark/compose.yaml`
+  (hors dépôt, contient un jeton HF en clair — non affiché, non déplacé, sauvegarde `.bak-2026-09-24`).
+- **Updater** : requêtes `Sec-Fetch-Site` cross-site refusées (403), téléversement LoRA sans
+  écrasement (409, `os.link` au lieu de `os.rename`), `.part` unique et nettoyé, fichier publié en 0644
+  (`mkstemp` crée en 0600 et le conteneur écrit en root : ComfyUI ne l'aurait pas lu).
+- Lien « Open ComfyUI » du Studio : `/comfy/` (le `:8188` direct n'est plus joignable à distance).
+- **Non fait, décision utilisateur en attente** : Ollama déployé reste sur `0.0.0.0:11434` — Open
+  WebUI et Spark Control Center l'atteignent par `host.docker.internal` et se casseraient s'il passait
+  en 127.0.0.1. Seul le gabarit du dépôt est durci.
+- Imprévu : ComfyUI était arrêté au démarrage du lot (mise à jour système + reboot à 07:35, conteneur
+  tué juste avant, non relancé par `unless-stopped`). L'agent s'est arrêté et a demandé plutôt que de
+  le relancer seul ; relancé ensuite avec la config durcie (`RestartCount` 0).
+
+### Lot 1A — bugs critiques C1, C2, C3 — `91bbd90`
+- **C1** : `applyMinimaxTurbo` (2 copies, `index.html` et `js/engine.js`) ne cible plus que la LoRA
+  `H3/…`. Avant, décocher « Turbo » puis passer sur Localized Assets retirait la LoRA Lightning de
+  Qwen-Edit (rendu dégradé, statut « success »). Contrôle négatif rejoué sur l'état avant correctif :
+  1 LoRA → 0. `docs/LESSONS.md` et `docs/ARCHITECTURE.md` corrigés.
+- **C2** : `applyMinimaxLastFrame` porté dans `js/engine.js` et appelé par les cartes Canvas
+  « Vidéo » et « Génération vidéo » en moteur H3 (elles échouaient depuis le 2026-09-22). Rendu réel
+  H3 i2v depuis le graphe Canvas : frames 0/19/38 fidèles, audio présent (−31,5 dB moyen).
+  **Le mécanisme d'échec du rapport était faux** : ComfyUI accepte le prompt (200) et échoue à
+  l'exécution sur `lastimg` (`Is a directory`), il ne le rejette pas à la validation. Rapport corrigé.
+- **C3** : `scripts/models.txt` place la LoRA Lightning dans `loras/Qwen/` (là où les gabarits la
+  cherchent) — invisible sur ce GB10 où le fichier existe aux deux endroits, cassait une install neuve.
+- Harnais réexécutable : `node ~/.cache/ai-content-studio/vague1/harness-1a.js` (18 cas).
+
+### Restes signalés par les lots, à traiter en Vague 2
+- Commentaire d'`index.html` (~L4270) « no-op sur tout graphe sans LoraLoaderModelOnly » devenu
+  imprécis ; indentation approximative de 2 lignes ajoutées par le lot 1A (cosmétique).
+- `tools/validate.py --audio` affiche un `[FAIL]` parasite sur un mp4 de 0 octet supprimé, alors que
+  la piste audio réelle est `[OK]`.
+- Le contrôle d'objets git du plan (`… | git cat-file --batch-check`) donnait de faux « missing » :
+  il faut `cut -d' ' -f1` avant `--batch-check`.
+- Les 60 captures UX du rapport ergonomie ont été perdues avec le scratchpad de session (vidé le
+  2026-09-24) : à refaire avant la Vague 3.
+
 ## 2026-09-23 — v1.2.0 — Qwen Image 2.1, en coexistence avec Qwen-Edit 2509
 
 Cadrage initial (`/architect`, `docs/QWEN-IMAGE-2.1-ROADMAP.md`) puis qualification réelle et intégration (4 commits). Le livré diffère du cadrage sur plusieurs points importants — voir plus bas, le compte-rendu complet est `docs/NOUVEAUX-MODELES-QWEN21.md`.

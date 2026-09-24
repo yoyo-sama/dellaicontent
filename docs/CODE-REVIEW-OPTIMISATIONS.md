@@ -78,13 +78,14 @@ Depuis `0241cbb` (2026-09-22), `workflows/api/minimax_h3_i2v.json` câble `last_
 - `js/nodes-simple.js` L322-345 (`VideoNode.generate`, moteur `minimax_h3`) ;
 - `js/nodes-advanced.js` L538-559 (`CutVideoNode.generate`, moteur `minimax_h3`).
 
-`buildGraph` substitue `{{IMAGE2}}` par `""` → `LoadImage { image: "" }` → la validation ComfyUI
-rejette le prompt entier.
+`buildGraph` substitue `{{IMAGE2}}` par `""` → `LoadImage { image: "" }` → le job échoue.
 
-**Vérifié** dans le source du conteneur (`/comfy/mnt/ComfyUI/nodes.py` L1808-1810) :
-`LoadImage.VALIDATE_INPUTS` renvoie `"Invalid image file: "` quand le fichier n'existe pas. Les
-deux cartes H3 i2v du Canvas sont donc inutilisables (LTX 2.5 et le mode `minimax_h3_r2v` ne sont
-pas touchés).
+**Vérifié à l'exécution** (lot 1A, ComfyUI 0.37.2, 2026-09-24) — et non à la validation comme
+l'annonçait une première lecture du code : le prompt est **accepté** (HTTP 200, `node_errors: {}`)
+puis le job échoue sur le nœud `lastimg` avec `[Errno 21] Is a directory: '/basedir/input'`
+(`image: ""` se résout sur le dossier `input/` lui-même, qui existe donc passe la validation).
+Effet pratique inchangé : les deux cartes H3 i2v du Canvas sont inutilisables (LTX 2.5 et le mode
+`minimax_h3_r2v` ne sont pas touchés). **Corrigé** par le lot 1A (commit `91bbd90`).
 
 **Correction** : porter `applyMinimaxLastFrame` dans `js/engine.js` et l'appeler juste après
 `E.buildGraph(...)` dans les deux branches H3 (`E.applyMinimaxLastFrame(graph, false)`).
