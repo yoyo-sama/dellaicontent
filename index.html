@@ -6033,6 +6033,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     $("studioExitBtn").addEventListener("click", exitStudio);
 
     function resetDirectorZone() {
+      // Libère les objectURLs de la session abandonnée (planches, décor, keyframes).
+      if (director) [...director.chars.flatMap(c => c.variants), ...director.locVariants, ...(director.keyframes || [])]
+        .forEach(x => x?.url && URL.revokeObjectURL(x.url));
       director = null;
       soulAnchors = null;
       exitStudio();
@@ -6182,15 +6185,15 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // (resolveImageJob) et complète la variante correspondante.
     async function resolveVariantJob(kind, variant, promptId) {
       const uploaded = await resolveImageJob(promptId);
-      variant.inputName = uploaded.name;
-      variant.file = uploaded.file; // référence à la sortie disque (persistable — LOT C)
-      variant.blob = uploaded.blob;
-      variant.url = URL.createObjectURL(uploaded.blob);
-      variant.status = "ready";
       // Le job résolu peut appartenir à un sujet que le menu n'affiche pas : on cherche la
       // variante dans TOUS les sujets, sinon une planche de sujet 2 resterait « Génération… ».
+      // Vérifié AVANT de créer l'objectURL, qu'une session remplacée ne libérerait jamais.
       const arr = kind === "char" ? director?.chars?.flatMap(c => c.variants) : director?.locVariants;
       if (!arr || !arr.includes(variant)) return; // session remplacée entre-temps
+      variant.inputName = uploaded.name;
+      variant.file = uploaded.file; // référence à la sortie disque (persistable — LOT C)
+      variant.url = URL.createObjectURL(uploaded.blob);
+      variant.status = "ready";
       refreshSheetUI(kind);
       saveProject();
     }
@@ -6476,7 +6479,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         const variants = isChar ? director.charVariants : director.locVariants;
         variants.push({ file: { filename: name, subfolder: "", type: "input" }, inputName: name,
                         seed: null, source: "imported", prompt: null, status: "ready",
-                        blob: fileObj, url: URL.createObjectURL(fileObj) });
+                        url: URL.createObjectURL(fileObj) });
         if (isChar) director.charActive = variants.length - 1; else director.locActive = variants.length - 1;
         director.validated = false;
         refreshSheetUI(kind);
@@ -6552,7 +6555,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       } else {
         // storyboard_v2 (ou pas de session : director null retombe ici, ré-verrouille au reset).
         $("shotEditList").style.display = unlocked ? "" : "none";
-        $("directorKeyframesBtn").style.display = unlocked ? "" : "none";
+        // Keyframes déjà là : on régénère carte par carte, jamais toute l'étape 2 (verrous, montage).
+        $("directorKeyframesBtn").style.display = unlocked && !director?.keyframes ? "" : "none";
         const sb = document.querySelector('#studioNav [data-section="storyboard"]');
         sb.disabled = !unlocked;
         sb.classList.toggle("locked", !unlocked);
@@ -6728,21 +6732,33 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       $("montageList").innerHTML = ""; $("montagePlayer").innerHTML = ""; $("studioTimeline").innerHTML = "";
       updateGateState();
       updateMontageButtons();
-      const ids = [];
+      // Statut PAR keyframe (motif de regenerateKeyframe) : un plan en échec passe « Erreur »,
+      // régénérable depuis sa carte, et les autres continuent. Aucun re-essai automatique.
+      const d = director, waits = [];
+      const kfFail = (i, err) => {
+        if (director !== d) return; // session remplacée entre-temps
+        d.keyframes[i].status = "error"; renderKeyframeCard(i); addEvent("WARN", err.message, "warn");
+      };
       for (let i = 0; i < director.n; i++) {
         const seed = director.seed + 11 + i;
         director.keyframes[i].seed = seed;
-        director.keyframes[i].prompt = compileKeyframePrompt(director.shots[i], shotSubjects(director.shots[i]).map(r => r.desc));
-        renderKeyframeCard(i);
-        ids.push(await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
-          director.locName, seed, director.width, director.height, i, director.n));
+        try {
+          director.keyframes[i].prompt = compileKeyframePrompt(director.shots[i], shotSubjects(director.shots[i]).map(r => r.desc));
+          renderKeyframeCard(i);
+          const id = await submitKeyframeJob(director.anchorRaw, director.shots[i], shotSubjects(director.shots[i]), director.negText,
+            director.locName, seed, director.width, director.height, i, director.n);
+          waits.push(trackKeyframeCompletion(i, id).catch(err => kfFail(i, err)));
+        } catch (err) { kfFail(i, err); }
       }
-      await Promise.all(ids.map((id, i) => trackKeyframeCompletion(i, id)));
+      await Promise.all(waits);
     }
 
     async function trackKeyframeCompletion(i, promptId) {
+      const d = director;
       const uploaded = await resolveImageJob(promptId);
-      const kf = director.keyframes[i];
+      if (director !== d) return; // session remplacée entre-temps (resetDirectorZone)
+      const kf = d.keyframes[i];
+      if (kf.url) URL.revokeObjectURL(kf.url); // l'ancienne image de la carte (régénération, reprise)
       kf.name = uploaded.name; kf.file = uploaded.file; kf.blob = uploaded.blob;
       kf.url = URL.createObjectURL(uploaded.blob);
       kf.status = "ready";
@@ -6920,20 +6936,32 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         const i2vRaw = await getTemplate(cutTemplateFor(engine));
         const plan = buildCutPlan();
         director.cutPlan = plan;
-        director.cuts = new Array(plan.length).fill(null);
+        // Un cut complet par plan dès la soumission, statut PAR cut : un échec ne coûte que
+        // son plan (« 🔄 Re-rendre ce plan » le relance seul), les autres sont récupérés.
+        const d = director;
+        director.cuts = plan.map((p, k) => ({ file: null, inputName: null, seed: seed + 31 + k, duration: p.duration,
+          status: "pending", engine, edited: false,
+          prompt: compileCutPromptFor(p.shot, shotCharDesc(p.shot), locDesc, p.holdMotion, engine, p.duration) }));
         director.order = plan.map((_, k) => k);
-        const ids = [];
-        for (let k = 0; k < plan.length; k++)
-          ids.push(await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, shotCharDesc(plan[k].shot), locDesc, negText,
-            seed + 31 + k, k, plan.length, plan[k].duration, plan[k].holdMotion, engine));
-        const entries = await waitForJobs(ids);
-        for (let k = 0; k < ids.length; k++) {
-          const f = outputFiles(entries[ids[k]], ".mp4")[0];
-          const up = await reupload(f);
-          director.cuts[k] = { file: f, inputName: up.name, seed: seed + 31 + k, duration: plan[k].duration,
-            status: "ready", engine, edited: false,
-            prompt: compileCutPromptFor(plan[k].shot, shotCharDesc(plan[k].shot), locDesc, plan[k].holdMotion, engine, plan[k].duration) };
+        const cutFail = (k, err) => {
+          if (director !== d) return; // session remplacée entre-temps
+          d.cuts[k].status = "error"; addEvent("WARN", err.message, "warn");
+        };
+        const waits = [];
+        for (let k = 0; k < plan.length; k++) {
+          try {
+            const id = await submitCutJob(i2vRaw, plan[k].keyObj, plan[k].shot, shotCharDesc(plan[k].shot), locDesc, negText,
+              seed + 31 + k, k, plan.length, plan[k].duration, plan[k].holdMotion, engine);
+            waits.push((async () => {
+              const f = outputFiles((await waitForJobs([id]))[id], ".mp4")[0];
+              const up = await reupload(f);
+              if (director !== d) return;
+              Object.assign(d.cuts[k], { file: f, inputName: up.name, status: "ready" });
+            })().catch(err => cutFail(k, err)));
+          } catch (err) { cutFail(k, err); }
         }
+        await Promise.all(waits);
+        if (director !== d) return;
         const held = plan.length - director.n;
         addEvent("OK", `${director.n} cuts générés${held ? ` + ${held} tenue du plan final` : ""} — réordonnez puis assemblez.`, "ok");
       } catch (err) { addEvent("WARN", err.message, "warn"); }
@@ -7560,7 +7588,9 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         engine,
         anchorRaw: director.anchorRaw || (director.anchorRaw = await getTemplate(director.wf.anchor)),
         i2vRaw: await getTemplate(cutTemplateFor(engine)),
-        charDesc: charDescFromFields(director.charFields),
+        // Sujet 1 explicite, comme relayShot (subjects:[0]) et relaySubjectLegend :
+        // charFields suit l'onglet affiché (charIdx), pas le sujet de la chaîne.
+        charDesc: charDescFromFields(director.chars[0].fields),
         locDesc: director.locDesc, negText: director.negText, seed: director.seed
       };
     }
@@ -7581,6 +7611,9 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
       seg.status = "pending";
       renderRelay();
       const prev = i > 0 ? relayTransitionOf(r.segments[i - 1]) : null;
+      // 🔗 demandé sans frame de transition : refus plutôt qu'une coupure silencieuse.
+      if (i > 0 && seg.mode === "continue" && !prev)
+        throw new Error(`Relay · segment ${i + 1} : liaison continue impossible, le segment ${i} n'a pas de frame de transition — re-générez-le.`);
       const mode = i === 0 || !prev ? "cut" : seg.mode;
       const shot = relayShot(seg);
       let keyObj;
@@ -7593,7 +7626,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         const kPrompt = compileRelayKeyframePrompt(seg.prompt.trim(), charDesc, locDesc, i === 0);
         const base = prev ? await relayResolveImage(prev) : null;
         const kId = await submitKeyframeJob(anchorRaw, shot,
-          [{ desc: charDesc, name: base ? base.name : director.charName }],
+          [{ desc: charDesc, name: base ? base.name : shotSubjects(shot)[0].name }],
           negText, director.locName, seed + 401 + i, director.width, director.height, i, total, kPrompt);
         keyObj = await resolveImageJob(kId);
       }
@@ -7889,7 +7922,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         tasks.push((async () => {
           try {
             const r = await resolveFileRef(v.file);
-            v.inputName = r.name; v.blob = r.blob; v.url = r.url;
+            v.inputName = r.name; v.url = r.url;
           } catch { v.status = "missing"; }
           refreshSheetUI(kind);
         })());
@@ -7969,7 +8002,11 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
       const queued = [...activeJobIds];
       activeJobIds.clear();
       try {
-        await fetch(`${COMFY}/interrupt`, { method: "POST" });
+        // Interruption ciblée : un /interrupt sans prompt_id arrêterait aussi le job d'un autre onglet.
+        await Promise.all(queued.map(id => fetch(`${COMFY}/interrupt`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt_id: id })
+        })));
         if (queued.length)
           await fetch(`${COMFY}/queue`, {
             method: "POST", headers: { "Content-Type": "application/json" },
