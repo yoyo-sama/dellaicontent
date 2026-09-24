@@ -31,7 +31,7 @@
       '"{{HEIGHT}}"': String(p.height),
       '"{{BATCH}}"': String(p.batch),
       '"{{DURATION}}"': String(p.duration || 5),
-      '"{{FRAMES}}"': String((p.duration || 5) * (p.fps || 25) + 1),
+      '"{{FRAMES}}"': String((p.duration || 5) * (p.fps || LTX25_FPS) + 1),
       '"{{IMAGE}}"': JSON.stringify(p.image || ""),
       '"{{IMAGE2}}"': JSON.stringify(p.image2 || "")
     };
@@ -78,7 +78,7 @@
   // turbo OFF : comportement inchangé (LoRA retirée, steps=20), quel que soit `steps`.
   function applyMinimaxTurbo(graph, turboOn, steps) {
     const loraEntry = Object.entries(graph).find(([, n]) =>
-    n.class_type === "LoraLoaderModelOnly" && String(n.inputs.lora_name).startsWith("H3/"));
+      n.class_type === "LoraLoaderModelOnly" && String(n.inputs.lora_name).startsWith("H3/"));
     if (!loraEntry) return graph;
     if (turboOn) {
       const n = Number(steps);
@@ -229,125 +229,12 @@
     return graph;
   }
 
-  const FLF2V_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0";
   const LTX25_FPS = 24;   // LTX 2.5 et Minimax H3 rendent en 24 fps (LTX 2.3 était en 25).
 
   function makeGraphBuilder() {
     const g = {}; let id = 0;
     const add = (class_type, inputs) => { g[String(++id)] = { class_type, inputs }; return String(id); };
     return { g, add };
-  }
-
-  // Ressources partagées LTX 2.5 (mêmes fichiers que workflows/api/ltx25_flf2v.json).
-  // Un seul jeu de loaders pour toute la chaîne multi-segments.
-  function addLtx25Shared(add) {
-    const unet = add("UNETLoader", {
-      unet_name: "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors", weight_dtype: "default"
-    });
-    const vae = add("VAELoader", { vae_name: "ltx-2.5-video-vae-bf16.safetensors" });
-    const audioVae = add("VAELoader", { vae_name: "ltx-2.5-audio-vae-bf16.safetensors" });
-    const te = add("CLIPLoader", {
-      clip_name: "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors", type: "ltxv", device: "default"
-    });
-    const enhClip = add("CLIPLoader", { clip_name: "gemma4_e2b_it_bf16.safetensors", type: "ltxv", device: "default" });
-    const sampler = add("SamplerEulerAncestral", { eta: 0, s_noise: 1 });
-    const sigmas = add("ManualSigmas", { sigmas: FLF2V_SIGMAS });
-    return { unet, vae, audioVae, te, enhClip, sampler, sigmas };
-  }
-
-  // Prompt-enhancer intégré LTX 2.5 : contrairement au 2.3, il accepte une entrée
-  // image — l'ancrer sur la 1ʳᵉ image du segment évite qu'il invente une scène (piège n°9).
-  function addLtx25Enhance(add, sh, prompt, seed, imageRef) {
-    return [add("TextGenerateLTX2Prompt", {
-      clip: [sh.enhClip, 0], prompt, max_length: 600,
-      sampling_mode: "on", "sampling_mode.temperature": 0.7, "sampling_mode.top_k": 64,
-      "sampling_mode.top_p": 0.95, "sampling_mode.min_p": 0.05,
-      "sampling_mode.repetition_penalty": 1.15, "sampling_mode.seed": seed,
-      "sampling_mode.presence_penalty": 0, image: imageRef, thinking: false, use_default_template: true
-    }), 0];
-  }
-
-  // Chaîne FLF2V LTX 2.5 : imageRefs = [nodeId, slot][], un prompt de transition par
-  // segment. Le bloc de sampling est celui de api/ltx25_flf2v.json (guider dual-CFG,
-  // audio natif) répété par segment ; images concaténées ImageBatch, audio AudioConcat.
-  function addFLF2VChain(add, sh, imageRefs, durations, promptTexts, negText, seed, width, height, withAudio) {
-    const negEnc = add("CLIPTextEncode", { text: negText, clip: [sh.te, 0] });
-    const decoded = [], audios = [];
-    for (let k = 0; k < imageRefs.length - 1; k++) {
-      const frames = 8 * Math.max(1, Math.round((durations[k] * LTX25_FPS - 1) / 8)) + 1;
-      const p1 = add("LTXVPreprocess", { image: imageRefs[k], img_compression: 18 });
-      const p2 = add("LTXVPreprocess", { image: imageRefs[k + 1], img_compression: 18 });
-      const pos = add("CLIPTextEncode", {
-        text: addLtx25Enhance(add, sh, promptTexts[k], seed + k, [p1, 0]), clip: [sh.te, 0]
-      });
-      const cond = add("LTXVConditioning", { positive: [pos, 0], negative: [negEnc, 0], frame_rate: LTX25_FPS });
-      const lat = add("EmptyLTXVLatentVideo", { width, height, length: frames, batch_size: 1 });
-      const g1 = add("LTXVAddGuide", {
-        positive: [cond, 0], negative: [cond, 1], vae: [sh.vae, 0],
-        latent: [lat, 0], image: [p1, 0], frame_idx: 0, strength: 0.7
-      });
-      const g2 = add("LTXVAddGuide", {
-        positive: [g1, 0], negative: [g1, 1], vae: [sh.vae, 0],
-        latent: [g1, 2], image: [p2, 0], frame_idx: -1, strength: 0.7
-      });
-      const noise = add("RandomNoise", { noise_seed: seed + k });
-      const guider = add("LTXVDualCFGGuider", {
-        model: [sh.unet, 0], positive: [g2, 0], negative: [g2, 1], video_cfg: 1, audio_cfg: 1
-      });
-      let samplerInput = [g2, 2], videoLatent;
-      if (withAudio) {
-        const aLat = add("LTXVEmptyLatentAudio", {
-          frames_number: frames, frame_rate: LTX25_FPS, batch_size: 1, audio_vae: [sh.audioVae, 0]
-        });
-        samplerInput = [add("LTXVConcatAVLatent", { video_latent: [g2, 2], audio_latent: [aLat, 0] }), 0];
-      }
-      const sca = add("SamplerCustomAdvanced", {
-        noise: [noise, 0], guider: [guider, 0], sampler: [sh.sampler, 0], sigmas: [sh.sigmas, 0], latent_image: samplerInput
-      });
-      if (withAudio) {
-        const sep = add("LTXVSeparateAVLatent", { av_latent: [sca, 1] });
-        videoLatent = [sep, 0];
-        audios.push(add("LTXVAudioVAEDecode", { samples: [sep, 1], audio_vae: [sh.audioVae, 0] }));
-      } else {
-        videoLatent = [sca, 1];
-      }
-      const crop = add("LTXVCropGuides", { positive: [g2, 0], negative: [g2, 1], latent: videoLatent });
-      decoded.push(add("VAEDecodeTiled", {
-        samples: [crop, 2], vae: [sh.vae, 0], tile_size: 512, overlap: 64, temporal_size: 64, temporal_overlap: 16
-      }));
-    }
-    let chain = decoded[0];
-    for (let k = 1; k < decoded.length; k++) chain = add("ImageBatch", { image1: [chain, 0], image2: [decoded[k], 0] });
-    let audioOut = null;
-    if (withAudio) {
-      let aChain = audios[0];
-      for (let k = 1; k < audios.length; k++)
-        aChain = add("AudioConcat", { audio1: [aChain, 0], audio2: [audios[k], 0], direction: "after" });
-      audioOut = [aChain, 0];
-    }
-    return { videoImages: [chain, 0], audioOut };
-  }
-
-  function addVideoOutput(add, chain, prefix) {
-    const inputs = { images: chain.videoImages, fps: LTX25_FPS, bit_depth: 8 };
-    if (chain.audioOut) inputs.audio = chain.audioOut;
-    const video = add("CreateVideo", inputs);
-    add("SaveVideo", { video: [video, 0], filename_prefix: prefix, format: "auto", codec: "auto" });
-  }
-
-  function buildFLF2VGraph(imageNames, durations, prompt, negativeText, seed, width = 1280, height = 720, withAudio = false) {
-    const { g, add } = makeGraphBuilder();
-    const sh = addLtx25Shared(add);
-    // Mise au format du latent (cover + crop centré) : sans ça, LTXVAddGuide
-    // recadre brutalement les images dont le ratio diffère de la vidéo.
-    const refs = imageNames.map(n => {
-      const l = add("LoadImage", { image: n });
-      return [add("ImageScale", { image: [l, 0], upscale_method: "lanczos", width, height, crop: "center" }), 0];
-    });
-    const chain = addFLF2VChain(add, sh, refs, durations, Array(refs.length - 1).fill(prompt),
-      negativeText, seed, width, height, withAudio);
-    addVideoOutput(add, chain, "studio/sequence");
-    return g;
   }
 
   // ── Branche image Krea 2 Turbo (8 steps, cfg 1 — copie de api/krea2_t2i.json) ──
@@ -434,38 +321,6 @@
     let grid = rows[0];
     for (let r = 1; r < rows.length; r++) grid = stitch(grid, rows[r], "down");
     return grid;
-  }
-
-  // ── Tâche complète : Campagne (posters + thumbnails + teaser) ──
-  function mergeGraph(g, other, prefix) {
-    for (const [nid, n] of Object.entries(other)) {
-      const copy = JSON.parse(JSON.stringify(n));
-      for (const [k, v] of Object.entries(copy.inputs)) {
-        if (Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && other[v[0]] !== undefined)
-          copy.inputs[k] = [prefix + v[0], v[1]];
-      }
-      g[prefix + nid] = copy;
-    }
-  }
-  async function buildCampaignFullGraph(prompt, negText, seed, batch, teaserDur) {
-    const { g, add } = makeGraphBuilder();
-    const img = addKrea2Shared(add);
-    [["poster", 832, 1216, batch, "Poster composition with space for title text."],
-     ["thumbnail", 1280, 720, batch, "YouTube thumbnail composition, bold and readable."],
-     ["social", 1024, 1024, 1, "Square social media visual."]].forEach(([name, w, h, b, suffix], i) => {
-      const dec = addKrea2Shot(add, img, `${prompt} ${suffix}`, seed + 200 + i, w, h, b);
-      add("SaveImage", { images: [dec, 0], filename_prefix: `studio/campaign/${name}` });
-    });
-    // Teaser vertical : réutilise le template LTX 2.5 t2v validé (2 passes + upscale,
-    // audio natif câblé dans le template — aucun ajout côté JS).
-    const raw = await getTemplate("api/ltx25_t2v.json");
-    const t2v = buildGraph(raw, {
-      prompt: `${prompt} Dynamic cinematic teaser, energetic camera movement.`,
-      negative: negText, seed, width: 720, height: 1280, batch: 1, duration: teaserDur
-    });
-    for (const n of Object.values(t2v)) if (n.class_type === "SaveVideo") n.inputs.filename_prefix = "studio/campaign/teaser";
-    mergeGraph(g, t2v, "tv_");
-    return g;
   }
 
   const CAMERA_LIB = {
@@ -645,9 +500,6 @@
     return shots;
   }
 
-  // Mouvement de caméra figé pour la tenue du plan final (pseudo-shot du dernier plan).
-  const HOLD_MOTION = "Locked camera holding on the final shot, subtle ambient motion only.";
-
   // Appel gemma4 mutualisé : format JSON, think:false, retry sans think sur 4xx.
   async function gemmaJSON(system, user) {
     const body = {
@@ -741,9 +593,11 @@
   }
 
   // ── Résolution pilotée par mégapixels — porté VERBATIM depuis
-  // ai-content-studio-cockpit/index.html (fonction `computeMPResolution`, cf.
-  // docs/LOT-D-MEGAPIXELS.md du cockpit pour le détail du piège d'arrondi LTX 2.5 deux-
-  // passes). Constante 1.045 (empirique, déjà validée) et formule INTOUCHÉES.
+  // ai-content-studio-cockpit/index.html (fonction `computeMPResolution`). Constante 1.045
+  // (empirique, déjà validée) et formule INTOUCHÉES. Le pas d'arrondi dépend du moteur
+  // (`unit`, voir `mpUnitForEngine`) : LTX 2.5 traite l'image en deux passes, dont la
+  // seconde double la résolution, donc une taille non multiple de 64 se fait arrondir à
+  // chaque passe et la vidéo rendue s'écarte de celle demandée.
   function computeMPResolution(mp, ratioStr, unit) {
     unit = unit || 32;
     const [rw, rh] = ratioStr.split(":").map(Number);
@@ -752,17 +606,15 @@
     const height = Math.round(Math.sqrt(1.045 * mp * 1000000 / ar) / unit) * unit;
     return [width, height];
   }
-  // Équivalent de `mpUnitForWorkflow(wf)` du cockpit (qui teste `wf.id.startsWith("ltx25_")`) :
-  // le canvas n'a pas de notion de "workflow id", seulement `properties.engine` sur les
+  // Le canvas n'a pas de notion de "workflow id", seulement `properties.engine` sur les
   // cartes qui en exposent un ("ltx25" | "minimax_h3"). LTX 2.5 = architecture 2 passes
-  // (arrondi ×64, cf. LOT-D-MEGAPIXELS.md du cockpit) ; Minimax H3 = arrondi direct ×32
-  // (inchangé). `engine` absent (adv/r2v, qui n'a pas de champ "engine" et n'est jamais
-  // LTX 2.5) ⇒ 32 par défaut.
+  // (arrondi ×64) ; Minimax H3 = arrondi direct ×32. `engine` absent (adv/r2v, qui n'a pas
+  // de champ "engine" et n'est jamais LTX 2.5) ⇒ 32 par défaut.
   function mpUnitForEngine(engine) {
     return engine === "ltx25" ? 64 : 32;
   }
   // 14 valeurs exposées dans l'UI, mêmes valeurs pour les 2 familles de moteurs (seule
-  // l'unité d'arrondi diffère) — reprises telles quelles de #megapixelsSelect du cockpit.
+  // l'unité d'arrondi diffère).
   const MP_VALUES = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.98, 1.0, 1.2, 1.5, 1.8, 2.0];
 
   // Krea 2 route le négatif dans ConditioningZeroOut : il n'est même pas encodé (LESSONS
@@ -987,87 +839,17 @@
       `${p.cutNames.length} cuts francs · ${p.withAudio ? "audio" : "muet"} · fps 24 · seed ${p.seed}`, p.clientId, p.onEvent);
   }
 
-  // Orchestrations complètes — même ordre d'appels réseau qu'index.html. Tout ce qui était
-  // lu au DOM (brief, negative, shotCount, holdDuration, audioToggle, turboToggle, styleSelect,
-  // videoDuration, workflow courant) arrive dans `p` ; `setAnchors` remplace setSoulAnchors().
-  async function generateStoryboardV2(p) {
-    const onEvent = p.onEvent;
-    if (onEvent) onEvent("REQ", `Fiche personnage + fiche décor + ${p.shotCount} plans via ${OLLAMA_MODEL}…`, "req");
-    const charDesc = charDescFromFields(await characterSheetFromBrief(p.brief, onEvent));
-    const locDesc = locDescFromFields(await locationSheetFromBrief(p.brief, onEvent));
-    const shots = await shotListFromBrief(p.brief, p.shotCount, p.segmentDuration, onEvent);
-
-    const base = { ...p, charDesc, locDesc, modelLabel: p.modelLabel };
-    const csId = await submitCharsheetJob({ ...base, seed: p.seed });
-    const lsId = await submitLocsheetJob({ ...base, seed: p.seed + 101 });
-    const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
-    const charName = charRef.name, locName = locRef.name;
-    if (p.setAnchors) p.setAnchors(charRef, locRef);
-
-    const anchorRaw = await getTemplate(p.anchorTemplate);
-    const keyIds = [];
-    for (let i = 0; i < p.shotCount; i++)
-      keyIds.push(await submitKeyframeJob({ ...base, anchorRaw, shot: shots[i], charName, locName,
-        seed: p.seed + 11 + i, idx: i, total: p.shotCount }));
-    const keyEntries = await waitForJobs(keyIds);
-    const keys = [];
-    for (const id of keyIds) keys.push(await reupload(outputFiles(keyEntries[id], ".png")[0]));
-
-    await submitGridJob({ ...base, keys });
-
-    const i2vRaw = await getTemplate("api/ltx25_i2v.json");
-    const plan = shots.map((shot, k) => ({ keyObj: keys[k], shot, dur: shot.duration, holdMotion: null }));
-    if (p.holdDuration > 0)
-      plan.push({ keyObj: keys[keys.length - 1], shot: shots[shots.length - 1], dur: p.holdDuration, holdMotion: HOLD_MOTION });
-    const cutIds = [];
-    for (let k = 0; k < plan.length; k++)
-      cutIds.push(await submitCutJob({ ...base, i2vRaw, keyObj: plan[k].keyObj, shot: plan[k].shot,
-        holdMotion: plan[k].holdMotion, duration: plan[k].dur, seed: p.seed + 31 + k, idx: k, total: plan.length }));
-    const cutEntries = await waitForJobs(cutIds);
-    const cutNames = [];
-    for (const id of cutIds) cutNames.push((await reupload(outputFiles(cutEntries[id], ".mp4")[0])).name);
-
-    const animaticId = await submitAnimaticJob({ ...base, cutNames, withAudio: p.withAudio, seed: p.seed });
-    return { charRef, locRef, shots, keys, cutNames, animaticId };
-  }
-
-  async function generateReference2Video(p) {
-    const onEvent = p.onEvent;
-    if (onEvent) onEvent("REQ", `Fiche personnage + fiche décor via ${OLLAMA_MODEL}…`, "req");
-    const charDesc = charDescFromFields(await characterSheetFromBrief(p.brief, onEvent));
-    const locDesc = locDescFromFields(await locationSheetFromBrief(p.brief, onEvent));
-
-    const base = { ...p, charDesc, locDesc };
-    const csId = await submitCharsheetJob({ ...base, seed: p.seed });
-    const lsId = await submitLocsheetJob({ ...base, seed: p.seed + 101 });
-    const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
-    const charName = charRef.name, locName = locRef.name;
-    if (p.setAnchors) p.setAnchors(charRef, locRef);
-
-    const raw = await getTemplate(p.templateFile);
-    const graph = buildGraph(raw, {
-      prompt: `${charDesc}. ${locDesc}. ${p.brief}`, negative: p.negative,
-      seed: p.seed + 201, width: p.width, height: p.height, duration: p.duration,
-      image: charName, image2: locName
-    });
-    applyMinimaxTurbo(graph, p.turbo);
-    const promptId = await submitGraph(graph, "Personnage + décor cohérents (Minimax H3 r2v)",
-      `${p.modelLabel} · r2v · ${p.duration}s · ${p.turbo ? "turbo 8 steps" : "20 steps"} · seed ${p.seed}`,
-      p.clientId, onEvent);
-    return { charRef, locRef, promptId };
-  }
-
     global.Engine = {
       COMFY, OLLAMA, OLLAMA_MODEL,
       // construction de graphes
-      buildGraph, makeGraphBuilder, mergeGraph, getTemplate,
-      buildFLF2VGraph, buildCampaignFullGraph, buildCharsheetGraph, buildLocsheetGraph, buildAnimaticGraph,
-      addKrea2Shared, addKrea2Shot, addGrid, addLtx25Shared, addFLF2VChain, addVideoOutput, applyMinimaxTurbo, applyMinimaxLastFrame,
+      buildGraph, makeGraphBuilder, getTemplate,
+      buildCharsheetGraph, buildLocsheetGraph, buildAnimaticGraph,
+      addKrea2Shared, addKrea2Shot, addGrid, applyMinimaxTurbo, applyMinimaxLastFrame,
       addMinimaxRefs, addQwenImage3,   // AJOUT Lot 5 : références additionnelles r2v / 3ᵉ fiche storyboard
       addQwen21Refs,   // AJOUT LOT Qwen21 : références additionnelles Qwen Image 2.1 (Canvas)
       addH3StyleLora,   // LoRA de style Minimax H3, cumulable avec applyMinimaxTurbo (appeler APRÈS)
       // prompts / libs
-      CAMERA_LIB, LIGHTING_LIB, STYLE_PACKS, KREA2_LORAS, H3_STYLE_LORAS, HOLD_MOTION, SHEET_CLEAN,
+      CAMERA_LIB, LIGHTING_LIB, STYLE_PACKS, KREA2_LORAS, H3_STYLE_LORAS, SHEET_CLEAN,
       styleTextFor, compileKeyframePrompt, compileCutPrompt,
       // LLM
       gemmaJSON, characterSheetFromBrief, locationSheetFromBrief, shotListFromBrief,
@@ -1080,8 +862,6 @@
       // résolution mégapixels (LTX 2.5 / Minimax H3) — porté de ai-content-studio-cockpit
       computeMPResolution, mpUnitForEngine, MP_VALUES,
       // jobs storyboard
-      submitCharsheetJob, submitLocsheetJob, submitKeyframeJob, submitGridJob, submitCutJob, submitAnimaticJob,
-      // orchestrations
-      generateStoryboardV2, generateReference2Video
+      submitCharsheetJob, submitLocsheetJob, submitKeyframeJob, submitGridJob, submitCutJob, submitAnimaticJob
     };
   })(typeof window !== "undefined" ? window : globalThis);

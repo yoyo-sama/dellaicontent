@@ -2594,7 +2594,6 @@
       "Action": { es: "Acción", de: "Aktion" },
       "Émotion": { en: "Emotion", es: "Emoción", de: "Emotion" },
       "Durée (s)": { en: "Duration (s)", es: "Duración (s)", de: "Dauer (s)" },
-      "Détails": { en: "Details", es: "Detalles" },
       "arrondi 8n+1 au rendu": { en: "rounded to 8n+1 on render", es: "redondeado a 8n+1 al renderizar", de: "beim Rendern auf 8n+1 gerundet" },
       // Éditeur de prompt (planches, keyframes, cuts)
       "Prompt": {},
@@ -2795,6 +2794,7 @@
       renderStyleOptions();
       renderSheetTemplateOptions();
       renderLoraSelect();
+      renderSheetLoraSelect();
       refreshSoulId();
       refreshSubjectUI();
       if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); renderRelay(); }
@@ -2950,7 +2950,7 @@
     // Krea2, pas de branchement par pipeline/moteur contrairement à renderLoraSelect ci-dessus.
     function renderSheetLoraSelect() {
       const sel = $("sheetLoraSelect"), prev = sel.value;
-      sel.innerHTML = KREA2_LORAS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+      sel.innerHTML = KREA2_LORAS.map(([v, l]) => `<option value="${v}">${tr(l)}</option>`).join("");
       if (KREA2_LORAS.some(([v]) => v === prev)) sel.value = prev;
     }
 
@@ -2976,7 +2976,7 @@
         '"{{HEIGHT}}"': String(p.height),
         '"{{BATCH}}"': String(p.batch),
         '"{{DURATION}}"': String(p.duration || 5),
-        '"{{FRAMES}}"': String((p.duration || 5) * (p.fps || 25) + 1),
+        '"{{FRAMES}}"': String((p.duration || 5) * (p.fps || LTX25_FPS) + 1),
         '"{{IMAGE}}"': JSON.stringify(p.image || ""),
         '"{{IMAGE2}}"': JSON.stringify(p.image2 || "")
       };
@@ -3043,13 +3043,7 @@
 
     // ── Pastille d'identité (planches ancrées) ─────────────────────
     // AFFICHAGE PUR d'un état déjà produit ailleurs : planches actives de la session
-    // Réalisateur (`director`) ou dernières planches résolues d'un run Auto/reference2video
-    // (`soulAnchors`). Ne déclenche ni ne modifie aucune génération.
-    let soulAnchors = null;
-    function setSoulAnchors(charRef, locRef) {
-      soulAnchors = { char: viewURL(charRef.file), loc: viewURL(locRef.file), locked: true };
-      refreshSoulId();
-    }
+    // Réalisateur (`director`). Ne déclenche ni ne modifie aucune génération.
     function currentAnchors() {
       if (director) {
         const c = director.charVariants[director.charActive], l = director.locVariants[director.locActive];
@@ -3057,7 +3051,7 @@
           return { char: c.url || viewURL(c.file), loc: l.url || viewURL(l.file), locked: !!director.validated };
         return null;
       }
-      return soulAnchors;
+      return null;
     }
     function refreshSoulId() {
       const box = $("soulId");
@@ -3499,7 +3493,7 @@
       campaign_full: (seed) => generateCampaignFull(seed),
       // Bypass fiches (#skipSheetsToggle) : rien à revoir si rien n'est auto-généré, donc la
       // revue est court-circuitée et le job vidéo part directement (generateReference2Video
-      // gère le bypass en interne). Décoché : revue des planches dans le studio.
+      // est ce chemin). Décoché : revue des planches dans le studio.
       reference2video: (seed, width, height) => $("skipSheetsToggle").checked
         ? generateReference2Video(seed, width, height)
         : directorStepR2V1(seed, width, height)
@@ -4270,7 +4264,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // strength_model 1) alimentant à la fois BasicScheduler et BasicGuider ; il n'y a pas
     // de nœud bascule côté ComfyUI. Turbo OFF retire la LoRA du graphe (retour au modèle
     // brut) et remonte les steps à 20. No-op silencieux sur tout graphe sans
-    // LoraLoaderModelOnly (Krea 2, LTX 2.5, etc.).
+    // LoraLoaderModelOnly dont `lora_name` commence par `H3/` (Krea 2, LTX 2.5, etc.) : une LoRA
+    // d'un autre dossier (Lightning `Qwen/` de Qwen-Edit) n'est jamais touchée.
     // `steps` est OPTIONNEL et rétrocompatible : omis (appel à 2 arguments), le graphe rendu
     // est strictement celui d'avant — LoRA du template conservé, steps du template intouchés.
     // Fourni ET turbo actif : 4 → bascule sur MINIMAX_FL2V_LORA_4STEP + BasicScheduler.steps=4 ;
@@ -4313,7 +4308,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     function applyMinimaxTurbo(graph, turboOn, steps) {
       const loraEntry = Object.entries(graph).find(([, n]) =>
-      n.class_type === "LoraLoaderModelOnly" && String(n.inputs.lora_name).startsWith("H3/"));
+        n.class_type === "LoraLoaderModelOnly" && String(n.inputs.lora_name).startsWith("H3/"));
       if (!loraEntry) return graph;
       if (turboOn) {
         const n = Number(steps);
@@ -4341,7 +4336,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // une nouvelle LoraLoaderModelOnly insérée entre les deux. anchorClassType absent du
     // graphe (LTX 2.5 : pas de KSampler ni de BasicScheduler pertinent) → no-op.
     // ORDRE OBLIGATOIRE — appeler APRÈS applyMinimaxTurbo, jamais avant : applyMinimaxTurbo
-    // retrouve SON PROPRE nœud LoraLoaderModelOnly par class_type ; une LoRA de style insérée
+    // retrouve SON PROPRE nœud LoraLoaderModelOnly par class_type + préfixe `H3/` ; une LoRA de style insérée
     // avant serait retrouvée à sa place (ou l'ordre d'itération des clés déciderait au hasard).
     function applyStyleLora(graph, loraName, anchorClassType) {
       if (!loraName) return graph;
@@ -5834,13 +5829,18 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       ].join("\n\n");
     }
 
-    // Plafond dur du modèle. On tronque en le disant plutôt que de laisser H3 couper en
-    // silence : le prompt Ref2VA est structuré, une coupe muette emporterait les champs
-    // de fin sans que rien ne le signale.
+    // Plafond dur du modèle. On rogne en le disant plutôt que de laisser H3 couper en
+    // silence. Le prompt Ref2VA est structuré : l'excédent est retiré de la FIN de
+    // detailed_description (seul champ libre), jamais d'overall_soundscape ni de
+    // non_diegetic_music, et un jeton <Subject N> coupé en deux part avec la coupe.
     function capH3Prompt(text) {
       if (text.length <= H3_PROMPT_CHARS) return text;
       addEvent("WARN", `Prompt H3 de ${text.length} caractères — tronqué à ${H3_PROMPT_CHARS} (plafond du modèle).`, "warn");
-      return text.slice(0, H3_PROMPT_CHARS);
+      const over = text.length - H3_PROMPT_CHARS;
+      const key = "detailed_description:\n", i = text.indexOf(key), end = text.lastIndexOf("\n\noverall_soundscape:");
+      if (i >= 0 && end - (i + key.length) > over) return text.slice(0, end - over).replace(/<[A-Za-z]* ?\d*$/, "") + text.slice(end);
+      // ponytail: plafond brut, la fin est perdue si le texte n'a pas la structure Ref2VA (i2v/t2v libre) ou si le corps ne suffit pas ; pas de repli plus fin tant que ce cas reste hors du chemin qualifié.
+      return text.slice(0, H3_PROMPT_CHARS).replace(/<[A-Za-z]* ?\d*$/, "");
     }
 
     // Phrase d'alignement temporel (header() du composer) : elle dit au modèle à quel
@@ -5920,9 +5920,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         `${wf.model} · r2v · ${duration}s · ${turboOn ? "turbo 8 steps" : "20 steps"}${refsLabel} · seed ${seed}`);
     }
 
-    // Mode Auto — et bypass fiches (checkbox #skipSheetsToggle, quel que soit Auto/Réalisateur,
-    // voir BUILDERS.reference2video) : bypass coché ⇒ aucune fiche générée, les 2 premières
-    // images de #refImagesInput deviennent ref_image_0/1 directement.
+    // Chemin du bypass fiches (checkbox #skipSheetsToggle, voir BUILDERS.reference2video) :
+    // aucune fiche générée, les 2 premières images de #refImagesInput deviennent
+    // ref_image_0/1 directement.
     async function generateReference2Video(seed, width, height) {
       if (!brief.value.trim()) throw new Error("Décrivez le personnage et le décor dans le brief avant de générer.");
       const wf = currentWorkflow();
@@ -5931,38 +5931,17 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const turboOn = $("turboToggle").checked;
       const loraName = $("loraStyleSelect").value;
 
-      if ($("skipSheetsToggle").checked) {
-        const files = Array.from($("refImagesInput").files);
-        if (files.length < 2) throw new Error("Ignorer les fiches nécessite au moins 2 fichiers dans « Images de référence supplémentaires » (ref_image_0/1).");
-        addEvent("REQ", "Fiches ignorées — upload des références fournies…", "req");
-        const [image, image2] = await Promise.all([uploadRefFile(files[0]), uploadRefFile(files[1])]);
-        // Sans fiche générée, la description des 2 premières images est la SEULE chose qui
-        // dise au modèle ce qu'elles contiennent : c'est le chemin où la vision compte le plus.
-        const [charDesc, locDesc] = await describeRefImages([files[0], files[1]]);
-        await submitReference2VideoGraph({
-          wf, negText, seed, width, height, duration, turboOn, loraName,
-          subjects: [{ kind: "character", desc: charDesc }, { kind: "environment", desc: locDesc }],
-          body: brief.value.trim(), image, image2, extraImageFiles: files.slice(2)
-        });
-        return;
-      }
-
-      addEvent("REQ", `Fiche personnage + fiche décor via ${OLLAMA_MODEL}…`, "req");
-      const charFields = await characterSheetFromBrief();
-      const charDesc = charDescFromFields(charFields);
-      const locDesc = locDescFromFields(await locationSheetFromBrief());
-
-      // Mêmes planches Krea 2 que storyboard_v2 : elles servent ici directement de
-      // ref_image_0/ref_image_1 (personnage / décor) du template Minimax H3 r2v.
-      const csId = await submitCharsheetJob(charFields, negText, seed, width, height, wf);
-      const lsId = await submitLocsheetJob(locDesc, negText, seed + 101, width, height, wf);
-      const charRef = await resolveImageJob(csId), locRef = await resolveImageJob(lsId);
-      setSoulAnchors(charRef, locRef); // affichage seul (pastille d'identité)
-
+      const files = Array.from($("refImagesInput").files);
+      if (files.length < 2) throw new Error("Ignorer les fiches nécessite au moins 2 fichiers dans « Images de référence supplémentaires » (ref_image_0/1).");
+      addEvent("REQ", "Fiches ignorées — upload des références fournies…", "req");
+      const [image, image2] = await Promise.all([uploadRefFile(files[0]), uploadRefFile(files[1])]);
+      // Sans fiche générée, la description des 2 premières images est la SEULE chose qui
+      // dise au modèle ce qu'elles contiennent : c'est le chemin où la vision compte le plus.
+      const [charDesc, locDesc] = await describeRefImages([files[0], files[1]]);
       await submitReference2VideoGraph({
         wf, negText, seed, width, height, duration, turboOn, loraName,
         subjects: [{ kind: "character", desc: charDesc }, { kind: "environment", desc: locDesc }],
-        body: brief.value.trim(), image: charRef.name, image2: locRef.name
+        body: brief.value.trim(), image, image2, extraImageFiles: files.slice(2)
       });
     }
 
@@ -6038,7 +6017,6 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       if (director) [...director.chars.flatMap(c => c.variants), ...director.locVariants, ...(director.keyframes || [])]
         .forEach(x => x?.url && URL.revokeObjectURL(x.url));
       director = null;
-      soulAnchors = null;
       exitStudio();
       $("shotEditList").innerHTML = "";
       $("shotEditList").style.display = "none";
