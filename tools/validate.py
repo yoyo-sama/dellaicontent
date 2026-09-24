@@ -7,7 +7,7 @@ for human inspection.
 
 Usage:
     python3 tools/validate.py <api_graph.json> [--reduce] [--frames 0,12,24]
-        [--audio] [--timeout 600] [--image filename.png] [--fps 24] [--refresh]
+        [--audio] [--timeout 600] [--image filename.png] [--fps 24] [--refresh] [--no-submit]
 
 Options:
     --reduce         On a COPY of the graph: forces length of EmptyLTXVLatentVideo to 25,
@@ -22,6 +22,9 @@ Options:
     --image2 NAME    Same for {{IMAGE2}}.
     --fps N          FPS used to compute FRAMES = fps*duration+1 (default 24).
     --refresh        Forces a refresh of tools/object_info.json.
+    --no-submit      Structural validation only, then stop: nothing is submitted or uploaded to
+                      ComfyUI (no GPU needed). Exit 0 if it passes, 1 otherwise. Usable with
+                      --refresh, e.g. to re-check every workflow after a ComfyUI update.
 
 The structural validation (known class_type, intact links, models present on disk) runs
 BEFORE any submission; a structural failure exits with code 1 without submitting anything
@@ -378,6 +381,7 @@ def parse_args():
     p.add_argument("--image2", default=None, help="file name in input/ for {{IMAGE2}}")
     p.add_argument("--fps", type=int, default=24, help="fps for FRAMES = fps*duration+1 (default 24)")
     p.add_argument("--refresh", action="store_true", help="force a refresh of object_info.json")
+    p.add_argument("--no-submit", action="store_true", help="structural validation only: submit nothing to ComfyUI")
     return p.parse_args()
 
 
@@ -408,6 +412,9 @@ def main():
         step.recap()
         return 1
     step.ok("validation structurelle")
+    if args.no_submit:
+        step.recap()
+        return 0
 
     # 2. placeholder substitution
     needs_image = '"{{IMAGE}}"' in raw_text

@@ -32,6 +32,16 @@ Soumettre : `POST /prompt` avec `{"prompt": <graphe API>}` — un 400 renvoie `n
 
 **Toujours tester en réduit** : vidéos à ~25 frames (patch du `length` des `EmptyLTXVLatentVideo` **et** des `frames_number` des `LTXVEmptyLatentAudio` dans une COPIE du graphe), batchs à 1. Ordres de grandeur GB10 : image Flux2 ≈ 8 s, segment FLF2V 25 frames ≈ 25 s, teaser t2v 1 s ≈ 30 s, gemma à froid ≈ 45 s.
 
+### Après une mise à jour de ComfyUI
+
+Sans GPU ni soumission : `--no-submit` s'arrête après la vérif structurelle (nœuds connus, liens, modèles sur disque) ; `--refresh` met `tools/object_info.json` à jour d'abord.
+
+```bash
+for f in workflows/api/*.json; do python3 tools/validate.py "$f" --refresh --no-submit || echo "KO $f"; done
+```
+
+Ne couvre **pas** les workflows construits en JS (storyboard, relay, etc. : assemblés dans `index.html` et `js/`, absents de `workflows/api/`) : un rendu réel réduit reste requis (règle d'`AGENTS.md`).
+
 ## 3. Banc headless : exécuter la page telle quelle, ComfyUI et Ollama bouchonnés
 
 C'est la vérification la plus rentable du projet, et la seule possible hors du GB10 : ni ComfyUI ni
