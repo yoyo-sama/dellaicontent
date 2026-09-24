@@ -326,3 +326,18 @@ Expected: `reused` on all three services, `already present (not re-downloaded) :
 `Ollama model gemma4:e4b: present`, and four `HTTP 200` health checks. Only then open
 `http://<ip>:8090`, test **✨ Enhance (LLM)** on a prompt field, then a simple image generation
 (Krea 2) before trying video.
+
+## 7. Rolling back a ComfyUI update
+
+The app can update ComfyUI itself (prompt at load when it is older than `comfyui.min` in
+`workflows/manifest.json`, see the README). The prompt shows the rollback command; the tag is `v`
++ the previous version (visible in the ComfyUI console header or `GET /comfy/system_stats`
+before the update):
+
+```bash
+git -C ~/comfyui-spark/run/ComfyUI checkout v0.36.0 && docker restart comfyui-nvidia   # example tag
+```
+
+If the update went through but ComfyUI does not answer after ~3 min, read
+`docker logs comfyui-nvidia --tail 50`. If the ComfyUI-Manager itself was upgraded in the process,
+the reboot (`execv`) does not replay the container's userscripts: `docker restart comfyui-nvidia`.

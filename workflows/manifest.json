@@ -1,4 +1,7 @@
 {
+  "comfyui": {
+    "min": "0.37.0"
+  },
   "pipelines": [
     {
       "id": "text2image",

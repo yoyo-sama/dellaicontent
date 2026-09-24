@@ -327,3 +327,18 @@ Attendu : `reused` sur les trois services, `already present (not re-downloaded) 
 `Ollama model gemma4:e4b: present`, et quatre `HTTP 200` en health-checks. Ensuite seulement,
 ouvrez `http://<ip>:8090`, testez **✨ Enrichir (LLM)** sur un champ de prompt, puis une
 génération d'image simple (Krea 2) avant d'essayer la vidéo.
+
+## 7. Revenir en arrière après une mise à jour de ComfyUI
+
+L'application peut mettre ComfyUI à jour elle-même (invite au chargement quand il est plus ancien
+que `comfyui.min` dans `workflows/manifest.json`, voir le README). L'invite affiche la commande de
+retour arrière ; le tag est `v` + l'ancienne version (visible dans l'en-tête de la console ComfyUI
+ou via `GET /comfy/system_stats` avant la mise à jour) :
+
+```bash
+git -C ~/comfyui-spark/run/ComfyUI checkout v0.36.0 && docker restart comfyui-nvidia   # tag d'exemple
+```
+
+Si la mise à jour est passée mais que ComfyUI ne répond plus au bout de ~3 min, lire
+`docker logs comfyui-nvidia --tail 50`. Si le ComfyUI-Manager lui-même a été mis à niveau au
+passage, le redémarrage (`execv`) ne rejoue pas les userscripts du conteneur : `docker restart comfyui-nvidia`.

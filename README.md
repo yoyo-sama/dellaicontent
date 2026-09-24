@@ -242,6 +242,20 @@ docker compose up -d --build
 `--build` is required here: it's what builds and starts the new `updater` service, which
 didn't exist yet on this deployment.
 
+### Minimum ComfyUI version
+
+`workflows/manifest.json` declares the oldest ComfyUI the shipped models need
+(`"comfyui": { "min": "0.37.0" }` — the version installed for Qwen Image 2.1). When Studio or
+Canvas loads and the running ComfyUI is older, a single confirmation offers to update it to the
+latest stable release through the ComfyUI-Manager (proxied at `/comfy/v2/manager/`). Accepting
+restarts ComfyUI (about 30 s) and interrupts running jobs, so the update is refused while the
+queue is not empty. Declining silences the prompt for the browser session. To go back to the
+previous version (the prompt shows the exact command, tag = `v` + old version):
+
+```bash
+git -C ~/comfyui-spark/run/ComfyUI checkout <old tag, e.g. v0.36.0> && docker restart comfyui-nvidia
+```
+
 ## The 3 scenarios (see spec `ai_content_studio_media_entertainment_gb10.md`)
 
 | Scenario | Dedicated pipelines | Deliverables |
