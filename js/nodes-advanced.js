@@ -145,13 +145,19 @@
       brief: "a lighthouse keeper with short white hair, yellow raincoat and a red scarf",
       // `lora` défaut "" = aucune LoRA, graphe strictement inchangé (cf. addKrea2Shared).
       // La résolution de la planche reste FIXE (1920×1088) : la LoRA ne la touche pas.
-      style: "cinematic", lora: "", seed: 0, charDesc: "", src: "", outFile: null
+      style: "cinematic", lora: "", seed: 0, charDesc: "", src: "", outFile: null,
+      // Type de sujet : "auto" (gemma tranche) | "human" | "other" (imposé). `kindResolved`/`kindLabel` :
+      // ce qui a réellement été retenu à la dernière génération, lu en aval (keyframes, cuts).
+      kind: "auto", kindResolved: "", kindLabel: ""
     };
     this.addWidget("text", "personnage", this.properties.brief, v => { this.properties.brief = v; });
     this.addWidget("combo", "style", this.properties.style, v => { this.properties.style = v; }, { values: styleIds() });
     this.addWidget("combo", "style (LoRA)", this.properties.lora, v => { this.properties.lora = v; }, { values: loraIds });
     this.addWidget("number", "seed (0=auto)", this.properties.seed, v => { this.properties.seed = Math.max(0, Math.round(v)); }, { min: 0, step: 1 });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
+    // Ajouté APRÈS le bouton : les `widgets_values` d'un canvas déjà sauvegardé se relisent par
+    // position, un widget inséré avant décalerait les anciens.
+    this.addWidget("combo", "type de sujet", this.properties.kind, v => { this.properties.kind = v; }, { values: ["auto", "human", "other"] });
     this.size = [340, 260];
     setStatus(this, "idle", "");
   }
@@ -164,9 +170,14 @@
     setStatus(this, "running", T("Fiche personnage : gemma…"));
     try {
       // Étape (a) de generateStoryboardV2 : gemma → champs → charDesc → planche Krea 2.
-      const fields = await E.characterSheetFromBrief(brief);
+      // Type de sujet choisi sur la carte ("auto" = gemma tranche, comme avant) ; ce qui a été retenu
+      // est persisté pour l'aval. Choisir un type ne lance rien : il agit à CETTE génération, cliquée.
+      const kind = this.properties.kind;
+      const fields = await E.characterSheetFromBrief(brief, undefined, kind === "human" || kind === "other" ? kind : undefined);
       const charDesc = E.charDescFromFields(fields);
       this.properties.charDesc = charDesc;
+      this.properties.kindResolved = E.charKindOf(fields);
+      this.properties.kindLabel = fields.label || "";
       const seed = this.properties.seed || randSeed();
       setStatus(this, "running", T("Planche personnage (Krea 2) en cours…"));
       // `kind` (human / other) est tranché par gemma, comme dans le Studio (piège n°17) : sans
@@ -515,9 +526,14 @@
           // Format dérivé de la KEYFRAME (comme l'i2v) : c'est elle qui fixe la composition
           // et le cadrage du plan, les 2 planches ne sont que des ancres d'apparence.
           const sz = E.videoSizeFor(await E.imageSize(blob));
+          // Grammaire Ref2VA, comme la carte r2v (LESSONS n°19) : <Picture 1> = fiche personnage,
+          // <Picture 2> = fiche décor, <Picture 3> = keyframe du plan (« référence » sans description :
+          // pas de vision côté Canvas). Le corps est le texte du plan, tel que le cut H3 i2v le compose.
+          const subjects = E.h3AssignSubjects([{ kind: "character", desc: base.charDesc }, { kind: "environment", desc: base.locDesc },
+            { kind: "reference", desc: "" }]);
           const g = E.buildGraph(tplRaw, {
-            // Même prompt que le chemin Minimax H3 i2v — aucun mécanisme de prompt nouveau.
-            prompt: E.compileCutPrompt(shots[k], base.charDesc, base.locDesc, null, base.styleId),
+            prompt: E.capH3Prompt(E.buildH3RefPrompt({ subjects, summary: E.h3Summary(shots[k].action),
+              body: E.h3CutBodyText(shots[k], subjects, null, base.styleId) }), onWarn),
             negative: "", seed: seed + 31 + k, width: sz.w, height: sz.h, batch: 1,
             duration, image: charName, image2: locName   // ref_image_0 / ref_image_1 du template
           });

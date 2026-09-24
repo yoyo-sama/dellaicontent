@@ -446,6 +446,11 @@
     "Style": { en: "Style", es: "Estilo", de: "Stil" },
     "Style (LoRA)": { en: "Style (LoRA)", es: "Estilo (LoRA)", de: "Stil (LoRA)" },
     "Seed (0 = auto)": { en: "Seed (0 = auto)", es: "Semilla (0 = auto)", de: "Seed (0 = automatisch)" },
+    "Type de sujet": { en: "Subject type", es: "Tipo de sujeto", de: "Subjekttyp" },
+    "Auto": { en: "Auto", es: "Auto", de: "Automatisch" },
+    "Humain": { en: "Human", es: "Humano", de: "Mensch" },
+    "Autre (animal, objet…)": { en: "Other (animal, object…)", es: "Otro (animal, objeto…)", de: "Anderes (Tier, Objekt …)" },
+    "Auto : l'IA détecte si le sujet est humain. Choisis toi-même si elle se trompe.": { en: "Auto: the AI detects whether the subject is human. Choose yourself if it gets it wrong.", es: "Auto: la IA detecta si el sujeto es humano. Elige tú mismo si se equivoca.", de: "Automatisch: Die KI erkennt, ob das Subjekt ein Mensch ist. Wähle selbst, wenn sie sich irrt." },
     "Brief": { en: "Brief", es: "Brief", de: "Briefing" },
     "Nombre de plans": { en: "Number of shots", es: "Número de planos", de: "Anzahl Einstellungen" },
     "Durée / plan (s)": { en: "Duration / shot (s)", es: "Duración / plano (s)", de: "Dauer / Einstellung (s)" },
@@ -720,6 +725,7 @@
   // mêmes 14 valeurs pour les 2 familles de moteurs, seule l'unité d'arrondi diffère
   // (Engine.mpUnitForEngine) — [valeur, libellé] au même format que KREA2_LORAS/STYLES.
   const MP_OPTIONS = () => window.Engine.MP_VALUES.map(v => [String(v), `${v} MP`]);
+  const SUBJECT_KINDS = [["auto", "Auto"], ["human", "Humain"], ["other", "Autre (animal, objet…)"]];
   // Steps Minimax H3 turbo. 4 n'est fiable qu'avec la LoRA fl2v 4-step (Engine bascule
   // automatiquement dessus) — cf. commentaire d'`applyMinimaxTurbo` dans js/engine.js.
   const MINIMAX_STEPS = [[4, "4 (LoRA fl2v v1.2)"], [6, "6"], [8, "8 (défaut)"]];
@@ -762,6 +768,10 @@
       meta: n => `Krea 2 · 1920×1088 · ${styleLabel(n.properties.style)}`,
       fields: [
         { k: "brief", w: "personnage", label: "Personnage", type: "textarea", enhance: ENHANCE.sheetBrief },
+        // Type de sujet (comme la bascule du Studio) : il agit à la PROCHAINE génération, cliquée —
+        // changer ce sélecteur ne lance rien.
+        { k: "kind", w: "type de sujet", label: "Type de sujet", type: "select", values: () => SUBJECT_KINDS,
+          hint: "Auto : l'IA détecte si le sujet est humain. Choisis toi-même si elle se trompe." },
         { k: "style", w: "style", label: "Style", type: "select", values: STYLES },
         { k: "lora", w: "style (LoRA)", label: "Style (LoRA)", type: "select", values: KREA2_LORAS },
         { k: "seed", w: "seed (0=auto)", label: "Seed (0 = auto)", type: "number" }
@@ -1732,6 +1742,11 @@
         };
       }
       row.appendChild(inp);
+      if (f.hint) {   // aide courte sous le champ (traduite ici, comme les libellés)
+        const hint = document.createElement("div");
+        hint.style.cssText = "font-size:10.5px;margin-top:4px;color:var(--text-2)";
+        hint.textContent = tr(f.hint); row.appendChild(hint);
+      }
       // Unique point d'accrochage du bouton « Enrichir » : il ne s'ajoute que sous un
       // textarea porteur d'une clé `enhance` (addEnhanceButton sort immédiatement sinon).
       if (f.type === "textarea") addEnhanceButton(row, node, f, inp);

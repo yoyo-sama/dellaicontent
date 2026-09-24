@@ -1111,26 +1111,38 @@ Answer ONLY with JSON: {"prompt": "..."}`;
   // Fiches gemma : `brief.value` devient l'argument `scene`, addEvent() devient onEvent.
   // Porté du Studio (piège n°17) : gemma tranche `kind` (human / other) et renseigne le jeu
   // de champs de ce kind, plus un `label` court (onglets, jamais compilé dans le prompt).
-  async function characterSheetFromBrief(scene, onEvent) {
+  // `forceKind` (optionnel, "human" | "other") : type de sujet imposé par l'utilisateur (sélecteur de la
+  // carte Fiche personnage) — absent ou autre valeur, comportement inchangé (gemma tranche).
+  async function characterSheetFromBrief(scene, onEvent, forceKind) {
+    const force = forceKind === "human" || forceKind === "other" ? forceKind : null;
     try {
       const out = await gemmaJSON(
-        `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. Also set "label": a plain 2-to-4-word name for this subject that tells it apart from other subjects of the same scene, e.g. "weary detective", "young farmhand", "adult male lion", "six-legged mining robot". If kind is "human", answer ONLY with JSON {"kind":"human","label":"...","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","label":"...","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.`,
+        `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. Also set "label": a plain 2-to-4-word name for this subject that tells it apart from other subjects of the same scene, e.g. "weary detective", "young farmhand", "adult male lion", "six-legged mining robot". If kind is "human", answer ONLY with JSON {"kind":"human","label":"...","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","label":"...","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.`
+        + (force ? ` The user has already decided: kind is "${force}". Set "kind" to "${force}" and fill only the ${force} field set.` : ""),
         scene);
       // Le squelette se décide sur les champs que gemma a REMPLIS, pas sur l'étiquette `kind`
       // qu'il annonce (il décrit régulièrement un lion dans {subject, form, surface} en se
       // déclarant "human", et l'inverse). `palette`, commune aux deux jeux, ne départage rien ;
-      // `kind` ne sert que d'arbitre à égalité.
+      // `kind` ne sert que d'arbitre à égalité. Type imposé : il l'emporte sur tout ça.
       const filledCount = keys => keys.filter(k => k !== "palette" && fieldText(out[k])).length;
       const nHuman = filledCount(CHAR_FIELD_KEYS), nOther = filledCount(CHAR_OTHER_FIELD_KEYS);
-      const fields = { kind: nOther > nHuman ? "other" : nHuman > nOther ? "human"
-                             : (out.kind === "human" ? "human" : "other") };
+      const fields = { kind: force || (nOther > nHuman ? "other" : nHuman > nOther ? "human"
+                             : (out.kind === "human" ? "human" : "other")) };
       fields.label = fieldText(out.label);
       for (const k of charFieldKeys(fields)) fields[k] = fieldText(out[k]);
+      // Type imposé alors que gemma a rempli l'AUTRE jeu : sa description est reversée dans le
+      // 1er champ du jeu imposé (même geste que la bascule « Type de sujet » du Studio).
+      if (force && !filledCount(charFieldKeys(fields))) {
+        const other = force === "human" ? CHAR_OTHER_FIELD_KEYS : CHAR_FIELD_KEYS;
+        const poured = stripPromptPadding(other.filter(k => k !== "palette").map(k => fieldText(out[k])).filter(Boolean).join(", "));
+        if (poured) { fields[charFieldKeys(fields)[0]] = poured; if (onEvent) onEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
+      }
       // Une fiche réduite à la palette ne décrit aucun sujet : repli sur le brief.
       if (filledCount(charFieldKeys(fields))) { if (onEvent) onEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
       throw new Error("aucun champ descriptif rempli");
     } catch (e) {
       if (onEvent) onEvent("WARN", `Fiche personnage LLM indisponible (${e.message}) — brief utilisé tel quel.`, "warn");
+      if (force === "other") return { kind: "other", subject: scene, form: "", surface: "", details: "", palette: "" };
       return { face: scene, hair: "", outfit: "", accessories: "", palette: "" };
     }
   }
@@ -1231,7 +1243,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // grammaire Minimax H3) — dépendances en arguments, prêtes pour le Studio et le Canvas
       SHEET_TEMPLATES, charsheetPromptFrom, charKindOf, KEYFRAME_ANCHOR_SOLO, KEYFRAME_ANCHOR_DUAL,
       stripPromptPadding, KREA2_ENRICH_SYSTEM,
-      h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, capH3Prompt,
+      h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, capH3Prompt, h3CutBodyText,
       h3Alignment, h3VideoFrames, h3RealDuration, h3CutSubjects, buildH3CutPrompt, compileCutPromptFor,
       // LLM
       gemmaJSON, characterSheetFromBrief, locationSheetFromBrief, shotListFromBrief,
