@@ -65,7 +65,7 @@
 
     .portal-header {
       display: grid;
-      grid-template-columns: 220px 1fr 220px;
+      grid-template-columns: auto minmax(0, 1fr) auto; /* logo | titre | réglages (S13) */
       gap: 20px;
       align-items: center;
       padding: 10px 0 28px;
@@ -86,6 +86,11 @@
     }
 
     .brand img { display: block; height: 28px; width: auto; }
+
+    /* Rail déplié (300 px) : le couple Studio|Canvas tient dans le rail, la réserve tombe. */
+    @media screen and (min-width: 1181px) {
+      .app-rail.expanded ~ .app-content .brand { margin-left: 0; }
+    }
 
     .title-block { text-align: center; }
 
@@ -230,7 +235,8 @@
 
     .rail-canvas:hover { background: var(--selected); }
 
-    .rail-canvas .rail-name { max-width: 220px; opacity: 1; margin-left: 10px; }
+    .rail-canvas .rail-name,
+    .rail-btn[data-panel="studio"] .rail-name { max-width: 220px; opacity: 1; margin-left: 10px; }
 
     /* Panneau de section : carte sobre dans la colonne du rail, juste sous son icône. */
     .flyout {
@@ -325,7 +331,6 @@
       border: 8px solid var(--bg-mid);
       border-bottom: 0;
       position: relative;
-      overflow: hidden;
     }
 
     .arc::after {
@@ -889,46 +894,45 @@
       cursor: pointer;
     }
 
-    /* ── Pastille d'identité (planches ancrées, toujours visible) ── */
-    #soulId {
-      position: fixed;
-      right: 18px;
-      top: 18px;
-      z-index: 90;
-      display: grid;
-      gap: 8px;
-      padding: 10px 14px;
+    /* ── Barre d'état de session (A2) : sous le header, dans le flux, affichage seul ── */
+    #sessionBar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 18px;
+      margin: -12px 0 16px;
+      padding: 6px 14px;
       border: 1px solid var(--border-light);
-      border-radius: var(--radius);
+      border-radius: var(--radius-sm);
       background: var(--card);
-      box-shadow: inset 0 0 0 1px var(--highlight), var(--shadow);
-      backdrop-filter: blur(12px);
+      color: var(--text);
+      font-size: 12px;
     }
-    #soulId[hidden] { display: none; }
-    #soulId.pending { box-shadow: var(--shadow); }
-    #soulId .soul-state {
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--text-2);
-    }
-    #soulId .soul-thumbs { display: flex; gap: 8px; }
-    #soulId figure { margin: 0; display: grid; gap: 4px; justify-items: center; }
-    #soulId img {
-      width: 56px;
-      height: 56px;
-      object-fit: cover;
-      border-radius: 12px;
+    #sessionBar [hidden] { display: none; }
+    /* En studio, hauteur fixe (vignettes ou pas) : #studioShell la retranche de sa hauteur. */
+    body[data-studio="1"] #sessionBar { min-height: 54px; }
+    .sb-anchors { display: flex; align-items: center; gap: 8px; }
+    .sb-state { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+    .sb-thumb {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
       background: var(--bg-mid);
+      overflow: hidden;
       cursor: pointer;
-      display: block;
     }
-    #soulId figcaption { font-size: 10px; color: var(--text-2); }
-
+    .sb-anchors.locked .sb-thumb { border-color: var(--highlight); }
+    .sb-thumb:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+    .sb-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    .sb-steps { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0; padding: 0; list-style: none; }
+    .sb-steps li + li::before { content: "›" / ""; margin-right: 8px; }
+    .sb-steps li[aria-current="step"] { color: var(--highlight); font-weight: 700; }
+    #sbJobs { font-weight: 600; font-variant-numeric: tabular-nums; }
+    #sbGpu { margin-left: auto; font-variant-numeric: tabular-nums; }
     @media screen and (max-width: 760px) {
-      #soulId { right: 10px; top: 10px; padding: 8px; }
-      #soulId img { width: 44px; height: 44px; }
+      .sb-thumb { width: 44px; height: 44px; }
     }
 
     #lightbox {
@@ -1279,7 +1283,7 @@
       grid-template-columns: 220px minmax(0, 1fr);
       grid-template-rows: minmax(0, 1fr) auto;
       gap: 18px;
-      height: calc(100vh - 160px);
+      height: calc(100vh - 218px); /* 160 px + barre de session (≈ 58 px, marges comprises) */
       min-height: 480px;
     }
     #studioNav {
@@ -1316,7 +1320,6 @@
     .studio-nav-btn.locked::after { content: " 🔒"; float: right; }
     .studio-nav-foot { margin-top: auto; display: grid; gap: 8px; }
     .studio-nav-foot .primary-btn, .studio-nav-foot .secondary-btn { padding: 11px 12px; font-size: 11px; }
-    .studio-nav-foot .hint { margin: 0; text-align: center; min-height: 15px; }
     #studioPanel {
       min-width: 0;
       min-height: 0;
@@ -1337,6 +1340,9 @@
       min-height: 46px;
       padding: 10px 16px;
     }
+    /* S16 : pas de cadre vide (pas de montage, pas de job). */
+    #studioTimeline:empty { display: none; }
+    .output-panel > div:has(> #jobList:empty) { display: none; }
     .sheet-layout {
       display: grid;
       grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
@@ -1709,6 +1715,19 @@
       </div>
     </header>
 
+    <!-- Barre d'état de session (A2) : affichage seul, segments vides masqués. -->
+    <section id="sessionBar" aria-labelledby="sessionBarLabel">
+      <span id="sessionBarLabel" hidden>État de la session</span>
+      <div class="sb-anchors" id="sbAnchors" hidden>
+        <span class="sb-state">Identité ancrée</span>
+        <button type="button" class="sb-thumb" data-kind="char"><img alt="" /></button>
+        <button type="button" class="sb-thumb" data-kind="loc"><img alt="" /></button>
+      </div>
+      <ol class="sb-steps" id="sbSteps" hidden></ol>
+      <span id="sbJobs" hidden></span>
+      <span id="sbGpu"><span>Mémoire GPU</span> <strong>—</strong></span>
+    </section>
+
     <main class="layout">
       <section class="studio-main">
         <div class="top-bar">
@@ -1961,7 +1980,6 @@
           <button type="button" class="secondary-btn" id="studioCancelBtn" style="display:none">Annuler le projet</button>
           <button type="button" class="secondary-btn" id="studioNewBtn">Nouveau projet</button>
           <button type="button" class="secondary-btn" id="studioExitBtn">Quitter le studio</button>
-          <p class="hint" id="studioJobs"></p>
         </div>
       </nav>
 
@@ -2023,7 +2041,6 @@
         <section id="studioStoryboard" class="studio-section" style="display:none">
           <h3 class="section-title">Storyboard</h3>
           <div class="form-stack">
-            <p class="hint">Étape 1 : ajustez les plans générés, puis lancez les keyframes. Étape 2 : régénérez ou verrouillez chaque case. Étape 3 : lancez l'animatic une fois toutes les cases prêtes.</p>
             <div class="shot-edit-list" id="shotEditList" style="display:none"></div>
             <button type="button" class="secondary-btn" id="directorKeyframesBtn" style="display:none">Générer les keyframes</button>
           </div>
@@ -2086,15 +2103,6 @@
     </section>
     </div><!-- /.app-content -->
   </div>
-
-  <!-- Pastille d'identité : planches ancrées (personnage/décor) toujours visibles -->
-  <aside id="soulId" hidden>
-    <span class="soul-state">Identité ancrée</span>
-    <div class="soul-thumbs">
-      <figure class="soul-char"><img alt="" /><figcaption>Personnage</figcaption></figure>
-      <figure class="soul-loc"><img alt="" /><figcaption>Décor</figcaption></figure>
-    </div>
-  </aside>
 
   <div id="promptModal" hidden>
     <div class="prompt-dialog">
@@ -2392,10 +2400,10 @@
       "Auto": {},
       "Réalisateur": { en: "Director", es: "Director", de: "Regisseur" },
       "Mode Réalisateur": { en: "Director mode", es: "Modo Director", de: "Regisseur-Modus" },
-      "Étape 1 : ajustez les plans générés, puis lancez les keyframes. Étape 2 : régénérez ou verrouillez chaque case. Étape 3 : lancez l'animatic une fois toutes les cases prêtes.":
-        { en: "Step 1: adjust the generated shots, then launch the keyframes. Step 2: regenerate or lock each panel. Step 3: launch the animatic once every panel is ready.",
-          es: "Paso 1: ajuste los planos generados y lance los keyframes. Paso 2: regenere o bloquee cada viñeta. Paso 3: lance el animatic cuando todas las viñetas estén listas.",
-          de: "Schritt 1: die generierten Einstellungen anpassen, dann die Keyframes starten. Schritt 2: jedes Panel neu generieren oder sperren. Schritt 3: das Animatic starten, sobald alle Panels bereit sind." },
+      "État de la session": { en: "Session status", es: "Estado de la sesión", de: "Sitzungsstatus" },
+      "Planches": { en: "Sheets", es: "Láminas", de: "Bögen" },
+      "Vidéo": { en: "Video", es: "Vídeo", de: "Video" },
+      "Mémoire GPU": { en: "GPU memory", es: "Memoria GPU", de: "GPU-Speicher" },
       "Générer les keyframes": { en: "Generate keyframes", es: "Generar keyframes", de: "Keyframes generieren" },
       "Lancer l'animatic": { en: "Start the animatic", es: "Iniciar el animatic", de: "Animatic starten" },
       "Scène": { en: "Scene", es: "Escena", de: "Szene" },
@@ -2411,7 +2419,6 @@
       "Planche personnage": { en: "Character sheet", es: "Lámina de personaje", de: "Figurenbogen" },
       "Planche décor": { en: "Location sheet", es: "Lámina de decorado", de: "Schauplatzbogen" },
       "Valider les planches": { en: "Validate the sheets", es: "Validar las láminas", de: "Bögen bestätigen" },
-      "Planches validées ✓": { en: "Sheets validated ✓", es: "Láminas validadas ✓", de: "Bögen bestätigt ✓" },
       // ── Sujets multiples (onglets du menu Personnage, taggage des plans) ──
       "+ Ajouter un sujet": { en: "+ Add a subject", es: "+ Añadir un sujeto", de: "+ Motiv hinzufügen" },
       "Retirer ce sujet": { en: "Remove this subject", es: "Quitar este sujeto", de: "Dieses Motiv entfernen" },
@@ -2657,9 +2664,11 @@
         en: n => `Subjects in this shot — ${n} per shot at most`,
         es: n => `Sujetos del plano — ${n} como máximo por plano`,
         de: n => `Motive dieser Einstellung — höchstens ${n} pro Einstellung` },
-      studioJobs: {
-        fr: n => `${n} job(s) en cours`, en: n => `${n} job(s) running`,
-        es: n => `${n} trabajo(s) en curso`, de: n => `${n} Job(s) aktiv` },
+      sessionJob: {
+        fr: (k, n, t) => `Job ${k}/${n} · ${t}`, en: (k, n, t) => `Job ${k}/${n} · ${t}`,
+        es: (k, n, t) => `Trabajo ${k}/${n} · ${t}`, de: (k, n, t) => `Job ${k}/${n} · ${t}` },
+      sessionNode: {
+        fr: p => `nœud ${p} %`, en: p => `node ${p}%`, es: p => `nodo ${p} %`, de: p => `Knoten ${p} %` },
       relaySegment: {
         fr: (i, n) => `Segment ${i}/${n}`, en: (i, n) => `Segment ${i}/${n}`,
         es: (i, n) => `Segmento ${i}/${n}`, de: (i, n) => `Segment ${i}/${n}` },
@@ -2707,7 +2716,7 @@
       renderSheetTemplateOptions();
       renderLoraSelect();
       renderSheetLoraSelect();
-      refreshSoulId();
+      refreshSessionBar();
       refreshSubjectUI();
       refreshGenerateLabel();
       if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); renderRelay(); }
@@ -2784,7 +2793,7 @@
       updateModelLabel();
       updateResumeButton();
       refreshSubjectUI();   // les puces de sujet n'existent que pour reference2video
-      refreshSoulId(); // pastille d'identité : visible seulement sur storyboard_v2 / reference2video
+      refreshSessionBar(); // vignettes ancrées : visibles seulement sur storyboard_v2 / reference2video
     }
 
     // Animatic : le brief est un prompt de MOUVEMENT, d'où un exemple de placeholder dédié.
@@ -2900,7 +2909,7 @@
       if (card.dataset.scenario === "localization") $("galleryBlock")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
 
-    // ── Pastille d'identité (planches ancrées) ─────────────────────
+    // ── Barre d'état de session : vignettes ancrées + stepper ─────
     // AFFICHAGE PUR d'un état déjà produit ailleurs : planches actives de la session
     // Réalisateur (`director`). Ne déclenche ni ne modifie aucune génération.
     function currentAnchors() {
@@ -2912,18 +2921,37 @@
       }
       return null;
     }
-    function refreshSoulId() {
-      const box = $("soulId");
+    function refreshSessionBar() {
+      const box = $("sbAnchors");
       const a = ["storyboard_v2", "reference2video"].includes(pipelineSelect.value) ? currentAnchors() : null;
       box.hidden = !a;
-      if (!a) return;
-      box.querySelector(".soul-char img").src = a.char;
-      box.querySelector(".soul-loc img").src = a.loc;
-      box.querySelector(".soul-state").textContent = tr(a.locked ? "Identité ancrée" : "Identité à valider");
-      box.classList.toggle("pending", !a.locked);
+      if (a) {
+        for (const [kind, label] of [["char", "Personnage"], ["loc", "Décor"]]) {
+          const b = box.querySelector(`[data-kind="${kind}"]`);
+          b.querySelector("img").src = a[kind];
+          b.setAttribute("aria-label", tr(label));
+          b.title = tr(label);
+        }
+        box.querySelector(".sb-state").textContent = tr(a.locked ? "Identité ancrée" : "Identité à valider");
+        box.classList.toggle("locked", a.locked);
+      }
+      // Stepper : même numérotation que le libellé « étape 1/3 » (1/2 en reference2video).
+      const steps = $("sbSteps");
+      steps.hidden = !director;
+      if (!director) return;
+      const r2v = director.pipeline === "reference2video";
+      const names = r2v ? ["Planches", "Vidéo"] : ["Planches", "Storyboard", "Montage"];
+      const cur = !director.validated ? 1 : r2v ? 2 : keyframesAllReady() ? 3 : 2;
+      steps.innerHTML = "";
+      names.forEach((n, i) => {
+        const li = document.createElement("li");
+        li.textContent = `${i + 1 < cur ? "✓" : i + 1} ${tr(n)}`;
+        if (i + 1 === cur) li.setAttribute("aria-current", "step");
+        steps.appendChild(li);
+      });
     }
-    $("soulId").querySelectorAll("img").forEach(img =>
-      img.addEventListener("click", () => { if (img.src) openLightbox(img.src, false); }));
+    document.querySelectorAll(".sb-thumb").forEach(b =>
+      b.addEventListener("click", () => { const img = b.querySelector("img"); if (img.src) openLightbox(img.src, false); }));
 
     // ── ComfyUI WebSocket + jobs ───────────────────────────────────
     const clientId = crypto.randomUUID();
@@ -2969,6 +2997,8 @@
         job.statusEl.textContent = `Running ${pct}%`;
         job.statusEl.className = "status running";
         $("stepInference").classList.add("active");
+        burst.pct = pct;
+        renderSessionJobs();
       } else if (msg.type === "executed" && job) {
         for (const f of extractFiles(d.output)) addAsset(f, job.label);
       } else if (msg.type === "execution_success" && job) {
@@ -3320,14 +3350,26 @@
       updateStudioJobs(1);
     }
 
-    // Compteur minimal de jobs en cours pour la nav studio (guard si l'élément est absent).
-    let runningJobs = 0;
+    // Jobs en cours, segment de la barre de session : « Job k/n · mm:ss · nœud p % ».
+    // ponytail: rafale = jobs soumis depuis que la file était vide ; une chaîne séquentielle (relay) repart à 1/1 à chaque segment, compter côté orchestrateur si besoin
+    let runningJobs = 0, burst = { n: 0, done: 0, start: 0, pct: null };
     function updateStudioJobs(delta) {
+      if (delta > 0 && !runningJobs) burst = { n: 0, done: 0, start: Date.now(), pct: null };
+      if (delta > 0) burst.n += delta;
+      else if (delta < 0 && runningJobs) burst.done -= delta;
       runningJobs = Math.max(0, runningJobs + delta);
-      const el = $("studioJobs");
-      if (el) el.textContent = runningJobs ? dyn("studioJobs", runningJobs) : "";
+      renderSessionJobs();
       updateCancelButton();
     }
+    function renderSessionJobs() {
+      const el = $("sbJobs");
+      el.hidden = !runningJobs;
+      if (!runningJobs) return;
+      const t = Math.floor((Date.now() - burst.start) / 1000), mm = String(Math.floor(t / 60)).padStart(2, "0");
+      el.textContent = dyn("sessionJob", Math.min(burst.done + 1, burst.n), burst.n, `${mm}:${String(t % 60).padStart(2, "0")}`)
+        + (burst.pct === null ? "" : ` · ${dyn("sessionNode", burst.pct)}`);
+    }
+    setInterval(renderSessionJobs, 1000);
 
     // ── Generate ───────────────────────────────────────────────────
     // Registre des builders JS (manifest : workflows[].builder) — un nouveau
@@ -3936,10 +3978,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       try {
         const s = await (await fetch(`${COMFY}/system_stats`)).json();
         const dev = (s.devices || [])[0];
-        if (dev && dev.vram_total) {
-          const pct = Math.round((1 - dev.vram_free / dev.vram_total) * 100);
-          setGauge("gaugeVram", pct, `${pct}%`);
-        }
+        const vram = dev?.vram_total ? Math.round((1 - dev.vram_free / dev.vram_total) * 100) : null;
+        if (vram !== null) setGauge("gaugeVram", vram, `${vram}%`);
+        $("sbGpu").querySelector("strong").textContent = vram === null ? "—" : `${vram} %`; // barre de session
         if (s.system && s.system.ram_total) {
           const pct = Math.round((1 - s.system.ram_free / s.system.ram_total) * 100);
           setGauge("gaugeRam", pct, `${pct}%`);
@@ -3955,6 +3996,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         $("nodeState").textContent = "Offline";
         $("nodeDot").classList.add("offline");
         $("comfyVersion").textContent = "offline";
+        $("sbGpu").querySelector("strong").textContent = "—";
       }
       try {
         if (!(await fetch(`${OLLAMA}/api/version`)).ok) throw 0;
@@ -5658,8 +5700,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       $("montageList").innerHTML = "";
       $("montagePlayer").innerHTML = "";
       $("studioTimeline").innerHTML = "";
-      $("directorValidateBtn").disabled = true;
-      $("directorValidateBtn").textContent = tr("Valider les planches");
+      updateValidateButtonState();
       $("directorR2VLaunchBtn").disabled = true;
       $("studioVideoR2VStatus").textContent = tr("Validez les planches personnage et décor pour activer le lancement.");
       updateStudioNavForPipeline();
@@ -6140,9 +6181,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     function updateValidateButtonState() {
       const btn = $("directorValidateBtn");
-      const ready = anchorsReady();
-      btn.disabled = !ready || (director?.validated ?? false);
-      btn.textContent = tr(director?.validated ? "Planches validées ✓" : "Valider les planches");
+      // Validé : le bouton disparaît, l'état se lit dans la barre de session (S15).
+      btn.hidden = !!director?.validated;
+      btn.disabled = !anchorsReady();
     }
 
     // Gate : nav Storyboard + liste des plans + bouton keyframes déverrouillés uniquement si
@@ -6181,7 +6222,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         rl.classList.toggle("locked", !unlocked);
         updateRelayButtons();
       }
-      refreshSoulId();
+      refreshSessionBar();
     }
 
     $("directorValidateBtn").addEventListener("click", () => {
