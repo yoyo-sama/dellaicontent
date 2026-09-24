@@ -2183,7 +2183,18 @@
     <div id="lightboxContent"></div>
   </div>
 
+  <script src="js/engine.js"></script>
   <script>
+    // E/S et builders identiques au Canvas, partagés depuis js/engine.js (chargé juste avant) —
+    // voir son en-tête. Première instruction du script : pas de zone morte temporelle possible.
+    const {
+      applyMinimaxTurbo, gemmaJSON, uploadBlob, reupload, viewURL,
+      buildGraph, getTemplate, extractFiles, outputFiles, imageSize, videoSizeFor, makeGraphBuilder,
+      addKrea2Shared, addKrea2Shot, addGrid, buildAnimaticGraph, applyMinimaxLastFrame, addMinimaxRefs, addQwen21Refs,
+      computeMPResolution, mpUnitForEngine, MP_VALUES,
+      fetchLoraOptions, loraLabel, H3_TURBO_LORAS
+    } = window.Engine;
+
     // ── Configuration ──────────────────────────────────────────────
     // ComfyUI/Ollama servis via le reverse-proxy nginx (/comfy/, /ollama/) — un
     // seul port exposé (8090), fonctionne à distance comme en local.
@@ -2193,59 +2204,14 @@
     const OLLAMA_MODEL = "gemma4:e4b";
     const RATIOS = { "16:9": [1280, 720], "9:16": [720, 1280], "1:1": [1024, 1024], "4:5": [832, 1040] };
 
-    // LoRA turbo alternative pour les pipelines fl2v (t2v/i2v, checkpoint
-    // `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors`) — validée par rendu réel à 4 steps.
-    // PIÈGE N°12 (LESSONS) — PRÉCISION : « 4 steps casse la colorimétrie » ne vaut QUE pour
-    // l'ANCIEN LoRA `H3/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors` (celui
-    // câblé en dur dans les 3 templates Minimax H3). Le LoRA ci-dessous, spécifiquement
-    // entraîné pour 4 steps, ne présente PAS cette dérive : 4 steps est donc exposable dans
-    // l'UI, mais UNIQUEMENT avec ce LoRA-là. Son nom porte `fl2v` : il n'est PAS valide pour
-    // le r2v, dont le checkpoint (`*_ref2va_*`) est différent et non interchangeable —
-    // reference2video appelle donc `applyMinimaxTurbo` SANS 3ᵉ argument et garde l'ancien LoRA.
-    const MINIMAX_FL2V_LORA_4STEP = "H3/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors";
+    // Résolution pilotée par mégapixels (computeMPResolution/mpUnitForEngine) : js/engine.js.
 
-    // ── Résolution pilotée par mégapixels — porté VERBATIM depuis js/engine.js
-    // (fonction `computeMPResolution`). Constante 1.045 (empirique, déjà validée) et
-    // formule INTOUCHÉES.
-    function computeMPResolution(mp, ratioStr, unit) {
-      unit = unit || 32;
-      const [rw, rh] = ratioStr.split(":").map(Number);
-      const ar = rw / rh;
-      const width = Math.round(Math.sqrt(1.045 * mp * 1000000 * ar) / unit) * unit;
-      const height = Math.round(Math.sqrt(1.045 * mp * 1000000 / ar) / unit) * unit;
-      return [width, height];
-    }
-    // LTX 2.5 = architecture 2 passes (arrondi ×64) ; Minimax H3 = arrondi direct ×32.
-    function mpUnitForEngine(engine) {
-      return engine === "ltx25" ? 64 : 32;
-    }
-    // 14 valeurs exposées dans l'UI, mêmes valeurs pour les 2 familles de moteurs (seule
-    // l'unité d'arrondi diffère) — reprises telles quelles de js/engine.js.
-    const MP_VALUES = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.98, 1.0, 1.2, 1.5, 1.8, 2.0];
-
-    // ── LoRA de style (Krea 2 / Minimax H3) — même mécanisme de découverte live que
-    // Canvas (js/engine.js : fetchLoraOptions/KREA2_LORAS/H3_STYLE_LORAS/H3_TURBO_LORAS),
-    // dupliqué ici verbatim car index.html n'importe pas js/engine.js (fichier autonome).
-    // Les 2 LoRA turbo H3 sont exclues de la liste "style" : elles restent pilotées par
-    // turbo/steps (turboToggle/turboSteps), pas un choix de style — copie exacte de la liste
-    // exclue côté Canvas.
-    const H3_TURBO_LORAS = new Set([
-      "H3/minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors",
-      "H3/minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors"
-    ]);
+    // ── LoRA de style (Krea 2 / Minimax H3) — même découverte live que Canvas :
+    // fetchLoraOptions/loraLabel/H3_TURBO_LORAS (les 2 LoRA turbo H3, exclues de la liste
+    // "style" car pilotées par turboToggle/turboSteps) viennent de js/engine.js ; les listes
+    // KREA2_LORAS/H3_STYLE_LORAS du Studio restent les siennes (rafraîchies ci-dessous).
     let KREA2_LORAS = [["", "Aucun"]];
     let H3_STYLE_LORAS = [["", "Aucun"]];
-    function loraLabel(path) { return path.replace(/^.*\//, "").replace(/\.safetensors$/i, ""); }
-    async function fetchLoraOptions() {
-      try {
-        const res = await fetch(`${COMFY}/object_info/LoraLoaderModelOnly`);
-        if (!res.ok) return [];
-        const data = await res.json();
-        return data.LoraLoaderModelOnly.input.required.lora_name[0] || [];
-      } catch {
-        return [];
-      }
-    }
     // Fire-and-forget au chargement et après un téléversement de LoRA — renderLoraSelect()
     // (définie plus bas, hoisting function top-level) repeuple le <select> une fois la liste
     // connue : contrairement aux combos litegraph de Canvas (qui relisent le tableau à
@@ -2813,7 +2779,6 @@
 
     // ── Workflow manifest ──────────────────────────────────────────
     let manifest = { workflows: [] };
-    const templateCache = {};
 
     let activeScenario = "campaign";
 
@@ -2957,33 +2922,7 @@
     pipelineSelect.addEventListener("change", updateModelOptions);
     modelSelect.addEventListener("change", updateModelLabel);
     $("turboToggle").addEventListener("change", updateTurboControls);
-
-    async function getTemplate(file) {
-      if (!templateCache[file]) {
-        const res = await fetch(`workflows/${file}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`template ${file} introuvable`);
-        templateCache[file] = await res.text();
-      }
-      return templateCache[file];
-    }
-
-    function buildGraph(raw, p) {
-      const rep = {
-        '"{{PROMPT}}"': JSON.stringify(p.prompt),
-        '"{{NEGATIVE_PROMPT}}"': JSON.stringify(p.negative),
-        '"{{SEED}}"': String(p.seed),
-        '"{{WIDTH}}"': String(p.width),
-        '"{{HEIGHT}}"': String(p.height),
-        '"{{BATCH}}"': String(p.batch),
-        '"{{DURATION}}"': String(p.duration || 5),
-        '"{{FRAMES}}"': String((p.duration || 5) * (p.fps || LTX25_FPS) + 1),
-        '"{{IMAGE}}"': JSON.stringify(p.image || ""),
-        '"{{IMAGE2}}"': JSON.stringify(p.image2 || "")
-      };
-      let t = raw;
-      for (const [k, v] of Object.entries(rep)) t = t.split(k).join(v);
-      return JSON.parse(t);
-    }
+    // getTemplate/buildGraph (gabarits api/*.json + placeholders) : js/engine.js.
 
     // ── Scenario tabs ──────────────────────────────────────────────
     document.querySelectorAll(".scenario-tab").forEach(tab => {
@@ -3135,17 +3074,7 @@
       }
     }
 
-    function extractFiles(output) {
-      const found = [];
-      for (const val of Object.values(output || {})) {
-        if (!Array.isArray(val)) continue;
-        for (const item of val) {
-          if (item && typeof item === "object" && item.filename) found.push(item);
-        }
-      }
-      return found;
-    }
-
+    // extractFiles (fichiers d'une sortie de nœud) : js/engine.js.
     const seenAssets = new Set();
 
     // ── Lightbox (lecteur intégré + copie du prompt) ───────────────
@@ -4259,31 +4188,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       $("seqFiles").value = "";
     });
 
-    // ── Minimax H3 : bascule turbo (LoRA ON / 20 steps OFF, LOT 1 + steps 4/6/8) ────
-    // Les 3 templates (t2v/i2v/r2v) câblent la LoRA turbo en dur (LoraLoaderModelOnly,
-    // strength_model 1) alimentant à la fois BasicScheduler et BasicGuider ; il n'y a pas
-    // de nœud bascule côté ComfyUI. Turbo OFF retire la LoRA du graphe (retour au modèle
-    // brut) et remonte les steps à 20. No-op silencieux sur tout graphe sans
-    // LoraLoaderModelOnly dont `lora_name` commence par `H3/` (Krea 2, LTX 2.5, etc.) : une LoRA
-    // d'un autre dossier (Lightning `Qwen/` de Qwen-Edit) n'est jamais touchée.
-    // `steps` est OPTIONNEL et rétrocompatible : omis (appel à 2 arguments), le graphe rendu
-    // est strictement celui d'avant — LoRA du template conservé, steps du template intouchés.
-    // Fourni ET turbo actif : 4 → bascule sur MINIMAX_FL2V_LORA_4STEP + BasicScheduler.steps=4 ;
-    // 6/8 → LoRA du template conservé + BasicScheduler.steps=steps.
-    // turbo OFF : comportement inchangé (LoRA retirée, steps=20), quel que soit `steps`.
-    // Retire `last_frame` (et son LoadImage) du graphe Minimax H3 quand aucune dernière
-    // image n'est fournie. Le nœud `MiniMaxH3ImageToVideo` couvre à lui seul les trois
-    // modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, les deux =
-    // FL2VA — nos templates t2v et i2v sont déjà le MÊME nœud à un champ près. Même idiome
-    // de retrait qu'applyMinimaxTurbo : on supprime la clé et le nœud devenu orphelin.
-    function applyMinimaxLastFrame(graph, hasLast) {
-      const entry = Object.entries(graph).find(([, n]) => n.class_type === "MiniMaxH3ImageToVideo");
-      if (!entry || hasLast) return graph;
-      const src = entry[1].inputs.last_frame;
-      delete entry[1].inputs.last_frame;
-      if (Array.isArray(src)) delete graph[src[0]];
-      return graph;
-    }
+    // ── Minimax H3 : bascule turbo — applyMinimaxTurbo et sa LoRA 4 steps sont dans js/engine.js.
+    // applyMinimaxLastFrame (retire `last_frame` sans image de fin) : js/engine.js.
 
     // Durée RÉELLEMENT rendue par Minimax H3, en secondes. La longueur se cale sur la
     // grille 17n+5 à 24 fps (LESSONS piège n°11) : une demande de 1 s rend 39 frames, soit
@@ -4306,32 +4212,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return f - ((f - 1) % 8);
     };
 
-    function applyMinimaxTurbo(graph, turboOn, steps) {
-      const loraEntry = Object.entries(graph).find(([, n]) =>
-        n.class_type === "LoraLoaderModelOnly" && String(n.inputs.lora_name).startsWith("H3/"));
-      if (!loraEntry) return graph;
-      if (turboOn) {
-        const n = Number(steps);
-        if (n !== 4 && n !== 6 && n !== 8) return graph;   // pas de steps exploitable → historique
-        if (n === 4) loraEntry[1].inputs.lora_name = MINIMAX_FL2V_LORA_4STEP;
-        for (const node of Object.values(graph))
-          if (node.class_type === "BasicScheduler") node.inputs.steps = n;
-        return graph;
-      }
-      const [loraId, loraNode] = loraEntry;
-      const src = loraNode.inputs.model; // sortie du UNETLoader, en amont de la LoRA
-      for (const n of Object.values(graph)) {
-        if (Array.isArray(n.inputs.model) && n.inputs.model[0] === loraId) n.inputs.model = src;
-        if (n.class_type === "BasicScheduler") n.inputs.steps = 20;
-      }
-      delete graph[loraId];
-      return graph;
-    }
-
     // Greffe une LoRA de style (Krea 2 ou H3) au graphe déjà construit — même technique que
     // addH3StyleLora (js/engine.js), généralisée sur le class_type d'ancrage puisque les
     // templates diffèrent (KSampler pour krea2_t2i, BasicScheduler pour les 3 Minimax H3,
-    // même nœud qu'applyMinimaxTurbo ci-dessus) : on retrouve la source actuelle de
+    // même nœud qu'applyMinimaxTurbo, js/engine.js) : on retrouve la source actuelle de
     // `inputs.model` sur ce nœud, on recible tout ce qui pointait vers cette même sortie vers
     // une nouvelle LoraLoaderModelOnly insérée entre les deux. anchorClassType absent du
     // graphe (LTX 2.5 : pas de KSampler ni de BasicScheduler pertinent) → no-op.
@@ -4353,71 +4237,13 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return graph;
     }
 
-    // ── AJOUT : références additionnelles MiniMaxH3ReferenceToVideo (portage verbatim
-    // de js/engine.js — Canvas / Ref2VideoNode, déjà validé côté Canvas) ────────────────
-    // Le template api/minimax_h3_r2v.json ne câble que `ref_images.ref_image_0` et
-    // `ref_images.ref_image_1` (personnage / décor). Ce helper greffe les références
-    // supplémentaires en réutilisant EXACTEMENT la convention de clés du template
-    // ("<famille>.<prefix><N>"), telle que /object_info la déclare pour les 4 familles
-    // COMFY_AUTOGROW_V3 du nœud :
-    //   ref_images       prefix "ref_image_"       IMAGE  max 9  (0/1 = les 2 planches)
-    //   ref_videos       prefix "ref_video_"       IMAGE  max 3  (frames 24 fps, PAS un VIDEO)
-    //   ref_video_audios prefix "ref_video_audio_" AUDIO  max 3  ("soundtrack of the
-    //                                                             same-numbered reference video")
-    //   ref_audios       prefix "ref_audio_"       AUDIO  max 3  (audio autonome)
-    // UNE vidéo de référence = 1 LoadVideo → 1 GetVideoComponents dont les sorties `images`
-    // (slot 0) et `audio` (slot 1) alimentent le COUPLE ref_video_N / ref_video_audio_N :
-    // c'est l'appariement prévu par le nœud, aucune UI séparée n'est nécessaire pour l'audio
-    // d'une vidéo de référence.
-    // Ids des nœuds greffés : préfixe "ref" (non numérique, comme les "w0"/"h32" déjà
-    // présents dans le template) — aucune collision possible avec les ids du template.
-    // `refs` vide (ou absent) ⇒ graphe rendu strictement inchangé.
-    function addMinimaxRefs(graph, refs) {
-      const entry = Object.entries(graph).find(([, n]) => n.class_type === "MiniMaxH3ReferenceToVideo");
-      if (!entry || !refs) return graph;
-      const mm = entry[1];
-      let k = 0;
-      const add = (class_type, inputs) => { const id = "ref" + (++k); graph[id] = { class_type, inputs }; return id; };
-      (refs.images || []).forEach((name, i) => {
-        mm.inputs[`ref_images.ref_image_${i + 2}`] = [add("LoadImage", { image: name }), 0];
-      });
-      (refs.videos || []).forEach((name, i) => {
-        const comp = add("GetVideoComponents", { video: [add("LoadVideo", { file: name }), 0] });
-        mm.inputs[`ref_videos.ref_video_${i}`] = [comp, 0];
-        mm.inputs[`ref_video_audios.ref_video_audio_${i}`] = [comp, 1];
-      });
-      (refs.audios || []).forEach((name, i) => {
-        mm.inputs[`ref_audios.ref_audio_${i}`] = [add("LoadAudio", { audio: name }), 0];
-      });
-      return graph;
-    }
-
-    // ── Qwen Image 2.1 : références supplémentaires de TextEncodeQwenImage21 (portage
-    // verbatim de Engine.addQwen21Refs, js/engine.js — index.html ne charge pas engine.js,
-    // qui ouvrirait un 2ᵉ WebSocket ComfyUI) ─────────────────────────────────────────
-    // Greffe une LoadImage par nom sous la clé autogrow "images.image_<N>", à la suite des
-    // entrées du gabarit (1-indexée, contiguë — le prompt les désigne <imageN>). Plafond
-    // prouvé en rendu : 10 images au total — c'est à l'appelant de borner `names`.
-    function addQwen21Refs(graph, names) {
-      const enc = Object.values(graph).find(n => n.class_type === "TextEncodeQwenImage21");
-      if (!enc || !names) return graph;
-      let n = Object.keys(enc.inputs).filter(k => k.startsWith("images.image_")).length;
-      names.forEach((name, i) => {
-        const id = "q21ref" + (i + 1);
-        graph[id] = { class_type: "LoadImage", inputs: { image: name } };
-        enc.inputs[`images.image_${++n}`] = [id, 0];
-      });
-      return graph;
-    }
+    // addMinimaxRefs (références r2v supplémentaires) et addQwen21Refs (références
+    // Qwen Image 2.1) : js/engine.js.
 
     const FLF2V_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0";
     const LTX25_FPS = 24;   // LTX 2.5 et Minimax H3 rendent en 24 fps (LTX 2.3 était en 25).
-
-    function makeGraphBuilder() {
-      const g = {}; let id = 0;
-      const add = (class_type, inputs) => { g[String(++id)] = { class_type, inputs }; return String(id); };
-      return { g, add };
-    }
+    // LTX25_FPS doit rester égal à celui de js/engine.js (buildGraph, buildAnimaticGraph).
+    // makeGraphBuilder : js/engine.js.
 
     // Ressources partagées LTX 2.5 (mêmes fichiers que workflows/api/ltx25_flf2v.json).
     // Un seul jeu de loaders pour toute la chaîne multi-segments.
@@ -4531,43 +4357,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return g;
     }
 
-    // ── Branche image Krea 2 Turbo (8 steps, cfg 1 — copie de api/krea2_t2i.json) ──
-    // ATTENTION (LESSONS piège n°16) : le négatif passe par ConditioningZeroOut, il n'est
-    // même pas encodé — TOUTE contrainte doit être formulée POSITIVEMENT dans le prompt.
-    function addKrea2Shared(add, loraName) {
-      let unet = add("UNETLoader", { unet_name: "krea2_turbo_fp8_scaled.safetensors", weight_dtype: "default" });
-      if (loraName) unet = add("LoraLoaderModelOnly", { model: [unet, 0], lora_name: loraName, strength_model: 1 });
-      const clip = add("CLIPLoader", { clip_name: "qwen3vl_4b_fp8_scaled.safetensors", type: "krea2", device: "default" });
-      const vae = add("VAELoader", { vae_name: "qwen_image_vae.safetensors" });
-      return { unet, clip, vae };
-    }
-    function addKrea2Shot(add, kx, prompt, seed, width, height, batch) {
-      const lat = add("EmptyLatentImage", { width, height, batch_size: batch });
-      const pos = add("CLIPTextEncode", { text: prompt, clip: [kx.clip, 0] });
-      const zero = add("ConditioningZeroOut", { conditioning: [pos, 0] });
-      const ks = add("KSampler", {
-        model: [kx.unet, 0], seed, steps: 8, cfg: 1, sampler_name: "euler", scheduler: "simple",
-        positive: [pos, 0], negative: [zero, 0], latent_image: [lat, 0], denoise: 1
-      });
-      return add("VAEDecode", { samples: [ks, 0], vae: [kx.vae, 0] });
-    }
-    function addGrid(add, refs) {
-      const stitch = (a, b, direction) => [add("ImageStitch", {
-        image1: a, direction, match_image_size: true, spacing_width: 0, spacing_color: "white", image2: b
-      }), 0];
-      // Grille carrée adaptative (4 → 2×2, 9 → 3×3, 16 → 4×4) ; lignes remplies
-      // à gauche : une ligne trop courte serait étirée par match_image_size.
-      const cols = Math.ceil(Math.sqrt(refs.length));
-      const rows = [];
-      for (let i = 0; i < refs.length; i += cols) {
-        let row = refs[i];
-        for (let j = i + 1; j < Math.min(i + cols, refs.length); j++) row = stitch(row, refs[j], "right");
-        rows.push(row);
-      }
-      let grid = rows[0];
-      for (let r = 1; r < rows.length; r++) grid = stitch(grid, rows[r], "down");
-      return grid;
-    }
+    // ── Branche image Krea 2 Turbo (addKrea2Shared/addKrea2Shot) et grille (addGrid) :
+    // js/engine.js. LESSONS piège n°16 : le négatif Krea 2 n'est jamais encodé.
 
     // ── Tâche complète : Campagne (posters + thumbnails + teaser) ──
     function mergeGraph(g, other, prefix) {
@@ -4989,28 +4780,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Mouvement de caméra figé pour la tenue du plan final (pseudo-shot du dernier plan).
     const HOLD_MOTION = "Locked camera holding on the final shot, subtle ambient motion only.";
 
-    // Appel gemma4 mutualisé : format JSON, think:false, retry sans think sur 4xx.
-    // `images` (optionnel) : tableau de base64 SANS le préfixe data: — le champ `images`
-    // du message utilisateur est la façon dont Ollama passe une image à un modèle vision.
-    async function gemmaJSON(system, user, images) {
-      const userMsg = { role: "user", content: user };
-      if (images && images.length) userMsg.images = images;
-      const body = {
-        model: OLLAMA_MODEL, stream: false, format: "json", think: false,
-        messages: [{ role: "system", content: system }, userMsg]
-      };
-      let res = await fetch(`${OLLAMA}/api/chat`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        delete body.think;
-        res = await fetch(`${OLLAMA}/api/chat`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
-        });
-      }
-      if (!res.ok) throw new Error(`ollama ${res.status}`);
-      return JSON.parse((await res.json()).message.content);
-    }
+    // Appel gemma4 mutualisé (gemmaJSON, avec images optionnelles) : js/engine.js.
 
     // Aplatit une valeur gemma (chaîne, objet imbriqué, tableau) en une chaîne dense.
     // gemma renvoie parfois un objet là où on attend une chaîne → on concatène ses valeurs.
@@ -5207,63 +4977,11 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Incrémenté par cancelProject() : les attentes lancées avant l'annulation ont gardé
     // l'ancienne valeur et sortent de leur boucle au lieu de poller un job jamais rendu.
     let cancelToken = 0;
-    // Attend la complétion d'une liste de jobs (poll /history) → renvoie leurs entrées.
-    async function waitForJobs(promptIds) {
-      const pending = new Set(promptIds), done = {}, gone = {};
-      const token = cancelToken;
-      while (pending.size) {
-        await new Promise(r => setTimeout(r, 1500));
-        if (token !== cancelToken) throw new Error("Projet annulé.");
-        const missing = [];
-        for (const id of [...pending]) {
-          let entry;
-          try { entry = (await (await fetch(`${COMFY}/history/${id}`, { cache: "no-store" })).json())[id]; }
-          catch { continue; }
-          if (!entry) { missing.push(id); continue; }
-          if (entry.status?.status_str === "error") throw new Error(`Un job ComfyUI a échoué (${id}).`);
-          if (entry.status?.completed) { done[id] = entry; pending.delete(id); }
-        }
-        if (!missing.length) continue;
-        let queued;
-        try {
-          const q = await (await fetch(`${COMFY}/queue`, { cache: "no-store" })).json();
-          queued = new Set([...q.queue_running, ...q.queue_pending].map(x => x[1]));
-        } catch { continue; }
-        for (const id of missing) {
-          gone[id] = queued.has(id) ? 0 : (gone[id] || 0) + 1;
-          if (gone[id] >= 2) throw new Error(`Job ${id} perdu (ComfyUI redémarré ?)`);
-        }
-      }
-      return done;
-    }
+    // Attend la complétion d'une liste de jobs (poll /history, js/engine.js) → renvoie leurs
+    // entrées ; lève « Projet annulé. » si cancelProject() passe pendant l'attente.
+    function waitForJobs(promptIds) { const token = cancelToken; return Engine.waitForJobs(promptIds, () => token !== cancelToken); }
 
-    // Fichiers de sortie d'une entrée /history filtrés par extension.
-    function outputFiles(entry, ext) {
-      const files = [];
-      for (const nodeOut of Object.values(entry.outputs || {}))
-        for (const f of extractFiles(nodeOut))
-          if (f.filename.toLowerCase().endsWith(ext) && (f.type || "output") === "output") files.push(f);
-      return files;
-    }
-
-    // Récupère une sortie via /view puis la ré-uploade en entrée (pattern uploadBlob).
-    async function reupload(f) {
-      const blob = await (await fetch(viewURL(f))).blob();
-      const name = await uploadBlob(blob, f.filename.split("/").pop());
-      return { name, blob };
-    }
-
-    async function imageSize(blob) {
-      const bmp = await createImageBitmap(blob);
-      const s = { w: bmp.width, h: bmp.height };
-      bmp.close();
-      return s;
-    }
-    // Format vidéo dérivé d'une keyframe (côté long ≤ 1280, multiples de 32).
-    function videoSizeFor({ w, h }) {
-      const scale = Math.min(1, 1280 / Math.max(w, h));
-      return { w: Math.max(320, Math.round(w * scale / 32) * 32), h: Math.max(320, Math.round(h * scale / 32) * 32) };
-    }
+    // outputFiles, imageSize, videoSizeFor : js/engine.js.
 
     // Krea 2 route le négatif dans ConditioningZeroOut : il n'est même pas encodé (LESSONS
     // piège n°16). Les contraintes autrefois portées par CHARSHEET_NEG/LOCSHEET_NEG sont donc
@@ -5459,22 +5177,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return g;
     }
 
-    // Assemblage par cuts francs : chaque clip décomposé (images+audio), concaténés.
-    function buildAnimaticGraph(videoNames, withAudio) {
-      const { g, add } = makeGraphBuilder();
-      const comps = videoNames.map(n => add("GetVideoComponents", { video: [add("LoadVideo", { file: n }), 0] }));
-      let imgs = [comps[0], 0];
-      for (let k = 1; k < comps.length; k++) imgs = [add("ImageBatch", { image1: imgs, image2: [comps[k], 0] }), 0];
-      const inputs = { images: imgs, fps: LTX25_FPS, bit_depth: 8 };
-      if (withAudio) {
-        let aud = [comps[0], 1];
-        for (let k = 1; k < comps.length; k++) aud = [add("AudioConcat", { audio1: aud, audio2: [comps[k], 1], direction: "after" }), 0];
-        inputs.audio = aud;
-      }
-      const cv = add("CreateVideo", inputs);
-      add("SaveVideo", { video: [cv, 0], filename_prefix: "studio/story/animatic", format: "auto", codec: "auto" });
-      return g;
-    }
+    // Assemblage par cuts francs (buildAnimaticGraph) : js/engine.js.
 
     // charsheet → N keyframes ancrées Qwen-Edit → grille → 1 cut i2v/keyframe → assemblage.
     // ── Storyboard v2 : sous-fonctions par étape (partagées Auto ↔ Réalisateur) ──
@@ -5492,6 +5195,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Attend un job image et le ré-uploade (pattern charsheet→ancre / keyframe→cut).
     // `file` = référence à la sortie disque ComfyUI (persistable — LOT C, contrairement à
     // l'input ré-uploadé qui peut être écrasé/purgé).
+    // Reste local (≠ Engine.resolveImageJob) : il passe par le waitForJobs annulable ci-dessus.
     async function resolveImageJob(promptId) {
       const entry = (await waitForJobs([promptId]))[promptId];
       const file = outputFiles(entry, ".png")[0];
@@ -5913,7 +5617,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         prompt, negative: negText, seed: seed + 201, width, height, duration, image, image2
       });
       addMinimaxRefs(graph, refs);
-      applyMinimaxTurbo(graph, turboOn);
+      applyMinimaxTurbo(graph, turboOn);   // SANS 3ᵉ argument : la LoRA 4 steps (fl2v) ne vaut pas pour le checkpoint r2v
       applyStyleLora(graph, loraName, "BasicScheduler");
       const refsLabel = refs.count ? ` · +${refs.count} réf.` : "";
       await submitGraph(graph, "Personnage + décor cohérents (Minimax H3 r2v)",
@@ -6849,10 +6553,6 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     }
 
     // ── Menu Montage : cuts i2v par plan (durée DNA) → clips réordonnables → animatic ──
-    // URL de lecture directe d'un fichier de sortie ComfyUI (vignette/lecteur, pas de blob).
-    function viewURL(f) {
-      return `${COMFY}/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}`;
-    }
     // ── Moteur des cuts : LTX 2.5 (défaut qualifié) ou Minimax H3 ────────────────
     // Un seul choix pour toute la série de cuts. Il est lu au lancement et RANGÉ sur chaque
     // cut : re-rendre un plan ne change jamais son moteur, même si le sélecteur a bougé
@@ -8026,16 +7726,6 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         batch, teaserDur);
       await submitGraph(graph, "Campagne complète",
         `${wf.model} · ${batch} posters + ${batch} thumbnails + social + teaser ${teaserDur}s · seed ${seed}`);
-    }
-
-    async function uploadBlob(blob, name) {
-      const fd = new FormData();
-      fd.append("image", new File([blob], name, { type: blob.type || "image/png" }));
-      fd.append("overwrite", "false");
-      const res = await fetch(`${COMFY}/upload/image`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error(`Upload de "${name}" refusé par ComfyUI.`);
-      const d = await res.json();
-      return d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
     }
 
     async function generateSequence(seed) {

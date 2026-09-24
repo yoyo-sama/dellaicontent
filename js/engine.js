@@ -1,7 +1,8 @@
 // engine.js — logique de génération de `index.html` extraite en fonctions paramétrées.
 //
-// EXTRACTION, PAS REFACTOR : `index.html` est inchangé et reste fonctionnel tel quel.
-// Ce fichier duplique la même logique métier (templates, substitutions, ordre des appels
+// Partagé avec le Studio : `index.html` charge aussi ce fichier et déstructure `window.Engine`
+// pour ses E/S et builders identiques ; le reste (prompts, submit*Job, sa WebSocket) y reste dupliqué.
+// Ce fichier reprend la même logique métier (templates, substitutions, ordre des appels
 // réseau) mais chaque fonction reçoit ses paramètres en argument explicite au lieu de les
 // lire dans des éléments DOM globaux uniques (`brief.value`, `$("shotCount").value`,
 // `director.style`, `clientId`…), et rend son résultat par retour/callback au lieu de
@@ -501,10 +502,14 @@
   }
 
   // Appel gemma4 mutualisé : format JSON, think:false, retry sans think sur 4xx.
-  async function gemmaJSON(system, user) {
+  // `images` (optionnel) : tableau de base64 SANS le préfixe data: — le champ `images`
+  // du message utilisateur est la façon dont Ollama passe une image à un modèle vision.
+  async function gemmaJSON(system, user, images) {
+    const userMsg = { role: "user", content: user };
+    if (images && images.length) userMsg.images = images;
     const body = {
       model: OLLAMA_MODEL, stream: false, format: "json", think: false,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }]
+      messages: [{ role: "system", content: system }, userMsg]
     };
     let res = await fetch(`${OLLAMA}/api/chat`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
@@ -537,10 +542,12 @@
     return LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", ");
   }
 
-  async function waitForJobs(promptIds) {
+  // `isCancelled` (optionnel, Studio) : vrai ⇒ l'attente lève « Projet annulé. » au tour suivant.
+  async function waitForJobs(promptIds, isCancelled) {
     const pending = new Set(promptIds), done = {}, gone = {};
     while (pending.size) {
       await new Promise(r => setTimeout(r, 1500));
+      if (isCancelled && isCancelled()) throw new Error("Projet annulé.");
       const missing = [];
       for (const id of [...pending]) {
         let entry;
@@ -714,7 +721,9 @@
   // détection de complétion reste entièrement à waitForJobs() (polling /history), inchangée.
   const clientId = crypto.randomUUID();
   const jobNodes = {};   // prompt_id -> nœud litegraph à faire progresser
-  function registerJob(promptId, node) { if (node) jobNodes[promptId] = node; }
+  // Socket ouverte au premier job suivi, pas au chargement : le Studio charge aussi ce fichier
+  // et a déjà la sienne (la progression d'un tout premier job peut donc être manquée).
+  function registerJob(promptId, node) { if (!ws) connectWS(); if (node) jobNodes[promptId] = node; }
 
   function handleWS(msg) {
     const d = (msg && msg.data) || {};
@@ -742,7 +751,6 @@
       handleWS(msg);
     };
   }
-  connectWS();
 
   // Fiches gemma : `brief.value` devient l'argument `scene`, addEvent() devient onEvent.
   async function characterSheetFromBrief(scene, onEvent) {
@@ -850,6 +858,7 @@
       addH3StyleLora,   // LoRA de style Minimax H3, cumulable avec applyMinimaxTurbo (appeler APRÈS)
       // prompts / libs
       CAMERA_LIB, LIGHTING_LIB, STYLE_PACKS, KREA2_LORAS, H3_STYLE_LORAS, SHEET_CLEAN,
+      fetchLoraOptions, loraLabel, H3_TURBO_LORAS,   // découverte LoRA, partagée avec le Studio
       styleTextFor, compileKeyframePrompt, compileCutPrompt,
       // LLM
       gemmaJSON, characterSheetFromBrief, locationSheetFromBrief, shotListFromBrief,
