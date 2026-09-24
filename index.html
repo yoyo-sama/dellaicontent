@@ -2246,16 +2246,21 @@
         return [];
       }
     }
-    // Fire-and-forget au chargement — renderLoraSelect() (définie plus bas, hoisting function
-    // top-level) repeuple le <select> une fois la liste connue : contrairement aux combos
-    // litegraph de Canvas (qui relisent le tableau à l'ouverture), le <select> DOM de Studio
-    // est peuplé statiquement, donc il faut un rendu explicite après résolution du fetch.
-    fetchLoraOptions().then(list => {
+    // Fire-and-forget au chargement et après un téléversement de LoRA — renderLoraSelect()
+    // (définie plus bas, hoisting function top-level) repeuple le <select> une fois la liste
+    // connue : contrairement aux combos litegraph de Canvas (qui relisent le tableau à
+    // l'ouverture), le <select> DOM de Studio est peuplé statiquement, donc il faut un rendu
+    // explicite après résolution du fetch. `length = 1` garde la ligne « Aucun » et les
+    // références partagées.
+    async function refreshLoraOptions() {
+      const list = await fetchLoraOptions();
+      KREA2_LORAS.length = 1; H3_STYLE_LORAS.length = 1;
       for (const f of list) if (f.startsWith("Krea2/")) KREA2_LORAS.push([f, loraLabel(f)]);
       for (const f of list) if (f.startsWith("H3/") && !H3_TURBO_LORAS.has(f)) H3_STYLE_LORAS.push([f, loraLabel(f)]);
       renderLoraSelect();
       renderSheetLoraSelect();
-    });
+    }
+    refreshLoraOptions();
 
     // Fallback si le manifest ne fournit pas la section "pipelines" (manifest v2).
     // controls ∈ {duration, shots, hold, variants, ratio, audio, turbo, image, markets, seq, mp, turboSteps, lora, sheetLora, sheetTemplate}
@@ -2927,7 +2932,7 @@
     // krea2_t2i, bucket H3 pour les 3 workflows minimax_h3_*), pas du tout pour LTX 2.5 (aucun
     // concept de LoRA, même comportement no-op que le toggle turbo pour ce moteur). Rappelée à
     // chaque changement de pipeline/modèle (via updateModelLabel) ET une fois la découverte live
-    // résolue (fetchLoraOptions().then ci-dessus) — la valeur sélectionnée est conservée si elle
+    // résolue (refreshLoraOptions ci-dessus) — la valeur sélectionnée est conservée si elle
     // existe encore dans la nouvelle liste (même bucket), sinon retombe sur "Aucun" (les noms de
     // fichiers Krea2/* et H3/* ne se recoupent jamais, donc un changement de bucket la fait
     // disparaître naturellement de la nouvelle liste).
@@ -2944,7 +2949,9 @@
     // Style Krea 2 des fiches perso/décor (storyboard_v2/reference2video) : toujours le bucket
     // Krea2, pas de branchement par pipeline/moteur contrairement à renderLoraSelect ci-dessus.
     function renderSheetLoraSelect() {
-      $("sheetLoraSelect").innerHTML = KREA2_LORAS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+      const sel = $("sheetLoraSelect"), prev = sel.value;
+      sel.innerHTML = KREA2_LORAS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+      if (KREA2_LORAS.some(([v]) => v === prev)) sel.value = prev;
     }
 
     pipelineSelect.addEventListener("change", updateModelOptions);
@@ -3073,7 +3080,26 @@
 
     function connectWS() {
       ws = new WebSocket(`${COMFY_WS}?clientId=${clientId}`);
-      ws.onopen = () => addEvent("SYS", "ComfyUI WebSocket connecté.", "sys");
+      ws.onopen = async () => {
+        addEvent("SYS", "ComfyUI WebSocket connecté.", "sys");
+        // Resynchronisation : un message de fin perdu pendant la coupure laisserait le job « Running ».
+        const lost = [];
+        for (const id of [...activeJobIds]) {
+          try {
+            const entry = (await (await fetch(`${COMFY}/history/${id}`, { cache: "no-store" })).json())[id];
+            if (!entry) lost.push(id);
+            else if (entry.status?.completed || entry.status?.status_str === "error")
+              handleWS({ type: entry.status.status_str === "error" ? "execution_error" : "execution_success", data: { prompt_id: id } });
+          } catch { /* ComfyUI injoignable : rien à conclure */ }
+        }
+        if (!lost.length) return;
+        try {
+          const q = await (await fetch(`${COMFY}/queue`, { cache: "no-store" })).json();
+          const queued = new Set([...q.queue_running, ...q.queue_pending].map(x => x[1]));
+          for (const id of lost) if (!queued.has(id))
+            handleWS({ type: "execution_error", data: { prompt_id: id, exception_message: "job perdu (ComfyUI redémarré ?)" } });
+        } catch { /* idem */ }
+      };
       ws.onclose = () => setTimeout(connectWS, 4000);
       ws.onmessage = e => {
         if (typeof e.data !== "string") return;
@@ -3102,13 +3128,16 @@
         $("stepInference").classList.remove("active");
         collectHistory(d.prompt_id, job.label);
         updateStudioJobs(-1);
-      } else if (msg.type === "execution_error" && job) {
+        delete jobs[d.prompt_id];
+      } else if ((msg.type === "execution_error" || msg.type === "execution_interrupted") && job) {
         if (!activeJobIds.delete(d.prompt_id)) return; // job déjà annulé : erreur attendue, ignorée
         job.statusEl.textContent = "Error";
         job.statusEl.className = "status error";
-        addEvent("WARN", `Erreur d'exécution : ${d.exception_message || "voir logs ComfyUI"}`, "warn");
+        addEvent("WARN", msg.type === "execution_interrupted" ? `${job.label} interrompu.`
+          : `Erreur d'exécution : ${d.exception_message || "voir logs ComfyUI"}`, "warn");
         $("stepInference").classList.remove("active");
         updateStudioJobs(-1);
+        delete jobs[d.prompt_id];
       }
     }
 
@@ -3253,9 +3282,14 @@
 
     // Assets supprimés : masqués définitivement côté studio (les fichiers restent dans l'output ComfyUI)
     const deletedAssets = new Set(JSON.parse(localStorage.getItem("deletedAssets") || "[]"));
+    // Un quota plein ne doit jamais empêcher d'ajouter une carte ni de remonter une vidéo.
+    function saveLocal(key, value) {
+      try { localStorage.setItem(key, value); }
+      catch (e) { addEvent("WARN", `Stockage navigateur plein : « ${key} » non sauvegardé.`, "warn"); }
+    }
     function markDeleted(key) {
       deletedAssets.add(key);
-      localStorage.setItem("deletedAssets", JSON.stringify([...deletedAssets]));
+      saveLocal("deletedAssets", JSON.stringify([...deletedAssets]));
       purgeGalleryAsset(key);
     }
 
@@ -3273,18 +3307,19 @@
         seen.add(ak); out.push(a);
       }
       galleryAssets.length = 0; galleryAssets.push(...out.slice(0, 200));
-      localStorage.setItem("galleryAssets", JSON.stringify(galleryAssets));
+      saveLocal("galleryAssets", JSON.stringify(galleryAssets));
     }
     function purgeGalleryAsset(key) {
       const idx = galleryAssets.findIndex(a => `${a.subfolder}/${a.filename}` === key);
       if (idx === -1) return;
       galleryAssets.splice(idx, 1);
-      localStorage.setItem("galleryAssets", JSON.stringify(galleryAssets));
+      saveLocal("galleryAssets", JSON.stringify(galleryAssets));
     }
     function saveAssetPrompts() {
+      const kept = new Set(galleryAssets.map(a => `${a.subfolder}/${a.filename}`));
       const o = {};
-      for (const [k, v] of assetPrompts) o[k] = v;
-      localStorage.setItem("assetPrompts", JSON.stringify(o));
+      for (const [k, v] of assetPrompts) if (kept.has(k)) o[k] = v; // les cloud:* restent en mémoire, inutiles après rechargement
+      saveLocal("assetPrompts", JSON.stringify(o));
     }
     function restoreGallery() {
       for (const a of galleryAssets) addAsset(a, a.label, false);
@@ -3423,10 +3458,10 @@
         const h = await (await fetch(`${COMFY}/history/${promptId}`)).json();
         const entry = h[promptId];
         if (!entry) return;
-        recordPrompts(entry);
         for (const nodeOut of Object.values(entry.outputs || {})) {
           for (const f of extractFiles(nodeOut)) addAsset(f, label);
         }
+        recordPrompts(entry);
       } catch { /* historique indisponible : les assets WS suffisent */ }
     }
 
@@ -3477,27 +3512,12 @@
         file = new File([blob], selectedAsset.filename, { type: blob.type });
       }
       if (!file) throw new Error("Sélectionnez une image d'entrée (fichier ou asset de la galerie).");
-      const fd = new FormData();
-      fd.append("image", file);
-      fd.append("overwrite", "true");
-      const res = await fetch(`${COMFY}/upload/image`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Upload de l'image refusé par ComfyUI.");
-      const d = await res.json();
-      return d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
+      return uploadBlob(file, file.name);
     }
 
-    // Upload générique (référence r2v : image/vidéo/audio) — même endpoint que
-    // uploadInputImage, non restreint au content-type malgré le chemin "/upload/image"
-    // (déjà utilisé ainsi pour vidéo/audio par uploadBlob côté js/engine.js/Canvas).
-    async function uploadRefFile(file) {
-      const fd = new FormData();
-      fd.append("image", file);
-      fd.append("overwrite", "true");
-      const res = await fetch(`${COMFY}/upload/image`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error(`Upload de la référence "${file.name}" refusé par ComfyUI.`);
-      const d = await res.json();
-      return d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
-    }
+    // Référence r2v (image/vidéo/audio) : wrapper gardé pour `.map(uploadRefFile)`, qui
+    // passerait sinon l'index comme nom à uploadBlob.
+    function uploadRefFile(file) { return uploadBlob(file, file.name); }
 
     $("generateBtn").addEventListener("click", async () => {
       const wf = currentWorkflow();
@@ -3572,19 +3592,8 @@
           applyMinimaxTurbo(graph, $("turboToggle").checked,
             (wf.pipeline === "text2video" || wf.pipeline === "image2video") ? Number($("turboSteps").value) : undefined);
           applyStyleLora(graph, $("loraStyleSelect").value, wf.id.startsWith("minimax_h3_") ? "BasicScheduler" : "KSampler");
-          const res = await fetch(`${COMFY}/prompt`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: graph, client_id: clientId })
-          });
-          const data = await res.json();
-          if (!res.ok || data.error) {
-            const detail = data.error?.message || JSON.stringify(data.error || data);
-            throw new Error(`ComfyUI a rejeté le job : ${detail}`);
-          }
           const label = wf.label + (spec.tag ? ` · ${spec.tag}` : "");
-          trackJob(data.prompt_id, label, `${wf.model} · ${wf.pipeline} · ${ratioSelect.value} · seed ${seed + i}`);
-          addEvent("REQ", `Job soumis : ${label} (${wf.pipeline}).`, "req");
+          await submitGraph(graph, label, `${wf.model} · ${wf.pipeline} · ${ratioSelect.value} · seed ${seed + i}`);
         }
       } catch (err) {
         addEvent("WARN", err.message, "warn");
@@ -3681,24 +3690,6 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return out || text;   // un prompt intégralement fait de remplissage : on garde l'original
     }
 
-    async function callOllama(system, user, withThink) {
-      const body = {
-        model: OLLAMA_MODEL, stream: false, format: "json",
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user }
-        ]
-      };
-      if (withThink) body.think = false;
-      const res = await fetch(`${OLLAMA}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) throw new Error(`ollama ${res.status}`);
-      return res.json();
-    }
-
     // ── Plateformes cloud (Advanced) : génération d'assets ─────────
     const CLOUD_PLATFORMS = {
       chatgpt:    { label: "ChatGPT (OpenAI)", console: "https://chatgpt.com", generate: generateViaOpenAI },
@@ -3783,9 +3774,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const out = [];
       for (let i = 0; i < p.batch; i++) {
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${encodeURIComponent(key)}`, {
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
           body: JSON.stringify({
             contents: [{ role: "user", parts }],
             generationConfig: { imageConfig: { aspectRatio: p.ratio } }
@@ -3884,10 +3875,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const user = brief.value.trim() + (styleText ? `\nPRIMARY_STYLE: ${styleText}` : "");
       $("stepEnrich").classList.add("active");
       try {
-        let data;
-        try { data = await callOllama(system, user, true); }
-        catch { data = await callOllama(system, user, false); }
-        const out = JSON.parse(data.message.content);
+        const out = await gemmaJSON(system, user);
         let stripped = 0;
         if (out.positive_prompt) {
           const raw = out.positive_prompt;
@@ -4095,6 +4083,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     }
 
     async function pollMonitor() {
+      if (document.hidden) return;
       try {
         const s = await (await fetch(`${COMFY}/system_stats`)).json();
         const dev = (s.devices || [])[0];
@@ -4119,7 +4108,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         $("comfyVersion").textContent = "offline";
       }
       try {
-        await fetch(`${OLLAMA}/api/version`);
+        if (!(await fetch(`${OLLAMA}/api/version`)).ok) throw 0;
         $("ollamaState").textContent = "Ready";
       } catch {
         $("ollamaState").textContent = "Offline";
@@ -4187,6 +4176,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
           addEvent("OK", `LoRA "${file.name}" téléversé dans ${folder}.`, "ok");
           fileInput.value = "";
           loadModels();
+          refreshLoraOptions();
         } else {
           let msg = xhr.responseText;
           try { msg = JSON.parse(xhr.responseText).error || msg; } catch { /* corps non-JSON */ }
@@ -5023,6 +5013,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
         });
       }
+      if (!res.ok) throw new Error(`ollama ${res.status}`);
       return JSON.parse((await res.json()).message.content);
     }
 
@@ -5223,18 +5214,29 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     let cancelToken = 0;
     // Attend la complétion d'une liste de jobs (poll /history) → renvoie leurs entrées.
     async function waitForJobs(promptIds) {
-      const pending = new Set(promptIds), done = {};
+      const pending = new Set(promptIds), done = {}, gone = {};
       const token = cancelToken;
       while (pending.size) {
         await new Promise(r => setTimeout(r, 1500));
         if (token !== cancelToken) throw new Error("Projet annulé.");
+        const missing = [];
         for (const id of [...pending]) {
           let entry;
           try { entry = (await (await fetch(`${COMFY}/history/${id}`, { cache: "no-store" })).json())[id]; }
           catch { continue; }
-          if (!entry) continue;
+          if (!entry) { missing.push(id); continue; }
           if (entry.status?.status_str === "error") throw new Error(`Un job ComfyUI a échoué (${id}).`);
           if (entry.status?.completed) { done[id] = entry; pending.delete(id); }
+        }
+        if (!missing.length) continue;
+        let queued;
+        try {
+          const q = await (await fetch(`${COMFY}/queue`, { cache: "no-store" })).json();
+          queued = new Set([...q.queue_running, ...q.queue_pending].map(x => x[1]));
+        } catch { continue; }
+        for (const id of missing) {
+          gone[id] = queued.has(id) ? 0 : (gone[id] || 0) + 1;
+          if (gone[id] >= 2) throw new Error(`Job ${id} perdu (ComfyUI redémarré ?)`);
         }
       }
       return done;
@@ -5251,8 +5253,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Récupère une sortie via /view puis la ré-uploade en entrée (pattern uploadBlob).
     async function reupload(f) {
-      const q = `filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}`;
-      const blob = await (await fetch(`${COMFY}/view?${q}`)).blob();
+      const blob = await (await fetch(viewURL(f))).blob();
       const name = await uploadBlob(blob, f.filename.split("/").pop());
       return { name, blob };
     }
@@ -5529,8 +5530,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // en <image3> via addQwen21Refs (addKeyframeThirdRef vise TextEncodeQwenImageEditPlus,
       // absent ici), puis les références supplémentaires : la MÊME liste que Minimax H3 r2v
       // (#refImagesInput, collectRefExtras, plafond 7) — au pire 3 + 7 = 10, plafond prouvé.
-      // ponytail: ré-upload de la liste à chaque keyframe (overwrite, mêmes noms) — la mettre
-      // en cache sur `director` si le nombre de plans × références devient sensible.
+      // ponytail: ré-upload de la liste à chaque keyframe (ComfyUI réutilise le nom si le contenu
+      // est identique) — la mettre en cache sur `director` si plans × références devient sensible.
       const q21 = Object.values(g).some(node => node.class_type === "TextEncodeQwenImage21");
       if (q21) addQwen21Refs(g, (refs[1] ? [locName] : []).concat((await collectRefExtras()).images));
       else if (refs[1]) addKeyframeThirdRef(g, locName);
@@ -8021,6 +8022,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         job.statusEl.textContent = "Cancelled";
         job.statusEl.className = "status fallback";
         updateStudioJobs(-1);
+        delete jobs[id];
       }
       $("stepInference").classList.remove("active");
       resetDirectorZone(); // ferme le studio et libère la session (exitStudio inclus)
@@ -8051,7 +8053,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
     async function uploadBlob(blob, name) {
       const fd = new FormData();
       fd.append("image", new File([blob], name, { type: blob.type || "image/png" }));
-      fd.append("overwrite", "true");
+      fd.append("overwrite", "false");
       const res = await fetch(`${COMFY}/upload/image`, { method: "POST", body: fd });
       if (!res.ok) throw new Error(`Upload de "${name}" refusé par ComfyUI.`);
       const d = await res.json();
@@ -8075,19 +8077,9 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
       const { w: width, h: height } = seqTargetSize();
       const graph = buildFLF2VGraph(names, durations, brief.value.trim(), negative.value.trim(),
         seed, width, height, $("audioToggle").checked);
-      const res = await fetch(`${COMFY}/prompt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: graph, client_id: clientId })
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(`ComfyUI a rejeté la séquence : ${data.error?.message || JSON.stringify(data.node_errors || data)}`);
-      }
       const total = durations.reduce((s, d) => s + d, 0);
-      trackJob(data.prompt_id, `Animatic FLF2V (${seqImages.length} images)`,
+      await submitGraph(graph, `Animatic FLF2V (${seqImages.length} images)`,
         `LTX 2.5 · ${durations.length} segments · ~${total}s · ${width}x${height} · seed ${seed}`);
-      addEvent("REQ", `Séquence FLF2V soumise : ${durations.length} segment(s), ~${total} s.`, "req");
     }
 
     // Galerie : recharge les assets déjà générés (historique ComfyUI)
@@ -8097,10 +8089,10 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         let n = 0;
         for (const entry of Object.values(h)) {
           if (!entry.status?.completed) continue;
-          recordPrompts(entry);
           for (const nodeOut of Object.values(entry.outputs || {})) {
             for (const f of extractFiles(nodeOut)) { addAsset(f, "Historique"); n++; }
           }
+          recordPrompts(entry);
         }
         if (n) addEvent("OK", `${n} assets rechargés depuis l'historique ComfyUI.`, "ok");
       } catch { addEvent("WARN", "Historique ComfyUI inaccessible.", "warn"); }

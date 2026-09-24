@@ -663,6 +663,7 @@
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
       });
     }
+    if (!res.ok) throw new Error(`ollama ${res.status}`);
     return JSON.parse((await res.json()).message.content);
   }
 
@@ -685,16 +686,27 @@
   }
 
   async function waitForJobs(promptIds) {
-    const pending = new Set(promptIds), done = {};
+    const pending = new Set(promptIds), done = {}, gone = {};
     while (pending.size) {
       await new Promise(r => setTimeout(r, 1500));
+      const missing = [];
       for (const id of [...pending]) {
         let entry;
         try { entry = (await (await fetch(`${COMFY}/history/${id}`, { cache: "no-store" })).json())[id]; }
         catch { continue; }
-        if (!entry) continue;
+        if (!entry) { missing.push(id); continue; }
         if (entry.status?.status_str === "error") throw new Error(`Un job ComfyUI a échoué (${id}).`);
         if (entry.status?.completed) { done[id] = entry; pending.delete(id); }
+      }
+      if (!missing.length) continue;
+      let queued;
+      try {
+        const q = await (await fetch(`${COMFY}/queue`, { cache: "no-store" })).json();
+        queued = new Set([...q.queue_running, ...q.queue_pending].map(x => x[1]));
+      } catch { continue; }
+      for (const id of missing) {
+        gone[id] = queued.has(id) ? 0 : (gone[id] || 0) + 1;
+        if (gone[id] >= 2) throw new Error(`Job ${id} perdu (ComfyUI redémarré ?)`);
       }
     }
     return done;
@@ -711,8 +723,7 @@
 
   // Récupère une sortie via /view puis la ré-uploade en entrée (pattern uploadBlob).
   async function reupload(f) {
-    const q = `filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}`;
-    const blob = await (await fetch(`${COMFY}/view?${q}`)).blob();
+    const blob = await (await fetch(viewURL(f))).blob();
     const name = await uploadBlob(blob, f.filename.split("/").pop());
     return { name, blob };
   }
@@ -813,7 +824,7 @@
   async function uploadBlob(blob, name) {
     const fd = new FormData();
     fd.append("image", new File([blob], name, { type: blob.type || "image/png" }));
-    fd.append("overwrite", "true");
+    fd.append("overwrite", "false");
     const res = await fetch(`${COMFY}/upload/image`, { method: "POST", body: fd });
     if (!res.ok) throw new Error(`Upload de "${name}" refusé par ComfyUI.`);
     const d = await res.json();
@@ -860,7 +871,7 @@
     if (msg.type === "progress" && d.max) {
       node.progress = Math.round((d.value / d.max) * 100);
       node.setDirtyCanvas(true, true);
-    } else if (msg.type === "execution_success" || msg.type === "execution_error") {
+    } else if (msg.type === "execution_success" || msg.type === "execution_error" || msg.type === "execution_interrupted") {
       node.progress = null;
       node.setDirtyCanvas(true, true);
       delete jobNodes[d.prompt_id];   // job terminé, plus rien à suivre
