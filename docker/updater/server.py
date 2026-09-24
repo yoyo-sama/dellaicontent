@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -57,6 +58,10 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def do_POST(self):
+        site = self.headers.get("Sec-Fetch-Site")
+        if site is not None and site != "same-origin":
+            self._send_json(403, {"error": "cross-site request refused"})
+            return
         parsed = urlparse(self.path)
         if parsed.path == "/apply":
             self._handle_apply()
@@ -108,11 +113,14 @@ class Handler(BaseHTTPRequestHandler):
         dest_dir = os.path.join(LORAS_DIR, folder)
         os.makedirs(dest_dir, exist_ok=True)
         final_path = os.path.join(dest_dir, filename)
-        part_path = final_path + ".part"
+        if os.path.exists(final_path):
+            self._send_json(409, {"error": f"file already exists: {folder}/{filename}"})
+            return
+        fd, part_path = tempfile.mkstemp(dir=dest_dir, suffix=".part")
 
         written = 0
         try:
-            with open(part_path, "wb") as f:
+            with os.fdopen(fd, "wb") as f:
                 while written < length:
                     chunk = self.rfile.read(min(UPLOAD_CHUNK, length - written))
                     if not chunk:
@@ -120,6 +128,10 @@ class Handler(BaseHTTPRequestHandler):
                     f.write(chunk)
                     written += len(chunk)
         except OSError as e:
+            try:
+                os.remove(part_path)
+            except OSError:
+                pass
             self._send_json(500, {"error": str(e)})
             return
 
@@ -131,7 +143,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "upload interrupted (byte count mismatch)"})
             return
 
-        os.rename(part_path, final_path)
+        # mkstemp creates 0600 and this container writes as root: ComfyUI (uid 1000) must read it.
+        os.chmod(part_path, 0o644)
+        try:
+            os.link(part_path, final_path)  # unlike rename, never overwrites
+        except FileExistsError:
+            os.remove(part_path)
+            self._send_json(409, {"error": f"file already exists: {folder}/{filename}"})
+            return
+        os.remove(part_path)
         self._send_json(200, {"ok": True, "path": f"{folder}/{filename}"})
 
     def log_message(self, fmt, *args):

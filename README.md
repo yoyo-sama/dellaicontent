@@ -97,6 +97,8 @@ Three separate stacks, one per service, each at the root of the home directory:
 | `~/comfyui-spark` | `comfyui-nvidia` | `mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest` | 8188 | Image/video generation engine |
 | `~/ollama` | `ollama-api` | `ollama/ollama:latest` | 11434 | Local LLM for prompt enrichment |
 
+ComfyUI only listens on `127.0.0.1` (remote access to its UI goes through `:8090/comfy/`); an existing install must carry these 3 changes over by hand into `~/comfyui-spark/compose.yaml` (port `"127.0.0.1:8188:8188"`, `SECURITY_LEVEL: normal`, `--enable-cors-header` removed from `COMFY_CMDLINE_EXTRA`), since `install.sh` only copies the template when it is missing.
+
 `install.sh` creates the two sibling stacks from the `docker/stacks/*.yml` templates, and
 creates their folders **before** the containers: a bind-mount whose source does not exist
 yet is created by Docker as `root`, which locks the folder and makes every subsequent model

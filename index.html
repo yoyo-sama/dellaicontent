@@ -1707,7 +1707,7 @@
             <summary class="panel-title"><span>Advanced</span><span>🛠</span></summary>
             <h3>ComfyUI Console</h3>
             <p>Accès direct à l'interface ComfyUI pour les démos techniques.</p>
-            <a class="control-btn primary" id="comfyLink" href="#" target="_blank" rel="noopener">Open ComfyUI</a>
+            <a class="control-btn primary" id="comfyLink" href="/comfy/" target="_blank" rel="noopener">Open ComfyUI</a>
 
             <h3 style="margin-top:16px">Cloud Platforms</h3>
             <p>Génération d'assets via une plateforme cloud. L'enrichissement de prompt reste local (gemma4:e4b).</p>
@@ -2185,7 +2185,6 @@
 
   <script>
     // ── Configuration ──────────────────────────────────────────────
-    const HOST = window.location.hostname || "localhost";
     // ComfyUI/Ollama servis via le reverse-proxy nginx (/comfy/, /ollama/) — un
     // seul port exposé (8090), fonctionne à distance comme en local.
     const COMFY = "/comfy";
@@ -2310,7 +2309,6 @@
     const jobList = $("jobList"), events = $("events");
     const galleryImages = $("galleryImages"), galleryVideos = $("galleryVideos");
     const routeLabel = $("routeLabel"), modelLabel = $("modelLabel");
-    $("comfyLink").href = `http://${HOST}:8188`;
 
     // ── Thème clair / sombre ───────────────────────────────────────
     function applyTheme(theme) {

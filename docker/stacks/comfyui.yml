@@ -10,7 +10,7 @@ services:
     image: mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest
     container_name: comfyui-nvidia
     ports:
-      - "8188:8188"
+      - "127.0.0.1:8188:8188"
     volumes:
       - ./userscripts_dir:/userscripts_dir
       - ./run:/comfy/mnt
@@ -22,8 +22,8 @@ services:
       BASE_DIRECTORY: /basedir
       USE_NEW_MANAGER: "true"
       ENABLE_MANAGER_LEGACY_UI: "true"
-      SECURITY_LEVEL: weak
-      COMFY_CMDLINE_EXTRA: --use-pytorch-cross-attention --disable-pinned-memory --reserve-vram 8 --enable-cors-header
+      SECURITY_LEVEL: normal
+      COMFY_CMDLINE_EXTRA: --use-pytorch-cross-attention --disable-pinned-memory --reserve-vram 8
       NVIDIA_VISIBLE_DEVICES: all
       USE_UV: "true"
       FORCE_REINSTALL: "false"
