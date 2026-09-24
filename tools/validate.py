@@ -7,7 +7,7 @@ for human inspection.
 
 Usage:
     python3 tools/validate.py <api_graph.json> [--reduce] [--frames 0,12,24]
-        [--audio] [--timeout 600] [--image filename.png] [--fps 25] [--refresh]
+        [--audio] [--timeout 600] [--image filename.png] [--fps 24] [--refresh]
 
 Options:
     --reduce         On a COPY of the graph: forces length of EmptyLTXVLatentVideo to 25,
@@ -20,7 +20,7 @@ Options:
     --image NAME     Name of a file already present in input/, required when the graph
                       contains an {{IMAGE}} placeholder.
     --image2 NAME    Same for {{IMAGE2}}.
-    --fps N          FPS used to compute FRAMES = fps*duration+1 (default 25).
+    --fps N          FPS used to compute FRAMES = fps*duration+1 (default 24).
     --refresh        Forces a refresh of tools/object_info.json.
 
 The structural validation (known class_type, intact links, models present on disk) runs
@@ -119,10 +119,16 @@ def is_link(v):
 
 
 def build_models_index():
+    # Paths relative to the category folder (loras/Qwen/X -> "Qwen/X"), as ComfyUI names them;
+    # files sitting directly under MODELS_DIR belong to no category.
+    # ponytail: flat index, a bare name present in another category still passes.
     idx = set()
     for root, _dirs, files in os.walk(MODELS_DIR):
+        cat = os.path.relpath(root, MODELS_DIR).split(os.sep)[0]
+        if cat == ".":
+            continue
         for f in files:
-            idx.add(f)
+            idx.add(os.path.relpath(os.path.join(root, f), os.path.join(MODELS_DIR, cat)))
     return idx
 
 
@@ -150,7 +156,7 @@ def structural_validate(graph, object_info, models_index):
                         f"node {node_id} ({ctype}).{iname}: link to a non-existent node '{src_id}'"
                     )
             elif isinstance(ival, str) and ival.endswith(".safetensors"):
-                if os.path.basename(ival) not in models_index:
+                if ival not in models_index:
                     errors.append(
                         f"node {node_id} ({ctype}).{iname}: model not found under "
                         f"{MODELS_DIR}: '{ival}'"
@@ -252,7 +258,8 @@ def collect_outputs(entry):
             if not isinstance(items, list):
                 continue
             for it in items:
-                if isinstance(it, dict) and "filename" in it:
+                # LoadVideo & co publish an "input" preview: not an output.
+                if isinstance(it, dict) and "filename" in it and it.get("type", "output") == "output":
                     files.append((node_id, key, it.get("subfolder", ""), it["filename"]))
     return files
 
@@ -369,7 +376,7 @@ def parse_args():
     p.add_argument("--timeout", type=int, default=600, help="poll timeout in seconds (default 600)")
     p.add_argument("--image", default=None, help="file name in input/ for {{IMAGE}}")
     p.add_argument("--image2", default=None, help="file name in input/ for {{IMAGE2}}")
-    p.add_argument("--fps", type=int, default=25, help="fps for FRAMES = fps*duration+1 (default 25)")
+    p.add_argument("--fps", type=int, default=24, help="fps for FRAMES = fps*duration+1 (default 24)")
     p.add_argument("--refresh", action="store_true", help="force a refresh of object_info.json")
     return p.parse_args()
 

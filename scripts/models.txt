@@ -4,7 +4,6 @@ vae|qwen_image_vae.safetensors|253806246|https://huggingface.co/Comfy-Org/Qwen-I
 loras/Qwen|Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors|849608296|https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors
 diffusion_models|krea2_turbo_fp8_scaled.safetensors|13141730784|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors
 text_encoders|qwen3vl_4b_fp8_scaled.safetensors|5242467968|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors
-vae|qwen_image_vae.safetensors|253806246|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors
 diffusion_models|ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors|21504034224|https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors
 vae|ltx-2.5-video-vae-bf16.safetensors|1472223346|https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors
 vae|ltx-2.5-audio-vae-bf16.safetensors|364866540|https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-audio-vae-bf16.safetensors

@@ -454,11 +454,17 @@ elif [ -f "$MODELS_FILE" ]; then
     # account and an access token is provided. HF_TOKEN is used when set in the environment;
     # otherwise gated files fail cleanly and show up in the summary's failure list, without
     # blocking the other downloads.
-    HF_AUTH_ARGS=()
+    # The token goes through a curl config read on stdin (-K -), never as a curl argument: argv
+    # is visible in `ps`. printf is a builtin, so no process is ever spawned with the token in argv.
+    auth_cfg=""
     if [ -n "${HF_TOKEN:-}" ] && [[ "$url" == *"huggingface.co"* ]]; then
-      HF_AUTH_ARGS=(-H "Authorization: Bearer ${HF_TOKEN}")
+      auth_cfg=$(printf 'header = "Authorization: Bearer %s"' "$HF_TOKEN")
     fi
-    if curl -sfL -C - "${HF_AUTH_ARGS[@]}" -o "$target_path" "$url"; then
+    # Download to .part then mv: ComfyUI never sees a partial file, and an older, smaller file under
+    # the final name is replaced instead of being extended by -C -.
+    # ponytail: a .part left over from an older version of the file would be resumed by -C -;
+    # delete it by hand if the result's sha256 is wrong.
+    if printf '%s\n' "$auth_cfg" | curl -sfL -K - -C - -o "$target_path.part" "$url" && mv -f "$target_path.part" "$target_path"; then
       DOWNLOADED_OK+=("$target_path")
     else
       warn "download failed for '$file' from $url"

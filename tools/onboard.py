@@ -244,10 +244,16 @@ def inject_images(api, pipeline, log):
 # ── model existence check ────────────────────────────────────────────
 
 def build_models_index():
+    # Paths relative to the category folder (loras/Qwen/X -> "Qwen/X"), as ComfyUI names them;
+    # files sitting directly under MODELS_DIR belong to no category.
+    # ponytail: flat index, a bare name present in another category still passes.
     idx = set()
     for root, _dirs, files in os.walk(MODELS_DIR):
+        cat = os.path.relpath(root, MODELS_DIR).split(os.sep)[0]
+        if cat == ".":
+            continue
         for f in files:
-            idx.add(f)
+            idx.add(os.path.relpath(os.path.join(root, f), os.path.join(MODELS_DIR, cat)))
     return idx
 
 
@@ -256,7 +262,7 @@ def check_safetensors(api, models_index):
     for node_id, node in api.items():
         for iname, ival in node.get("inputs", {}).items():
             if isinstance(ival, str) and ival.endswith(".safetensors"):
-                if os.path.basename(ival) not in models_index:
+                if ival not in models_index:
                     missing.append((node_id, node.get("class_type"), iname, ival))
     return missing
 

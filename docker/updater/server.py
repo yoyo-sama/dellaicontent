@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -10,6 +11,10 @@ REPO_DIR = os.environ.get("REPO_DIR", "/repo")
 LORAS_DIR = os.environ.get("LORAS_DIR", "/loras")
 LORA_FOLDERS = {"Krea2", "H3"}
 UPLOAD_CHUNK = 1024 * 1024
+STATUS_TTL = 60
+# (timestamp, 200 payload of /status): avoids an ls-remote on every page load.
+# ponytail: one global cache, cleared by a successful /apply; a remote push stays invisible for up to 60 s.
+status_cache = (0.0, None)
 
 
 def parse_ls_remote_sha(output):
@@ -35,8 +40,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        global status_cache
         if self.path != "/status":
             self._send_json(404, {"error": "not found"})
+            return
+
+        cached_at, cached = status_cache
+        if cached is not None and time.time() - cached_at < STATUS_TTL:
+            self._send_json(200, cached)
             return
 
         local = run_git("rev-parse", "HEAD")
@@ -51,11 +62,18 @@ class Handler(BaseHTTPRequestHandler):
 
         local_sha = local.stdout.strip()
         remote_sha = parse_ls_remote_sha(remote.stdout)
-        self._send_json(200, {
-            "updateAvailable": local_sha != remote_sha,
+        # An update only exists on main, and only if the remote is not already in our history
+        # (branch ahead = nothing to pull). No `git fetch`: the updater runs as root and would
+        # dirty .git; a SHA unknown locally (rc 128) means the remote moved on.
+        branch = run_git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        update = branch == "main" and run_git("merge-base", "--is-ancestor", remote_sha, "HEAD").returncode != 0
+        payload = {
+            "updateAvailable": update,
             "localSha": local_sha,
             "remoteSha": remote_sha,
-        })
+        }
+        status_cache = (time.time(), payload)
+        self._send_json(200, payload)
 
     def do_POST(self):
         site = self.headers.get("Sec-Fetch-Site")
@@ -72,6 +90,11 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(404, {"error": "not found"})
 
     def _handle_apply(self):
+        global status_cache
+        if run_git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != "main":
+            self._send_json(200, {"success": False, "error": "not on main"})
+            return
+
         dirty = run_git("status", "--porcelain")
         if dirty.returncode != 0:
             self._send_json(500, {"error": dirty.stderr.strip()})
@@ -90,6 +113,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(200, {"success": False, "error": pull.stderr.strip()})
             return
 
+        status_cache = (0.0, None)
         self._send_json(200, {"success": True})
 
     def _handle_lora_upload(self, query):
