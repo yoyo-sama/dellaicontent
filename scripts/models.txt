@@ -1,7 +1,7 @@
 diffusion_models|qwen_image_edit_2509_fp8_e4m3fn.safetensors|20430698424|https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors
 text_encoders|qwen_2.5_vl_7b_fp8_scaled.safetensors|9384670680|https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors
 vae|qwen_image_vae.safetensors|253806246|https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors
-loras|Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors|849608296|https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors
+loras/Qwen|Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors|849608296|https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors
 diffusion_models|krea2_turbo_fp8_scaled.safetensors|13141730784|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors
 text_encoders|qwen3vl_4b_fp8_scaled.safetensors|5242467968|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors
 vae|qwen_image_vae.safetensors|253806246|https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors

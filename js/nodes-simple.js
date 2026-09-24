@@ -331,6 +331,7 @@
       // sans aucun moyen de choisir turbo/steps. C'est corrigé ici.
       let stepLabel = "";
       if (this.properties.engine === "minimax_h3") {
+        E.applyMinimaxLastFrame(graph, false);
         E.applyMinimaxTurbo(graph, this.properties.turbo, this.properties.steps);
         const st = Number(this.properties.steps);
         stepLabel = this.properties.turbo

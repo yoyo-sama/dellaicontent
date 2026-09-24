@@ -542,6 +542,7 @@
             negative: "", seed: seed + 31 + k, width: sz.w, height: sz.h, batch: 1,
             duration, image: keyObj.name
           });
+          E.applyMinimaxLastFrame(g, false);
           E.applyMinimaxTurbo(g, this.properties.turbo, this.properties.steps);
           // Cumul turbo + style — ORDRE OBLIGATOIRE, cf. commentaire d'addH3StyleLora dans
           // engine.js (doit toujours suivre applyMinimaxTurbo, jamais le précéder).

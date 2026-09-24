@@ -4322,7 +4322,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     };
 
     function applyMinimaxTurbo(graph, turboOn, steps) {
-      const loraEntry = Object.entries(graph).find(([, n]) => n.class_type === "LoraLoaderModelOnly");
+      const loraEntry = Object.entries(graph).find(([, n]) =>
+      n.class_type === "LoraLoaderModelOnly" && String(n.inputs.lora_name).startsWith("H3/"));
       if (!loraEntry) return graph;
       if (turboOn) {
         const n = Number(steps);

@@ -77,7 +77,8 @@
   // 6/8 → LoRA du template conservé + BasicScheduler.steps=steps.
   // turbo OFF : comportement inchangé (LoRA retirée, steps=20), quel que soit `steps`.
   function applyMinimaxTurbo(graph, turboOn, steps) {
-    const loraEntry = Object.entries(graph).find(([, n]) => n.class_type === "LoraLoaderModelOnly");
+    const loraEntry = Object.entries(graph).find(([, n]) =>
+    n.class_type === "LoraLoaderModelOnly" && String(n.inputs.lora_name).startsWith("H3/"));
     if (!loraEntry) return graph;
     if (turboOn) {
       const n = Number(steps);
@@ -94,6 +95,20 @@
       if (n.class_type === "BasicScheduler") n.inputs.steps = 20;
     }
     delete graph[loraId];
+    return graph;
+  }
+
+  // Retire `last_frame` (et son LoadImage) du graphe Minimax H3 quand aucune dernière
+  // image n'est fournie. Le nœud `MiniMaxH3ImageToVideo` couvre à lui seul les trois
+  // modes selon ce qui est branché : rien = t2v, `first_frame` seul = i2v, les deux =
+  // FL2VA — nos templates t2v et i2v sont déjà le MÊME nœud à un champ près. Même idiome
+  // de retrait qu'applyMinimaxTurbo : on supprime la clé et le nœud devenu orphelin.
+  function applyMinimaxLastFrame(graph, hasLast) {
+    const entry = Object.entries(graph).find(([, n]) => n.class_type === "MiniMaxH3ImageToVideo");
+    if (!entry || hasLast) return graph;
+    const src = entry[1].inputs.last_frame;
+    delete entry[1].inputs.last_frame;
+    if (Array.isArray(src)) delete graph[src[0]];
     return graph;
   }
 
@@ -115,8 +130,8 @@
   // tout nœud pointant vers cette même sortie (BasicScheduler ET BasicGuider) est reciblé
   // vers la nouvelle LoRA.
   // ORDRE OBLIGATOIRE — appeler APRÈS applyMinimaxTurbo, jamais avant : applyMinimaxTurbo
-  // retrouve LUI-MÊME son nœud LoraLoaderModelOnly par class_type (le premier trouvé dans le
-  // graphe) pour le retirer ou changer son fichier ; appelé avant addH3StyleLora, tout irait
+  // retrouve LUI-MÊME son nœud LoraLoaderModelOnly par class_type + préfixe `H3/` (la première
+  // LoRA `H3/…` trouvée dans le graphe) pour la retirer ou changer son fichier ; appelé avant addH3StyleLora, tout irait
   // bien, mais appelé APRÈS, il retrouverait la LoRA de STYLE fraîchement ajoutée au lieu de
   // la LoRA turbo (ou la mauvaise des deux selon l'ordre d'itération des clés) et casserait
   // le graphe. `loraName` vide ⇒ graphe strictement inchangé (no-op strict).
@@ -1036,7 +1051,7 @@
       // construction de graphes
       buildGraph, makeGraphBuilder, mergeGraph, getTemplate,
       buildFLF2VGraph, buildCampaignFullGraph, buildCharsheetGraph, buildLocsheetGraph, buildAnimaticGraph,
-      addKrea2Shared, addKrea2Shot, addGrid, addLtx25Shared, addFLF2VChain, addVideoOutput, applyMinimaxTurbo,
+      addKrea2Shared, addKrea2Shot, addGrid, addLtx25Shared, addFLF2VChain, addVideoOutput, applyMinimaxTurbo, applyMinimaxLastFrame,
       addMinimaxRefs, addQwenImage3,   // AJOUT Lot 5 : références additionnelles r2v / 3ᵉ fiche storyboard
       addQwen21Refs,   // AJOUT LOT Qwen21 : références additionnelles Qwen Image 2.1 (Canvas)
       addH3StyleLora,   // LoRA de style Minimax H3, cumulable avec applyMinimaxTurbo (appeler APRÈS)
