@@ -374,48 +374,129 @@
     night: { label: "Nuit",
       text: "The whole scene is set at night under cool artificial lighting, with pools of light, deep shadow and a dark sky." },
   };
+  // Porté du Studio (index.html, I13) : 14 styles curés sur les 9 familles de la taxonomie
+  // Krea 2 (PHOTO / CINE / FASH / ILLU / PAINT / CGI / ANIME / EXP). Texte POSITIF (Krea 2
+  // n'encode aucun négatif, piège n°16), toujours ajouté EN FIN de prompt (sujet > style).
+  // Les ids none/cinematic/noir/documentary/anime et leurs textes sont inchangés : un nœud
+  // enregistré avant cette liste garde son style.
   const STYLE_PACKS = {
     none: { label: "Aucun", text: "" },
+    // PHOTO
+    editorial: { label: "Éditorial",
+      text: "Editorial photography, sophisticated composition, magazine aesthetic, controlled studio lighting, refined neutral palette." },
+    analog35: { label: "Argentique 35 mm",
+      text: "35mm film, analog grain, soft halation, warm natural light, gentle imperfect exposure." },
+    documentary: { label: "Documentaire",
+      text: "Naturalistic documentary photography look, available light, realistic muted colors and candid unposed framing." },
+    // CINE
     cinematic: { label: "Cinématique",
       text: "Shot on 35mm Kodak Vision3 film, cinematic color grading, soft natural film grain, natural contrast and shallow depth of field." },
     noir: { label: "Film noir",
       text: "High-contrast black-and-white film-noir look, deep shadows, hard directional light and dramatic chiaroscuro." },
-    documentary: { label: "Documentaire",
-      text: "Naturalistic documentary photography look, available light, realistic muted colors and candid unposed framing." },
+    arthouse: { label: "Cinéma d'auteur",
+      text: "Arthouse cinema, restrained palette, symbolic composition, naturalistic soft light and quiet contemplative atmosphere." },
+    scifi: { label: "SF blockbuster",
+      text: "Cinematic science-fiction, ambitious production design, dramatic volumetric lighting, cool steel and neon palette." },
+    // FASH
+    quiet_luxury: { label: "Luxe discret",
+      text: "Quiet luxury, minimalist styling, neutral palette, soft directional light, premium understated materials." },
+    // CGI
+    product: { label: "Packshot produit",
+      text: "Premium product visualization, controlled studio environment, physically accurate materials, clean gradient backdrop, precise specular highlights." },
+    // ANIME
     anime: { label: "Anime",
       text: "Stylized Japanese anime illustration look, clean cel-shaded artwork, vivid saturated colors and expressive linework." },
+    // ILLU
+    screenprint: { label: "Sérigraphie",
+      text: "Screen print, flat inks, bold graphic shapes, halftone texture, limited high-contrast palette." },
+    // PAINT
+    oil: { label: "Peinture à l'huile",
+      text: "Classical oil painting, controlled chiaroscuro, rich pigments, visible brushwork on canvas texture." },
+    // EXP
+    dreamlike: { label: "Onirique",
+      text: "Dreamlike atmosphere, soft diffusion, ethereal light, hazy pastel palette and weightless depth." },
   };
 
-  // `locDesc` (texte de la fiche décor) est injecté EXACTEMENT comme dans compileCutPrompt :
-  // le conditionnement image seul (planche décor en image 2) est trop souvent dominé par
-  // l'image d'ancrage personnage (image 1, qui alimente aussi le VAEEncode — piège n°10),
-  // et la keyframe fixe la géométrie/identité du décor pour tout le plan qui en découle.
-  // Les instructions anti-collage / anti-split-screen / anti-planche-contact restent
-  // inchangées (piège Qwen-Edit : aucun vocabulaire « storyboard/keyframe/contact sheet »,
-  // tout formulé positivement).
-  function compileKeyframePrompt(shot, charDesc, locDesc, styleId) {
+  // Sujets d'un plan : `[{desc, kind}]` (ou une chaîne seule, l'ancien `charDesc` du Canvas),
+  // dans l'ordre des entrées image. Un sujet sans description est écarté, comme dans le Studio.
+  const asSubjects = s => (Array.isArray(s) ? s : [s])
+    .map(x => (typeof x === "string" ? { desc: x } : x)).filter(x => x && x.desc);
+
+  // ── Ancrage des keyframes Qwen-Edit : invariant sorti en constantes (porté du Studio) ──
+  // Part NON NÉGOCIABLE du prompt de keyframe : le rendu est un plan de film unique et
+  // l'identité de chaque référence est conservée (pièges n°21/n°31 : jamais donné à gemma,
+  // toujours ré-apposé). SOLO = formulation du Studio, qui ne parle plus de sujet « standing »
+  // ni de « costume » (piège n°17) ; DUAL = identité formulée pour n'importe quelle nature de
+  // sujet et exemplaire COMPLET exigé de chacun (piège n°32). Texte au caractère près du Studio.
+  const KEYFRAME_ANCHOR_DUAL =
+    "Both subjects are fully integrated into the same scene, present together in that "
+    + "location with correct perspective and scale. Each of them appears exactly once, as one "
+    + "single complete and intact whole, assembled in one piece, never broken up, never taken "
+    + "apart, never scattered as separate fragments. Do not place the references side by side, "
+    + "do not create a split screen, diptych or collage, do not show any reference sheet, "
+    + "contact sheet, grid, thumbnails, multiple poses, color swatches, panels, borders, "
+    + "margins, black frame, caption or text anywhere. The whole picture is a single unified "
+    + "live-action movie frame, one continuous scene that extends all the way to all four "
+    + "edges. Keep each subject exactly as its own reference image shows it: same shape, "
+    + "structure, proportions, surface, materials, markings and colors, and, for a living "
+    + "character, the same anatomy, body plan, head and clothing.";
+  const KEYFRAME_ANCHOR_SOLO =
+    "The character is fully integrated into the scene, present in that location with correct "
+    + "perspective and scale. Do not place the two references side by side, do not create a "
+    + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
+    + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
+    + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
+    + "continuous scene that extends all the way to all four edges. Keep the character's anatomy, "
+    + "body plan, head, surface, materials, markings, clothing if any and colors identical to the "
+    + "first reference image.";
+
+  // Porté du Studio (compileKeyframePrompt). `subjects` = `charDesc` (chaîne, un sujet) ou
+  // `[{desc, kind}]` (1 ou 2 sujets), dans l'ordre des entrées image. Le décor est nommé
+  // DEUX fois — phrase de rôle ET après le cadrage (piège n°28 : cette entrée image ne fait
+  // que du conditioning, à cfg 1 le prompt fait loi). À deux sujets, chacun est nommé d'après
+  // son `kind` et le décor passe sur la 3e entrée image (piège n°32) — branche prête, pas
+  // encore câblée côté Canvas. Tout est formulé POSITIVEMENT, le négatif n'est jamais encodé.
+  function compileKeyframePrompt(shot, subjects, locDesc, styleId) {
+    const list = asSubjects(subjects);
+    const charDesc = list[0] ? list[0].desc : "";
+    const loc = String(locDesc ?? "").trim();
+    const locHere = loc ? " The location is " + loc + "." : "";
     const cam = CAMERA_LIB[shot.camera] || CAMERA_LIB.medium;
     const light = LIGHTING_LIB[shot.lighting] || LIGHTING_LIB.golden_hour;
     const styleText = styleTextFor(styleId);
     const emotion = (shot.emotion || "").trim();
     const extra = (shot.extra || "").trim();
-    const loc = (locDesc || "").trim();
-    let s = "Use the first reference image only as the appearance guide for one single character, "
-      + charDesc
-      + ", and use the second reference image only as the guide for the environment"
-      + (loc ? ", " + loc : "") + ". "
-      + "Create one brand-new photorealistic cinematic film still that places exactly one single "
-      + "instance of that character inside the environment of the second reference image: "
-      + shot.action + ". Frame it as " + cam.frame + ".";
-    if (emotion) s += " The character's expression and body language convey " + emotion + ".";
-    s += " " + light.text;
-    s += " The character is fully integrated into the scene, standing in that location with correct "
-      + "perspective and scale. Do not place the two references side by side, do not create a "
-      + "split screen, diptych or collage, do not show any reference sheet, contact sheet, grid, "
-      + "thumbnails, multiple poses, color swatches, panels, borders, margins, black frame, caption "
-      + "or text anywhere. The whole picture is a single unified live-action movie frame, one "
-      + "continuous scene that extends all the way to all four edges. Keep the character's face, "
-      + "hair, costume and colors identical to the first reference image.";
+    let s;
+    if (list.length > 1) {
+      const noun = sub => (charKindOf(sub) === "other" ? "subject" : "character");
+      s = "Use the first reference image only as the appearance guide for one single " + noun(list[0]) + ", "
+        + list[0].desc
+        + ", use the second reference image only as the appearance guide for one single other "
+        + noun(list[1]) + ", " + list[1].desc
+        + ", and use the third reference image only as the guide for the environment"
+        + (loc ? ", " + loc : "") + ". "
+        + "The first two reference images are multi-view reference sheets, each one showing the "
+        + "same single thing from several angles: read them only to learn what that one thing "
+        + "looks like. "
+        + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+        + "complete instance of each of those two subjects together inside the environment of the "
+        + "third reference image, both of them whole and clearly visible in the frame: "
+        + shot.action + ". Frame it as " + cam.frame + "." + locHere;
+      if (emotion) s += " The subjects' expressions and body language convey " + emotion + ".";
+      s += " " + light.text;
+      s += " " + KEYFRAME_ANCHOR_DUAL;
+    } else {
+      s = "Use the first reference image only as the appearance guide for one single character, "
+        + charDesc
+        + ", and use the second reference image only as the guide for the environment"
+        + (loc ? ", " + loc : "") + ". "
+        + "Create one brand-new photorealistic cinematic film still that places exactly one single "
+        + "instance of that character inside the environment of the second reference image: "
+        + shot.action + ". Frame it as " + cam.frame + "." + locHere;
+      if (emotion) s += " The character's expression and body language convey " + emotion + ".";
+      s += " " + light.text;
+      s += " " + KEYFRAME_ANCHOR_SOLO;
+    }
     if (extra) s += " " + extra;
     if (styleText) s += " " + styleText;
     return s;
@@ -436,6 +517,149 @@
     if (extra) s += " " + extra;
     if (styleText) s += " " + styleText;
     return s;
+  }
+
+  // ── Grammaire de prompt Minimax H3 (Ref2VA / I2VA) — portée du Studio ─────────────
+  // Composer de référence BMB12d3/minimax-h3-prompt-composer (piège n°19) :
+  //   <Picture N> = l'entrée PHYSIQUE ComfyUI, 1-indexée → ref_image_{N-1}
+  //   <Subject N> = une identité LOGIQUE ; la liaison tient en UNE phrase de
+  //   subject_definitions, puis la prose n'emploie plus que <Subject N>.
+  // Plafond du modèle : 7 000 caractères (capH3Prompt).
+  const H3_PROMPT_CHARS = 7000;
+  const h3Subject = n => `<Subject ${n}>`;
+  const h3Picture = n => `<Picture ${n}>`;
+
+  // Définition et note de rétention par nature de sujet. `leadMulti` (piège n°23) : deux
+  // personnages ne peuvent pas être tous deux « the main character ».
+  const H3_SUBJECT_KINDS = {
+    character:   { lead: "is the main character in", leadMulti: "is a character in", note: "the complete defined identity, face, and body proportions are preserved." },
+    environment: { lead: "is the location as defined by", note: "the environment's defined architecture, layout, and spatial continuity are retained." },
+    reference:   { lead: "is an additional reference in", note: "the defined shape, proportions, materials, colors, and distinguishing features are retained." }
+  };
+
+  // Numérotation attribuée par l'app, jamais saisie : l'ordre des slots EST l'ordre des
+  // sujets (ref_image_0 → <Picture 1> → <Subject 1>). `list` = [{kind, desc}] ; un sujet
+  // « reference » sans description (pas de vision côté Canvas) garde sa définition sans texte.
+  function h3AssignSubjects(list) {
+    return list.map((sub, i) => ({ ...sub, picture: i + 1, label: h3Subject(i + 1) }));
+  }
+
+  // Résumé d'une ligne (champ `summary`) : première phrase du brief, bornée.
+  function h3Summary(text) {
+    const first = String(text || "").trim().split(/[.!?]/)[0].trim() || String(text || "").trim();
+    return first.length > 200 ? `${first.slice(0, 197)}…` : first;
+  }
+
+  // Corps de detailed_description : phrase d'ancrage personnage → décor (labels), puis le brief.
+  function h3RefBody(subjects, text) {
+    const char = subjects.find(sub => sub.kind === "character");
+    const env = subjects.find(sub => sub.kind === "environment");
+    const anchor = char && env ? `${char.label} is in ${env.label}. ` : "";
+    return anchor + String(text || "").trim();
+  }
+
+  // Assemble le bloc Ref2VA 6 champs. `subjects` sort de h3AssignSubjects.
+  function buildH3RefPrompt({ subjects, summary, body }) {
+    const multiChar = subjects.filter(sub => sub.kind === "character").length > 1;
+    const defs = subjects.map(sub => {
+      const kind = H3_SUBJECT_KINDS[sub.kind] || H3_SUBJECT_KINDS.reference;
+      const desc = (sub.desc || "").trim().replace(/[.\s]+$/, "");
+      const lead = (multiChar && kind.leadMulti) || kind.lead;
+      return `${sub.label} ${lead} ${h3Picture(sub.picture)}${desc ? `, ${desc}` : ""}.`;
+    }).join("\n");
+    // Pas de parenthèse après le label : un seul plan par clip, rien à y mettre.
+    const ret = subjects.map(sub => {
+      const kind = H3_SUBJECT_KINDS[sub.kind] || H3_SUBJECT_KINDS.reference;
+      return `${sub.label}: fully_preserved - ${kind.note}`;
+    }).join("\n");
+    return [
+      `subject_definitions:\n${defs || "—"}`,
+      `summary:\n[reference generation] ${summary}`,
+      `retention_analysis:\n${ret || "—"}`,
+      `detailed_description:\n${body}`,
+      // Les deux derniers champs font partie de la grammaire : H3 les attend.
+      "overall_soundscape:\nNatural diegetic ambience consistent with the scene.",
+      "non_diegetic_music:\nNone."
+    ].join("\n\n");
+  }
+
+  // Plafond dur du modèle, rogné en le disant (`onWarn(message)`, optionnel) : l'excédent
+  // sort de la FIN de detailed_description, jamais des champs de fin, et un jeton
+  // <Subject N> coupé en deux part avec la coupe.
+  function capH3Prompt(text, onWarn) {
+    if (text.length <= H3_PROMPT_CHARS) return text;
+    if (onWarn) onWarn(`Prompt H3 de ${text.length} caractères — tronqué à ${H3_PROMPT_CHARS} (plafond du modèle).`);
+    const over = text.length - H3_PROMPT_CHARS;
+    const key = "detailed_description:\n", i = text.indexOf(key), end = text.lastIndexOf("\n\noverall_soundscape:");
+    if (i >= 0 && end - (i + key.length) > over) return text.slice(0, end - over).replace(/<[A-Za-z]* ?\d*$/, "") + text.slice(end);
+    // ponytail: plafond brut, la fin est perdue si le texte n'a pas la structure Ref2VA (i2v/t2v libre) ou si le corps ne suffit pas.
+    return text.slice(0, H3_PROMPT_CHARS).replace(/<[A-Za-z]* ?\d*$/, "");
+  }
+
+  // Durée RÉELLEMENT rendue par Minimax H3 : grille 17n+5 à 24 fps (piège n°11), modulo à
+  // la Python (piège n°20 : sans correction, 1 s donnerait 22 frames au lieu de 39).
+  const h3VideoFrames = seconds => {
+    const base = Math.max(5, Math.round(seconds * 24));
+    return base + (((5 - (base % 17)) % 17) + 17) % 17;
+  };
+  const h3RealDuration = seconds => h3VideoFrames(seconds) / 24;
+
+  // Phrase d'alignement temporel (header() du composer), en TÊTE du prompt I2VA/FL2VA : i2v
+  // (première image seule) ou FL2VA (première ET dernière, repère de fin = durée rendue).
+  function h3Alignment(hasLast, seconds) {
+    if (!hasLast)
+      return "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
+    return "How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with "
+      + `the 0.00-second mark of the target video; <Picture 2> (from [Shot 1]) aligns with the `
+      + `${h3RealDuration(seconds).toFixed(2)}-second mark of the target video.`;
+  }
+
+  // Cut H3 (i2v depuis une keyframe) : une seule entrée image, où personnage(s) et décor sont
+  // déjà composés — tous les sujets se définissent donc sur <Picture 1>. `subjects` = sujets
+  // du plan (`[{desc, kind}]` ou chaîne), passés par l'appelant.
+  function h3CutSubjects(subjects, locDesc) {
+    const list = asSubjects(subjects).map(sub => ({ kind: "character", desc: sub.desc }));
+    if (locDesc) list.push({ kind: "environment", desc: locDesc });
+    return list.map((sub, i) => ({ ...sub, picture: 1, label: h3Subject(i + 1) }));
+  }
+
+  // Corps narratif d'un cut H3 : même matière que compileCutPrompt SANS recopier les
+  // descriptions (déjà dans subject_definitions), et TOUS les personnages placés dans le décor.
+  function h3CutBodyText(shot, subjects, holdMotion, styleId) {
+    const cam = CAMERA_LIB[shot.camera] || CAMERA_LIB.medium;
+    const light = LIGHTING_LIB[shot.lighting] || LIGHTING_LIB.golden_hour;
+    const emotion = (shot.emotion || "").trim();
+    const extra = (shot.extra || "").trim();
+    const styleText = styleTextFor(styleId);
+    const env = subjects.find(sub => sub.kind === "environment");
+    const chars = subjects.filter(sub => sub.kind === "character");
+    const lead = chars.length && env
+      ? `${chars.map(sub => sub.label).join(" and ")} ${chars.length > 1 ? "are" : "is"} in ${env.label}. `
+      : "";
+    let s = lead + shot.action + (emotion ? ", conveying " + emotion : "") + ". " + light.text
+      + " Camera motion: " + (holdMotion || cam.motion) + ".";
+    if (extra) s += " " + extra;
+    if (styleText) s += " " + styleText;
+    return s;
+  }
+
+  // Bloc complet d'un cut H3 : phrase d'alignement (la keyframe est l'instant 0) puis les
+  // 6 champs. `bodyOverride` : corps ré-enrichi, la structure reste intacte. `hasLast` :
+  // image de fin fournie (FL2VA).
+  function buildH3CutPrompt(shot, subjects, locDesc, holdMotion, duration, bodyOverride, hasLast, styleId, onWarn) {
+    const subs = h3CutSubjects(subjects, locDesc);
+    const body = bodyOverride || h3CutBodyText(shot, subs, holdMotion, styleId);
+    return capH3Prompt(`${h3Alignment(!!hasLast, duration)}\n\n` + buildH3RefPrompt({
+      subjects: subs, summary: h3Summary(shot.action), body
+    }), onWarn);
+  }
+
+  // Prompt d'un cut, moteur compris. LTX 2.5 garde EXACTEMENT compileCutPrompt (piège n°9),
+  // l'identité étant les descriptions des sujets jointes par ". " (shotCharDesc du Studio).
+  function compileCutPromptFor(shot, subjects, locDesc, holdMotion, engine, duration, hasLast, styleId, onWarn) {
+    return engine === "minimax_h3"
+      ? buildH3CutPrompt(shot, subjects, locDesc, holdMotion, duration, null, hasLast, styleId, onWarn)
+      : compileCutPrompt(shot, asSubjects(subjects).map(sub => sub.desc).join(". "), locDesc, holdMotion, styleId);
   }
 
   // ── Normalisation de la sortie gemma (shotListFromBrief DNA) vers ids valides ──
@@ -531,15 +755,65 @@
     return v == null ? "" : String(v);
   };
 
+  // Consigne Krea 2 du Studio (ordre sujet→style→lumière→optique→composition, remplissage
+  // banni, AUCUN négatif demandé — piège n°16), au même texte près de la clé de sortie :
+  // {"prompt"} comme les autres consignes « ✨ Enrichir » du Canvas.
+  const KREA2_ENRICH_SYSTEM = `You are a visual prompt architect for Krea 2, an aesthetic-focused image model.
+Rewrite the user's brief into ONE English image prompt, built in this order and keeping only what carries visual information: subject, action, environment, style, lighting, camera and optics, composition, color, material and texture, atmosphere.
+Rules:
+- Name the main subject first and unambiguously; never let style wording replace or obscure it.
+- Preserve the user's subject, action and intent exactly. Invent no detail the brief does not imply.
+- Describe the visual result, not how to achieve it.
+- Krea 2 never encodes a negative prompt, so express every constraint POSITIVELY: write "clean seamless background", never "no clutter"; write "both hands fully visible and correctly formed", never "no extra limbs".
+- Keep one dominant style. Do not stack unrelated style keywords.
+- 40 to 100 words. Every phrase must add visual information; delete filler.
+- Never use "masterpiece", "best quality", "8k", "ultra detailed", "award winning", "stunning" or "beautiful lighting" — they carry no visual direction.
+- A PRIMARY_STYLE line may follow the brief. Build the description so it fits that style, but do NOT restate the style wording itself: it is appended separately.
+Before answering, re-read your prompt and delete any banned word that slipped in.
+Answer ONLY with JSON: {"prompt": "..."}`;
+
+  // Filet déterministe (porté du Studio) : gemma4:e4b n'honore PAS de façon fiable une
+  // interdiction de vocabulaire. On retire ces termes après coup. Liste volontairement
+  // étroite — uniquement des termes sans direction visuelle : "photorealistic", "fine
+  // detail", "epic scale" et les mots-clés de STYLE_PACKS doivent survivre intacts.
+  const PROMPT_PADDING = new RegExp("\\s*\\b(?:" + [
+    "masterpiece", "best quality", "highest quality", "high quality",
+    "award[- ]winning", "ultra[- ]detailed", "hyper[- ]detailed", "highly detailed",
+    "extremely detailed", "insanely detailed", "super detailed", "highly rendered",
+    "trending on artstation", "artstation", "cgsociety", "deviantart", "pixiv",
+    "octane render", "rendered in octane", "unreal engine(?: \\d)?", "v-?ray", "redshift render",
+    "8k(?: uhd)?", "4k", "16k", "32k", "uhd",
+  ].join("|") + ")\\b", "gi");
+  function stripPromptPadding(text) {
+    const out = text.replace(PROMPT_PADDING, "")
+      .replace(/,(\s*,)+/g, ",")
+      .replace(/([.!?])\s*,\s*/g, "$1 ")
+      .replace(/,\s*([.!?])/g, "$1")
+      .replace(/\s+([,.!?])/g, "$1")
+      .replace(/([.!?])(?:\s*[.!?])+/g, "$1")   // phrase entièrement retirée → "..".
+      .replace(/\s{2,}/g, " ")
+      .replace(/^[\s,]+/, "").replace(/[\s,]+$/, "").trim();
+    return out || text;   // un prompt intégralement fait de remplissage : on garde l'original
+  }
+
   // Ordre canonique des champs de fiche (personnage / décor) : la jointure ", " de ces
   // champs par les helpers ci-dessous reproduit EXACTEMENT l'ancienne chaîne charDesc/locDesc.
+  // Deux squelettes (piège n°17) : visage/cheveux/tenue ne veulent rien dire hors d'un sujet
+  // humain (un lion sortait anthropomorphe et habillé). Le second est volontairement générique
+  // (animal, créature, robot, objet). `kind` (dans l'objet de champs, hors des deux listes donc
+  // jamais compilé dans le prompt) choisit la liste ; une fiche sans `kind` reste humaine.
   const CHAR_FIELD_KEYS = ["face", "hair", "outfit", "accessories", "palette"];
+  const CHAR_OTHER_FIELD_KEYS = ["subject", "form", "surface", "details", "palette"];
+  const charKindOf = f => (f?.kind && f.kind !== "human" ? "other" : "human");
+  const charFieldKeys = f => (charKindOf(f) === "other" ? CHAR_OTHER_FIELD_KEYS : CHAR_FIELD_KEYS);
   const LOC_FIELD_KEYS = ["place", "architecture", "materials", "lighting", "palette"];
+  // Ces deux chaînes alimentent des graphes Krea 2 : même filtre de remplissage que
+  // l'enrichissement, sinon un "ultra-detailed fur, 8k" lâché par gemma y atterrit tel quel.
   function charDescFromFields(f) {
-    return CHAR_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", ");
+    return stripPromptPadding(charFieldKeys(f).map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
   }
   function locDescFromFields(f) {
-    return LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", ");
+    return stripPromptPadding(LOC_FIELD_KEYS.map(k => fieldText(f?.[k])).filter(Boolean).join(", "));
   }
 
   // `isCancelled` (optionnel, Studio) : vrai ⇒ l'attente lève « Projet annulé. » au tour suivant.
@@ -630,15 +904,97 @@
   // `negText` (champ négatif de l'UI) est conservé dans la signature mais sans effet ici.
   const SHEET_CLEAN = "One single seamless uncut photograph filling the whole frame edge to edge, completely free of any text, letters, numbers, captions, labels, annotations, watermark, signature or logo, with no drawn borders, no panel lines, no grid lines, no black frame and no comic panel divisions. Pure photography: real photographic capture, sharp focus, high detail, correct anatomy, clean seamless background.";
 
+  // ── Gabarits de planche personnage (portés du Studio, piège n°17) ──
+  // Un gabarit ne décrit QUE la composition ; le vocabulaire qui dépend de la nature du sujet
+  // sort de `sheetWords(kind)` et la clause anti-anthropomorphe (`SUBJECT_GUARD`) est ajoutée
+  // hors gabarit : chaque gabarit marche sur un humain comme sur un lion ou un robot.
+  // `turnaround` + sujet humain = au caractère près la formulation qualifiée au LOT 7 (et
+  // l'ancien texte en dur de buildCharsheetGraph) — ne pas la retoucher sans rendu réel.
+  // Les schémas SVG du sélecteur du Studio (`wire`) restent côté UI.
+  const SUBJECT_GUARD = "The subject is photographed exactly as the thing it is: its anatomy, structure, proportions, number of limbs and parts, and its natural resting posture are strictly the ones described above and never those of a human being; it has no human face, and it wears nothing unless the description above says otherwise. ";
+
+  const sheetWords = kind => kind === "other"
+    ? { who: "subject", sheet: "reference sheet", design: "design",
+        poses: "four views", stance: "natural posture",
+        face: "the part that identifies it best: its head, or its front if it has no head",
+        faceShort: "that same part", headshots: "photographs", expressions: "seen from different angles",
+        details: "its surface, its materials and its distinctive details",
+        flats: "its separable parts laid out flat", swatches: "the subject",
+        identity: "shape, surface and markings" }
+    : { who: "person", sheet: "character reference sheet", design: "character design",
+        poses: "four standing poses", stance: "neutral relaxed stance",
+        face: "the face", faceShort: "the face", headshots: "headshots",
+        expressions: "showing different facial expressions: neutral, smiling, surprised, determined",
+        details: "costume details", flats: "the garments laid out flat, seen from the front",
+        swatches: "the outfit and hair", identity: "face, hair and costume" };
+
+  const SHEET_HEAD = (d, w, guard) =>
+    `A professional photorealistic ${w.sheet} of one single ${w.who}, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${d}. ${guard}`;
+  const SHEET_SWATCHES = w =>
+    `Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of ${w.swatches}. `;
+  const SHEET_SAME = w =>
+    `Every view shows the exact same single ${w.who} with identical ${w.identity}, consistent ${w.design}. `;
+
+  const SHEET_TEMPLATES = {
+    // Turnaround 4 vues + rangée d'expressions + détails de costume (gabarit historique).
+    turnaround: { label: "Turnaround + expressions + costume", build: (d, w, guard) =>
+      SHEET_HEAD(d, w, guard)
+      + `Arranged neatly, the sheet shows a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a ${w.stance}, evenly studio-lit. `
+      + `Above the turnaround, one large tight close-up portrait of ${w.face}. `
+      + `A row of several smaller close-up ${w.headshots} of ${w.faceShort} ${w.expressions}. `
+      + `A cluster of detailed close-up photographs of ${w.details}. `
+      + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+    // Colonne d'expressions à gauche + 3 vues + accessoires isolés (planche de modèle anime).
+    expressions: { label: "Colonne d'expressions + accessoires", build: (d, w, guard) =>
+      SHEET_HEAD(d, w, guard)
+      + `Arranged neatly, the sheet shows down its entire left side a vertical column of five close-up ${w.headshots} of ${w.faceShort} ${w.expressions}, evenly stacked. `
+      + `Filling the rest of the frame, three large full-body views of the same ${w.who} side by side - front view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+      + `In the lower left corner, below the column, a cluster of isolated close-up photographs of ${w.details}, each one floating separately on the empty background. `
+      + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+    // Grand portrait héros à gauche + rangée de têtes + vues corps (planche 3D / casting).
+    portrait: { label: "Grand portrait + rangée de têtes", build: (d, w, guard) =>
+      SHEET_HEAD(d, w, guard)
+      + `Arranged neatly, the sheet shows one very large close-up portrait of ${w.face} filling the whole left third of the frame. `
+      + `Across the top of the remaining space, a row of five smaller ${w.headshots} of ${w.faceShort} ${w.expressions}. `
+      + `Below that row, three large full-body views of the same ${w.who} side by side - front view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+      + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+    // Portrait + turnaround 4 vues + vêtements à plat (planche costume de production).
+    wardrobe: { label: "Grand portrait + vêtements à plat", build: (d, w, guard) =>
+      SHEET_HEAD(d, w, guard)
+      + `Arranged neatly, the sheet shows one large close-up portrait of ${w.face} in its upper left corner. `
+      + `Across the middle and lower part of the frame, a full-body turnaround of the same ${w.who} in ${w.poses} evenly spaced across a row - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}, evenly studio-lit. `
+      + `Along the right edge, a narrow vertical column of separate product photographs showing ${w.flats}, each isolated on its own plain background. `
+      + SHEET_SWATCHES(w) + SHEET_SAME(w) },
+
+    // Vues neutres + poses d'action + équipement (planche sport / personnage en mouvement).
+    action: { label: "Poses d'action + équipement", build: (d, w, guard) =>
+      SHEET_HEAD(d, w, guard)
+      + `Arranged neatly, the sheet shows across its top a row of four full-body views of the same ${w.who} - front view, three-quarter view, side profile view, and back view - at the same scale on the same ground, all in a ${w.stance}. `
+      + `Below them, a second row of three full-body action poses of the same ${w.who} caught in mid-movement, each one isolated on the background. `
+      + `In the upper right corner, one large close-up portrait of ${w.face}, and beside it four smaller ${w.headshots} ${w.expressions}. `
+      + `In the lower right corner, a cluster of isolated close-up photographs of ${w.details} laid out flat. `
+      + SHEET_SWATCHES(w) + SHEET_SAME(w) }
+  };
+
+  // Prompt de planche personnage à partir de la description DÉJÀ compilée. `kind` ("human" |
+  // "other", défaut humain) et `templateId` (id de SHEET_TEMPLATES, défaut / "auto" / inconnu
+  // = turnaround) sont optionnels : sans eux, texte identique à l'ancien gabarit en dur.
+  function charsheetPromptFrom(desc, kind, templateId, styleId) {
+    const styleText = styleTextFor(styleId);
+    const layout = SHEET_TEMPLATES[templateId] || SHEET_TEMPLATES.turnaround;
+    return `${layout.build(desc, sheetWords(kind), kind === "other" ? SUBJECT_GUARD : "")}${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
+  }
+
   // Planche personnage multi-vues (ancre d'apparence, image 1 des keyframes duales).
   // Format 16:9 large obligatoire (layout prouvé au Lot 1), indépendant du ratio UI.
-  function buildCharsheetGraph(charDesc, negText, seed, width, height, styleId, loraName) {
+  // `kind`/`templateId` optionnels (voir charsheetPromptFrom).
+  function buildCharsheetGraph(charDesc, negText, seed, width, height, styleId, loraName, kind, templateId) {
     const { g, add } = makeGraphBuilder();
     const kx = addKrea2Shared(add, loraName);
-    const styleText = styleTextFor(styleId);
-    const dec = addKrea2Shot(add, kx,
-      `A professional photorealistic character reference sheet of one single person, composited as a clean multi-view layout on a smooth seamless light grey studio background: ${charDesc}. Arranged neatly, the sheet shows a full-body turnaround of the same person in four standing poses evenly spaced across a row - front view, three-quarter view, side profile view, and back view - all in a neutral relaxed stance, evenly studio-lit. Above the turnaround, one large tight close-up portrait of the face. A row of several smaller close-up headshots of the face showing different facial expressions: neutral, smiling, surprised, determined. A cluster of detailed close-up photographs of costume details. Along the bottom edge, a horizontal strip of solid rectangular color swatches sampling the exact colors of the outfit and hair. Every view shows the exact same single person with identical face, hair and costume, consistent character design. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
-      seed, 1920, 1088, 1);
+    const dec = addKrea2Shot(add, kx, charsheetPromptFrom(charDesc, kind, templateId, styleId), seed, 1920, 1088, 1);
     add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/charsheet" });
     return g;
   }
@@ -753,15 +1109,26 @@
   }
 
   // Fiches gemma : `brief.value` devient l'argument `scene`, addEvent() devient onEvent.
+  // Porté du Studio (piège n°17) : gemma tranche `kind` (human / other) et renseigne le jeu
+  // de champs de ce kind, plus un `label` court (onglets, jamais compilé dans le prompt).
   async function characterSheetFromBrief(scene, onEvent) {
     try {
       const out = await gemmaJSON(
-        `You are a character designer. From the user's scene, take the SINGLE most prominent character and describe them so they stay IDENTICAL across shots. Answer ONLY with JSON with these fields, each a dense ~10-20 word English string, no camera/scene/action wording: {"face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}.`,
+        `You are a character designer. From the user's scene, take the SINGLE most prominent character or subject and describe it so it stays IDENTICAL across shots. It can be anything: a human being, an animal, an imaginary creature, a robot or machine of any shape, an alien, a vehicle, a plant or an inanimate object. FIRST set "kind": "human" only for a human being, "other" for everything else. THEN use the field set of that kind, each value a dense ~10-20 word English string, no camera/scene/action wording. Also set "label": a plain 2-to-4-word name for this subject that tells it apart from other subjects of the same scene, e.g. "weary detective", "young farmhand", "adult male lion", "six-legged mining robot". If kind is "human", answer ONLY with JSON {"kind":"human","label":"...","face":"...","hair":"...","outfit":"...","accessories":"...","palette":"..."}. If kind is "other", answer ONLY with JSON {"kind":"other","label":"...","subject":"what it is, in its own terms: type or species, and how many limbs, heads, wheels or parts it has, e.g. adult male African lion, four-legged big cat, or six-legged insect-like mining robot","form":"its silhouette, structure, proportions and natural resting posture","surface":"what its body is made of and how it looks: fur, scales, skin, bark, metal, glass, worn paint","details":"the distinctive parts and marks that identify it","palette":"..."}. When kind is "other", describe it strictly as the thing it is: give it no human face, no human hair, no clothing and no human stance unless the user's scene explicitly says so.`,
         scene);
-      const fields = {};
-      for (const k of CHAR_FIELD_KEYS) fields[k] = fieldText(out[k]);
-      if (charDescFromFields(fields)) { if (onEvent) onEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
-      throw new Error("format inattendu");
+      // Le squelette se décide sur les champs que gemma a REMPLIS, pas sur l'étiquette `kind`
+      // qu'il annonce (il décrit régulièrement un lion dans {subject, form, surface} en se
+      // déclarant "human", et l'inverse). `palette`, commune aux deux jeux, ne départage rien ;
+      // `kind` ne sert que d'arbitre à égalité.
+      const filledCount = keys => keys.filter(k => k !== "palette" && fieldText(out[k])).length;
+      const nHuman = filledCount(CHAR_FIELD_KEYS), nOther = filledCount(CHAR_OTHER_FIELD_KEYS);
+      const fields = { kind: nOther > nHuman ? "other" : nHuman > nOther ? "human"
+                             : (out.kind === "human" ? "human" : "other") };
+      fields.label = fieldText(out.label);
+      for (const k of charFieldKeys(fields)) fields[k] = fieldText(out[k]);
+      // Une fiche réduite à la palette ne décrit aucun sujet : repli sur le brief.
+      if (filledCount(charFieldKeys(fields))) { if (onEvent) onEvent("OK", `Fiche personnage générée par ${OLLAMA_MODEL}.`, "ok"); return fields; }
+      throw new Error("aucun champ descriptif rempli");
     } catch (e) {
       if (onEvent) onEvent("WARN", `Fiche personnage LLM indisponible (${e.message}) — brief utilisé tel quel.`, "warn");
       return { face: scene, hair: "", outfit: "", accessories: "", palette: "" };
@@ -790,7 +1157,7 @@
     let shots;
     try {
       const out = await gemmaJSON(
-        `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character, costume and setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one person in frame) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
+        `You are a storyboard cinematographer. The user gives ONE scene with fixed character and setting. Break it into exactly ${n} sequential shots of THAT SAME scene. The character's appearance and the setting NEVER change — only camera, light and moment vary. For EACH shot output an object with: "camera" = EXACTLY ONE id from [${camIds}], "lighting" = EXACTLY ONE id from [${lightIds}], "action" = short English description of what the single main character (exactly one subject in frame, a person, an animal, a creature, a machine or an object) is doing (~8-14 words), "emotion" = one or two words for the mood/expression. Answer ONLY with JSON: {"shots": [ {"camera":"...","lighting":"...","action":"...","emotion":"..."}, ... ]} with exactly ${n} entries.`,
         scene);
       shots = normalizeShotList(out.shots, n, scene);
       if (onEvent) onEvent("OK", `${n} plans Scene DNA (caméra/lumière/action) générés par ${OLLAMA_MODEL}.`, "ok");
@@ -806,7 +1173,7 @@
 
   // Jobs storyboard : mêmes graphes/prompts, paramètres reçus en objet.
   async function submitCharsheetJob(p) {
-    return submitGraph(buildCharsheetGraph(p.charDesc, p.negative, p.seed, p.width, p.height, p.styleId, p.lora),
+    return submitGraph(buildCharsheetGraph(p.charDesc, p.negative, p.seed, p.width, p.height, p.styleId, p.lora, p.kind, p.templateId),
       "Storyboard · fiche personnage", `${p.modelLabel} · charsheet · seed ${p.seed}`, p.clientId, p.onEvent);
   }
   async function submitLocsheetJob(p) {
@@ -860,6 +1227,12 @@
       CAMERA_LIB, LIGHTING_LIB, STYLE_PACKS, KREA2_LORAS, H3_STYLE_LORAS, SHEET_CLEAN,
       fetchLoraOptions, loraLabel, H3_TURBO_LORAS,   // découverte LoRA, partagée avec le Studio
       styleTextFor, compileKeyframePrompt, compileCutPrompt,
+      // I13 : corrections de prompt du Studio (planches selon le sujet, ancrages keyframe,
+      // grammaire Minimax H3) — dépendances en arguments, prêtes pour le Studio et le Canvas
+      SHEET_TEMPLATES, charsheetPromptFrom, charKindOf, KEYFRAME_ANCHOR_SOLO, KEYFRAME_ANCHOR_DUAL,
+      stripPromptPadding, KREA2_ENRICH_SYSTEM,
+      h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, capH3Prompt,
+      h3Alignment, h3VideoFrames, h3RealDuration, h3CutSubjects, buildH3CutPrompt, compileCutPromptFor,
       // LLM
       gemmaJSON, characterSheetFromBrief, locationSheetFromBrief, shotListFromBrief,
       charDescFromFields, locDescFromFields,
