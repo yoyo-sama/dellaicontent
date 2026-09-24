@@ -13,6 +13,9 @@
 // Engine.COMFY / Engine.viewURL / Engine.extractFiles (js/engine.js) au lieu de dupliquer
 // cette logique.
 (function () {
+  // Ce fichier s'exécute AVANT `window.tr = tr` (canvas.html) : les libellés du tiroir sont posés en français,
+  // en nœuds texte séparés, et traduits par translateTree(document.body) (à chaque changement de langue).
+  // `T` ne sert qu'aux textes créés plus tard (dépôt sur une carte), quand `window.tr` existe.
   const T = (s) => (window.tr ? window.tr(s) : s);
 
   // ── Style ────────────────────────────────────────────────────────────────
@@ -43,6 +46,7 @@
     .cg-tray .cg-thumb{height:100%;width:auto;flex:0 0 auto;cursor:pointer;
       background:var(--disabled);border:1px solid var(--border);border-radius:8px;
       object-fit:cover;display:block;}
+    #cgHandle:focus-visible,.cg-tab:focus-visible,.cg-thumb:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
   `;
   document.head.appendChild(style);
 
@@ -52,14 +56,14 @@
   drawer.innerHTML = `
     <div id="cgBody">
       <div class="cg-tabs">
-        <button class="cg-tab active" id="cgTabImages" type="button" data-tab="images">${T("Images")} (0)</button>
-        <button class="cg-tab" id="cgTabVideos" type="button" data-tab="videos">${T("Vidéos")} (0)</button>
+        <button class="cg-tab active" id="cgTabImages" type="button" data-tab="images"><span>Images</span> <span class="cg-n">(0)</span></button>
+        <button class="cg-tab" id="cgTabVideos" type="button" data-tab="videos"><span>Vidéos</span> <span class="cg-n">(0)</span></button>
       </div>
       <div id="cgTrayImages" class="cg-tray"></div>
       <div id="cgTrayVideos" class="cg-tray" style="display:none"></div>
     </div>
     <button id="cgHandle" type="button" aria-expanded="false">
-      <span>${T("Galerie")}</span>
+      <span>Galerie</span>
       <span class="cg-chevron">▲</span>
     </button>
   `;
@@ -82,14 +86,20 @@
   tabVideos.addEventListener("click", () => switchTab("videos"));
   function bumpCount(isVideo) {
     counts[isVideo ? "videos" : "images"]++;
-    tabImages.textContent = `${T("Images")} (${counts.images})`;
-    tabVideos.textContent = `${T("Vidéos")} (${counts.videos})`;
+    tabImages.querySelector(".cg-n").textContent = `(${counts.images})`;
+    tabVideos.querySelector(".cg-n").textContent = `(${counts.videos})`;
   }
 
   // ── Données / persistance (clé localStorage dédiée, distincte de Studio) ──
   const STORE_KEY = "canvasGalleryAssets";
   const seenAssets = new Set();
-  const galleryAssets = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+  // Valeur illisible (JSON cassé, pas un tableau, entrées sans nom de fichier) : galerie vide, sans exception.
+  const galleryAssets = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
+      return Array.isArray(v) ? v.filter(a => a && typeof a.filename === "string") : [];
+    } catch { return []; }
+  })();
 
   function persistAsset(f, label) {
     const k = `${f.subfolder || ""}/${f.filename}`;
@@ -101,7 +111,9 @@
       seen.add(ak); out.push(a);
     }
     galleryAssets.length = 0; galleryAssets.push(...out.slice(0, 200));
-    localStorage.setItem(STORE_KEY, JSON.stringify(galleryAssets));
+    // Quota plein ou stockage bloqué : la galerie de la session continue, seule la persistance est perdue.
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(galleryAssets)); }
+    catch (e) { console.warn("Galerie : sauvegarde impossible", e); }
   }
 
   // Glisser-déposer vers une carte "Import média" du canvas : pose dans le
@@ -114,7 +126,12 @@
     el.title = f.filename;
     if (isVideo) { el.controls = true; el.muted = true; el.playsInline = true; }
     else el.alt = f.filename;
-    el.addEventListener("click", () => window.open(url, "_blank"));
+    const open = () => window.open(url, "_blank");
+    el.addEventListener("click", open);
+    if (!isVideo) {   // une <img> n'est pas atteignable au clavier : bouton nommé, Entrée et Espace = clic (une <video controls> l'est déjà)
+      el.tabIndex = 0; el.setAttribute("role", "button"); el.setAttribute("aria-label", f.filename);
+      el.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); } });
+    }
     el.draggable = true;
     el.addEventListener("dragstart", (event) => {
       const payload = { filename: f.filename, subfolder: f.subfolder || "", type: f.type || "output" };

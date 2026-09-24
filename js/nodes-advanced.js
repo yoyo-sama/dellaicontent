@@ -12,17 +12,17 @@
 // Les helpers setStatus/buildOverlay/removeOverlay/upstreamFile (et la palette STATUS_COLOR
 // qu'utilise setStatus) sont REPRIS tels quels de nodes-simple.js via `window.__simpleNodes`.
 //
-// Logique métier : AUCUNE réimplémentation. Tout passe par window.Engine (js/engine.js) —
-// characterSheetFromBrief / locationSheetFromBrief / shotListFromBrief / submitCharsheetJob /
-// submitLocsheetJob / submitKeyframeJob / submitGridJob / submitCutJob / submitAnimaticJob,
-// dans l'ordre exact de `Engine.generateStoryboardV2`, et buildGraph+applyMinimaxTurbo dans
-// l'ordre exact de `Engine.generateReference2Video`.
+// Logique métier : AUCUNE réimplémentation. Tout passe par les fonctions unitaires de
+// window.Engine (js/engine.js) — characterSheetFromBrief / locationSheetFromBrief /
+// shotListFromBrief / submitCharsheetJob / submitLocsheetJob / submitKeyframeJob /
+// submitGridJob / submitCutJob / submitAnimaticJob, les mêmes que le Studio enchaîne dans ses
+// étapes `directorStep1/2/3` (index.html), et buildGraph+applyMinimaxTurbo pour le reference2video.
 //
-// Pourquoi les fonctions unitaires et pas `generateStoryboardV2()` en bloc : cette fonction
-// génère elle-même ses deux planches (submitCharsheetJob + submitLocsheetJob) au début. Or ici
-// les planches sont DEUX CARTES AMONT, déjà rendues et connectées — les régénérer à l'intérieur
-// du nœud Storyboard rendrait les connexions décoratives. On appelle donc la queue de
-// `generateStoryboardV2` (étapes c → f) telle quelle, sans en changer ni l'ordre ni les prompts.
+// Pourquoi des cartes et pas l'enchaînement du Studio en bloc : ses étapes génèrent elles-mêmes
+// les deux planches. Or ici les planches sont DEUX CARTES AMONT, déjà rendues et connectées —
+// les régénérer à l'intérieur du nœud Storyboard rendrait les connexions décoratives. Le nœud
+// Storyboard n'appelle donc que la queue de cet enchaînement (shot list → keyframes → grille),
+// sans en changer ni l'ordre ni les prompts.
 (function () {
   "use strict";
   const E = window.Engine;
@@ -99,7 +99,9 @@
   function autogrow(node, groups) {
     if (node._growing) return;
     node._growing = true;
+    const w = node.size[0];   // addInput/removeInput refont `size = computeSize()` : sans ça la carte rétrécit (320 → 210) dès qu'une référence est branchée
     try { for (const [name, cap] of groups) growSlots(node, name, cap); } finally { node._growing = false; }
+    node.size[0] = w;
     autoHeight(node);
   }
   // Câble le hook litegraph de changement de connexion sur un type à slots dynamiques.
@@ -169,7 +171,7 @@
     if (!brief) { setStatus(this, "error", T("Erreur : description personnage vide.")); return; }
     setStatus(this, "running", T("Fiche personnage : gemma…"));
     try {
-      // Étape (a) de generateStoryboardV2 : gemma → champs → charDesc → planche Krea 2.
+      // Même début que le Studio (directorStep1) : gemma → champs → charDesc → planche Krea 2.
       // Type de sujet choisi sur la carte ("auto" = gemma tranche, comme avant) ; ce qui a été retenu
       // est persisté pour l'aval. Choisir un type ne lance rien : il agit à CETTE génération, cliquée.
       const kind = this.properties.kind;
@@ -322,7 +324,7 @@
       const shots = await E.shotListFromBrief(brief, n, this.properties.segmentDuration);
 
       // Les planches amont sont des SORTIES ComfyUI : les ré-uploader en entrées
-      // (exactement ce que fait resolveImageJob dans generateStoryboardV2).
+      // (exactement ce que fait resolveImageJob dans le Studio).
       const charName = (await E.reupload(charFile)).name;
       const locName = (await E.reupload(locFile)).name;
       // Lot 5 : 3ᵉ fiche optionnelle (slot AUTOGROW). Absente ⇒ image3Name reste undefined

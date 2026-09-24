@@ -20,13 +20,16 @@
   :root{
     color-scheme:light;
     --bg:#ffffff; --border:#e3e8ef; --brand:#343ced; --highlight:#0b5cab;
-    --text:#202a3a; --text-2:#6b778c; --card:rgba(255,255,255,.86); --card-2:rgba(255,255,255,.95);
+    --text:#202a3a; --text-2:#667185; --card:rgba(255,255,255,.86); --card-2:rgba(255,255,255,.95);
     --radius:16px;
     --stage:#f7f8fb;                    /* fond de la scène (= lgcanvas.clear_background_color) */
     --dot:#dfe4ec;                      /* points de la grille de fond (repli CSS) */
     --shadow:rgba(15,23,42,.10);        /* ombre portée des panneaux .glass */
     --disabled:#f4f6fa;                 /* fond des champs désactivés */
     --accent-soft:rgba(52,60,237,.05);  /* fond du cas d'usage déplié */
+    /* Statut du panneau Propriétés (≥ 4,5:1 sur le panneau). Les couleurs DESSINÉES sur le
+       canvas (STATUS_COLOR, js/nodes-simple.js) sont un autre système, hors de ce lot. */
+    --st-idle:#5f6b80; --st-running:#8a5a00; --st-done:#1f6b1f; --st-error:#b0271a;
   }
   /* ── Thème sombre ─────────────────────────────────────────────────────────
      MÊME identité que le clair : même typographie (DM Sans) et même bleu d'accent
@@ -43,6 +46,7 @@
     --shadow:rgba(0,0,0,.55);
     --disabled:#1b1f2b;
     --accent-soft:rgba(90,99,245,.14);
+    --st-idle:#9aa6bd; --st-running:#e0a93b; --st-done:#6cc36c; --st-error:#ff8a7a;
   }
   *{box-sizing:border-box;}
   html, body { margin:0; height:100%; overflow:hidden;
@@ -78,7 +82,7 @@
   #props   { right:18px; width:250px; max-height:calc(100vh - 36px); overflow:auto; }
   #props[hidden] { display:none; }
 
-  .panel-title { font-size:10.5px; font-weight:700; letter-spacing:.08em;
+  .panel-title { font-size:12px; font-weight:700; letter-spacing:.08em;
                  text-transform:uppercase; color:var(--text-2); margin:0 0 12px; }
   /* Logo Dell : PNG gris neutre (rgb(169,169,169), fond transparent), lisible tel quel
      en thème clair ET sombre, pas de fond ni de filtre CSS conditionnel au thème. */
@@ -92,23 +96,28 @@
      contour --brand pour le lien de sortie (même recette que .btn-outline). */
   .rail-switch { display:flex; gap:8px; margin:0 0 14px; }
   .rail-pill { flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
-               border-radius:10px; padding:7px 0; font-size:11.5px; font-weight:700;
+               border-radius:10px; padding:7px 0; font-size:12px; font-weight:700;
                text-decoration:none; }
   .rail-pill svg { width:16px; height:16px; flex:0 0 auto; }
   .rail-pill-active { border:0; color:#fff; background:linear-gradient(135deg,var(--brand),var(--highlight)); }
   .rail-pill-outline { border:1px solid var(--brand); color:var(--brand); background:transparent; cursor:pointer; }
   .rail-pill-outline:hover { background:var(--accent-soft); }
   .field { margin-bottom:10px; }
-  .field > label { display:block; font-size:10.5px; color:var(--text-2); margin-bottom:4px; }
+  .field > label { display:block; font-size:12px; color:var(--text-2); margin-bottom:4px; }
   .box, .panel select, .panel input[type=text], .panel input[type=number], .panel textarea {
     width:100%; display:block; font:inherit; font-size:12px; color:var(--text);
     background:var(--card-2); border:1px solid var(--border); border-radius:10px;
     padding:7px 9px; outline:none; -webkit-appearance:none; appearance:none;
   }
-  .panel select { background-image:none; cursor:pointer; }
+  /* Chevron en SVG inline (data URI), une couleur par thème : ≥ 3:1 sur le champ (--card-2). Posé APRÈS le
+     raccourci `background` de la règle précédente, qui remet l'image à `none`. */
+  .panel select { cursor:pointer; padding-right:30px; background-repeat:no-repeat; background-position:right 10px center; background-size:12px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.25 6 8.25 10 4.25' fill='none' stroke='%234d5870' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+  :root[data-theme="dark"] .panel select {
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.25 6 8.25 10 4.25' fill='none' stroke='%23b4bfd6' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
   .panel textarea { resize:vertical; min-height:54px; line-height:1.35; }
   .panel select:focus, .panel input:focus, .panel textarea:focus { border-color:var(--brand); }
-  .panel select:disabled, .panel input:disabled { color:var(--text-2); background:var(--disabled); cursor:default; }
+  .panel select:disabled, .panel input:disabled { color:var(--text-2); background-color:var(--disabled); cursor:default; }
 
   .btn-primary { width:100%; border:0; border-radius:10px; padding:9px 10px; cursor:pointer;
                  font:inherit; font-size:12.5px; font-weight:700; color:#fff;
@@ -133,8 +142,8 @@
   .usecase:hover, .usecase-opt:hover { border-color:var(--brand); }
   .usecase.open { border-color:var(--brand); background:var(--accent-soft); }
   .usecase > strong { display:block; font-size:12.5px; font-weight:700; color:var(--text); margin-bottom:3px; }
-  .usecase-opt > strong { display:block; font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:2px; }
-  .usecase > span, .usecase-opt > span { display:block; font-size:10.5px; color:var(--text-2); line-height:1.35; }
+  .usecase-opt > strong { display:block; font-size:12px; font-weight:700; color:var(--text); margin-bottom:2px; }
+  .usecase > span, .usecase-opt > span { display:block; font-size:12px; color:var(--text-2); line-height:1.35; }
   /* Sous-options du cas B : simple zone dépliée sous le bouton, dans le panneau (pas de modale). */
   .usecase-sub { display:flex; flex-direction:column; gap:6px;
                  margin:2px 0 2px 8px; padding-left:9px; border-left:2px solid var(--border); }
@@ -142,7 +151,7 @@
 
   /* Disclosure « Mode avancé » : lien discret, replié par défaut. */
   .disclosure { display:block; width:100%; text-align:left; border:0; background:none; padding:0;
-                font:inherit; font-size:11px; font-weight:600; color:var(--text-2); cursor:pointer; }
+                font:inherit; font-size:12px; font-weight:600; color:var(--text-2); cursor:pointer; }
   .disclosure:hover { color:var(--brand); }
   #advBlock[hidden] { display:none; }
   #advBlock { margin-top:10px; }
@@ -162,15 +171,21 @@
 
   /* Panneau droit : titre de carte, aperçu du prompt, lignes label/valeur */
   #propsCardTitle { font-size:14px; font-weight:700; margin:0 0 2px; }
-  #propsCardType  { font-size:10.5px; color:var(--text-2); margin:0 0 8px; }
-  #propsPreview   { font-size:11.5px; color:var(--text-2); margin:0 0 4px; line-height:1.45; }
-  #propsStatus    { font-size:10.5px; margin:0 0 6px; min-height:13px; }
+  #propsCardType  { font-size:12px; color:var(--text-2); margin:0 0 8px; }
+  #propsPreview   { font-size:12px; color:var(--text-2); margin:0 0 4px; line-height:1.45; }
+  #propsStatus    { font-size:12px; margin:0 0 6px; min-height:17px; }
+  /* Couleur du statut par thème : `data-status` posé par updateLiveProps, plus de style inline. */
+  #propsStatus[data-status="idle"]    { color:var(--st-idle); }
+  #propsStatus[data-status="running"] { color:var(--st-running); }
+  #propsStatus[data-status="done"]    { color:var(--st-done); }
+  #propsStatus[data-status="error"]   { color:var(--st-error); }
   .row { border-top:1px solid var(--border); padding-top:8px; margin-top:8px; }
-  .row > label { display:block; font-size:10.5px; color:var(--text-2); margin-bottom:4px; }
+  .row > label { display:block; font-size:12px; color:var(--text-2); margin-bottom:4px; }
   .actions { margin-top:14px; display:flex; flex-direction:column; gap:8px; }
 
   /* Focus clavier visible sur les commandes des panneaux et de la barre de feuilles. */
-  .panel button:focus-visible, .panel .rail-pill:focus-visible, #sheetBar button:focus-visible
+  .panel button:focus-visible, .panel .rail-pill:focus-visible, #sheetBar button:focus-visible,
+  .panel select:focus-visible, .panel input:focus-visible, .panel textarea:focus-visible
     { outline:2px solid var(--brand); outline-offset:2px; }
 
   /* ── Sous 768 px : palette et Propriétés deviennent des feuilles basculantes (C1) ──
@@ -201,14 +216,15 @@
      de fin de page s'exécute après le chargement de litegraph (js/vendor/) et des 3 js/ locaux :
      y poser le thème laisserait un flash de thème clair sur les panneaux. Même règle de
      valeur par défaut que l'app de prod (ai-content-studio/index.html) : localStorage
-     sinon `prefers-color-scheme`. Pas de 3ᵉ mode « auto » — la préférence système n'est
+     sinon `prefers-color-scheme`. Clé `theme`, la MÊME que le Studio (repli de lecture sur
+     l'ancienne clé `canvasTheme`, jamais réécrite). Pas de 3ᵉ mode « auto » — la préférence système n'est
      lue qu'ici, une seule fois, à défaut de valeur mémorisée.
      Ce bloc porte un `id` : l'extraction JS documentée dans AGENTS.md ne matche que la
      balise ouvrante NUE, elle continue donc de viser le seul bloc principal. Ne jamais
      écrire de balise de script littérale dans ce commentaire, cela casserait la regex. -->
 <script id="themeBoot">
   document.documentElement.dataset.theme =
-    localStorage.getItem("canvasTheme") ||
+    localStorage.getItem("theme") || localStorage.getItem("canvasTheme") ||
     (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 </script>
 </head>
@@ -218,19 +234,20 @@
 <aside id="palette" class="panel glass">
   <!-- Identité Dell : PNG gris neutre, lisible identiquement quel que soit le thème. -->
   <div class="brand-logo"><img src="assets/dell-technologies-logo.png" alt="Dell Technologies"></div>
-  <!-- Paire Studio/Canvas : Canvas = page courante (pilule pleine, non cliquable),
-       Studio = lien de sortie vers index.html (pilule outline). Mêmes icônes SVG que
+  <!-- Paire Studio/Canvas, dans l'ordre FIXE « Studio | Canvas » (le même que sur le Studio) :
+       Canvas = page courante (pilule pleine, non cliquable), Studio = lien de sortie vers
+       index.html (pilule outline). Mêmes icônes SVG que
        le rail de l'app de prod (index.html, ~ligne 1376/1380), copiées telles quelles
        pour rester cohérent visuellement entre les deux pages. -->
   <div class="rail-switch">
-    <span class="rail-pill rail-pill-active" title="Canvas" aria-current="page">
-      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M12 7.2 6.3 16.2M12 7.2l5.7 9M7.2 18h9.6"/></svg>
-      Canvas
-    </span>
     <a href="index.html" class="rail-pill rail-pill-outline" title="Studio">
       <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 9V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><path d="M8.5 4 6.5 9M14.5 4l-2 5"/></svg>
       Studio
     </a>
+    <span class="rail-pill rail-pill-active" title="Canvas" aria-current="page">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M12 7.2 6.3 16.2M12 7.2l5.7 9M7.2 18h9.6"/></svg>
+      Canvas
+    </span>
   </div>
   <!-- Espace insécable avant le « ? » (typographie FR) : évite aussi le « ? » orphelin
        sur une 2ᵉ ligne dans un panneau étroit (230px). -->
@@ -254,7 +271,7 @@
       </button>
       <button type="button" class="usecase-opt" id="ucTeaserSheets">
         <strong>Je pars de fiches Personnage/Décor</strong>
-        <span>Le plan est composé depuis vos planches de référence.</span>
+        <span>Le plan est composé depuis tes planches de référence.</span>
       </button>
     </div>
 
@@ -283,7 +300,7 @@
       <select id="pipelineSelect"></select>
     </div>
     <div class="field">
-      <label for="modelSelect">Modèle</label>
+      <label for="modelSelect">Moteur</label>
       <select id="modelSelect"></select>
     </div>
     <button id="addCard" class="btn-primary">+ Nouvelle carte</button>
@@ -325,7 +342,7 @@
   <p id="propsStatus"></p>
   <div id="propsFields"></div>
   <div class="actions">
-    <button id="btnRegen" class="btn-primary">Régénérer</button>
+    <button id="btnRegen" class="btn-primary">Générer</button>
     <button id="btnDup" class="btn-outline">Dupliquer</button>
   </div>
 </aside>
@@ -354,8 +371,10 @@
   "use strict";
 
   const STORAGE_KEY = "canvasGraphState";
-  const LANG_KEY = "canvasLang";
-  const THEME_KEY = "canvasTheme";   // même clé que le boot script du <head>
+  // MÊMES clés que le Studio (index.html) : langue et thème le suivent d'une app à l'autre. Repli de
+  // lecture sur les anciennes clés `canvasLang` / `canvasTheme` (jamais réécrites).
+  const LANG_KEY = "lang";
+  const THEME_KEY = "theme";   // même clé que le boot script du <head>
 
   // ══ Thème clair / sombre ══════════════════════════════════════════════════
   // MÊME schéma que LANG/tr()/applyLang() juste au-dessous : une variable globale,
@@ -380,8 +399,8 @@
   //     n'est d'ailleurs pas modifié par ce lot ;
   //   · les noms de produits / moteurs / modèles (Krea 2, Qwen-Edit, LTX 2.5,
   //     Minimax H3, Reference2Video, Animatic, Storyboard, Pipeline, Prompt, Anime…) ;
-  //   · les étiquettes techniques d'en-tête de carte (CARDS[x].tech : charsheet,
-  //     locsheet, cutvideo, r2v, krea2, qwen_edit…) : ce sont des identifiants de code,
+  //   · les étiquettes techniques (CARDS[x].tech, affichées dans le panneau Propriétés :
+  //     charsheet, locsheet, cutvideo, r2v, krea2, qwen_edit…) : ce sont des identifiants de code,
   //     copies des types litegraph (`adv/charsheet`) et des noms de templates ComfyUI.
   const I18N = {
     // ── Panneau gauche ──
@@ -395,11 +414,10 @@
     "J'ai déjà une image précise à animer": { en: "I already have a specific image to animate", es: "Ya tengo una imagen concreta para animar", de: "Ich habe bereits ein konkretes Bild zum Animieren" },
     "On met en mouvement cette image telle quelle.": { en: "We set that image in motion as it is.", es: "Ponemos esa imagen en movimiento tal cual.", de: "Dieses Bild wird unverändert in Bewegung gesetzt." },
     "Je pars de fiches Personnage/Décor": { en: "I start from Character/Location sheets", es: "Parto de fichas de Personaje/Escenario", de: "Ich starte von Charakter-/Kulissenblättern" },
-    "Le plan est composé depuis vos planches de référence.": { en: "The shot is composed from your reference sheets.", es: "El plano se compone a partir de tus láminas de referencia.", de: "Die Einstellung wird aus deinen Referenzblättern komponiert." },
+    "Le plan est composé depuis tes planches de référence.": { en: "The shot is composed from your reference sheets.", es: "El plano se compone a partir de tus láminas de referencia.", de: "Die Einstellung wird aus deinen Referenzblättern komponiert." },
     "Trailer narratif (plusieurs plans)": { en: "Narrative trailer (several shots)", es: "Tráiler narrativo (varios planos)", de: "Erzählerischer Trailer (mehrere Einstellungen)" },
     "On commence par les 2 planches : personnage et décor.": { en: "We start with the 2 sheets: character and location.", es: "Empezamos por las 2 láminas: personaje y escenario.", de: "Wir beginnen mit den 2 Blättern: Charakter und Kulisse." },
     "Mode avancé (choisir un type de carte précis)": { en: "Advanced mode (pick a specific card type)", es: "Modo avanzado (elegir un tipo de tarjeta concreto)", de: "Erweiterter Modus (bestimmten Kartentyp wählen)" },
-    "Modèle": { en: "Model", es: "Modelo", de: "Modell" },
     "+ Nouvelle carte": { en: "+ New card", es: "+ Nueva tarjeta", de: "+ Neue Karte" },
     "Langue": { en: "Language", es: "Idioma", de: "Sprache" },
     "Thème clair / sombre": { en: "Light / dark theme", es: "Tema claro / oscuro", de: "Helles / dunkles Thema" },
@@ -412,7 +430,13 @@
 
     // ── Panneau droit ──
     "Propriétés — carte sélectionnée": { en: "Properties — selected card", es: "Propiedades — tarjeta seleccionada", de: "Eigenschaften — ausgewählte Karte" },
+    "Générer": { en: "Generate", es: "Generar", de: "Generieren" },   // même lexique que le Studio
     "Régénérer": { en: "Regenerate", es: "Regenerar", de: "Neu generieren" },
+    // Statut du panneau (mêmes mots que le Studio) — idle / running / done / error.
+    "En attente": { en: "Queued", es: "En cola", de: "Wartend" },
+    "En cours": { en: "Running", es: "En curso", de: "Läuft" },
+    "Terminé": { en: "Done", es: "Terminado", de: "Fertig" },
+    "Erreur": { en: "Error", es: "Error", de: "Fehler" },
     "Dupliquer": { en: "Duplicate", es: "Duplicar", de: "Duplizieren" },
     "Oui": { en: "Yes", es: "Sí", de: "Ja" },
     "Non": { en: "No", es: "No", de: "Nein" },
@@ -502,6 +526,18 @@
     "Réalisme": { en: "Realism", es: "Realismo", de: "Realismus" },
     "Vieillissement": { en: "Ageing", es: "Envejecimiento", de: "Alterung" },
 
+    // Pied de carte dessiné : cartes amont pas encore lancées (cf. waitingFor).
+    "À lancer après : ": { en: "Run after: ", es: "Lanzar después: ", de: "Danach starten: " },
+    "Qwen-Edit 2509 · 1 réf. · sortie 1024×1024": { en: "Qwen-Edit 2509 · 1 ref · 1024×1024 output", es: "Qwen-Edit 2509 · 1 ref. · salida 1024×1024", de: "Qwen-Edit 2509 · 1 Ref. · Ausgabe 1024×1024" },
+    "Qwen Image 2.1 · jusqu'à 10 réf. · taille de la source": { en: "Qwen Image 2.1 · up to 10 refs · source size", es: "Qwen Image 2.1 · hasta 10 ref. · tamaño de la fuente", de: "Qwen Image 2.1 · bis zu 10 Ref. · Größe der Quelle" },
+    "Qwen-Edit 2509 · références ignorées (Qwen Image 2.1 seulement)": { en: "Qwen-Edit 2509 · references ignored (Qwen Image 2.1 only)", es: "Qwen-Edit 2509 · referencias ignoradas (solo Qwen Image 2.1)", de: "Qwen-Edit 2509 · Referenzen ignoriert (nur Qwen Image 2.1)" },
+    "Entrée du haut : l'image à éditer. Entrée du bas : références supplémentaires, Qwen Image 2.1 seulement.": { en: "Top input: the image to edit. Bottom input: extra references, Qwen Image 2.1 only.", es: "Entrada superior: la imagen que se edita. Entrada inferior: referencias adicionales, solo Qwen Image 2.1.", de: "Oberer Eingang: das zu bearbeitende Bild. Unterer Eingang: zusätzliche Referenzen, nur Qwen Image 2.1." },
+    // Tiroir de galerie (js/canvas-gallery.js) : libellés en nœuds texte, traduits par translateTree.
+    "Images": { en: "Images", es: "Imágenes", de: "Bilder" },
+    "Vidéos": { en: "Videos", es: "Vídeos", de: "Videos" },
+    "Galerie": { en: "Gallery", es: "Galería", de: "Galerie" },
+    "Depuis la galerie": { en: "From the gallery", es: "Desde la galería", de: "Aus der Galerie" },
+
     // ── Messages de statut (js/nodes-simple.js + js/nodes-advanced.js, via window.tr) ──
     "Erreur : ": { en: "Error: ", es: "Error: ", de: "Fehler: " },
     "Terminé : ": { en: "Done: ", es: "Terminado: ", de: "Fertig: " },
@@ -542,7 +578,7 @@
     "aucune image en sortie": { en: "no image in output", es: "ninguna imagen de salida", de: "kein Bild in der Ausgabe" },
     "aucune vidéo en sortie": { en: "no video in output", es: "ningún vídeo de salida", de: "kein Video in der Ausgabe" }
   };
-  let LANG = localStorage.getItem(LANG_KEY) || "fr";
+  let LANG = localStorage.getItem(LANG_KEY) || localStorage.getItem("canvasLang") || "fr";
   function tr(key) { return LANG === "fr" ? key : (I18N[key]?.[LANG] ?? key); }
   function translateTree(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -702,7 +738,7 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   // Catalogue d'habillage des 8 types de cartes de génération (+ les 2 nœuds de test).
-  // `label`/`tech` = en-tête de la carte ; `grad` = vignette dégradée tant qu'aucun
+  // `label` = en-tête de la carte, `tech` = type technique (panneau Propriétés) ; `grad` = vignette dégradée tant qu'aucun
   // résultat n'est généré ; `model` = modèle affiché (fixe sauf simple/video) ;
   // `meta` = ligne de métadonnées du pied de carte ; `fields` = schéma du panneau droit ;
   // `subject` = propriété servant à personnaliser le titre ("Personnage — a lighthouse…").
@@ -876,9 +912,14 @@
       modelProp: "engine", modelWidget: "moteur", model: "Qwen-Edit 2509 / Qwen Image 2.1",
       modelValues: [["qwen_edit_2509", "Qwen-Edit 2509"], ["qwen21", "Qwen Image 2.1"]],
       subject: "instruction", preview: "instruction",
-      meta: n => n.properties.engine === "qwen21" ? "Qwen Image 2.1 · jusqu'à 10 réf." : "Qwen-Edit 2509 · 1024×1024",
+      // Pieds symétriques (références · sortie). En 2509 le slot de références n'a aucun effet : s'il est
+      // branché, le pied l'annonce au lieu du résumé.
+      meta: n => n.properties.engine === "qwen21" ? tr("Qwen Image 2.1 · jusqu'à 10 réf. · taille de la source")
+        : n.inputs.some(i => i.name === ADV.SLOT_IMG_REF && i.link != null) ? tr("Qwen-Edit 2509 · références ignorées (Qwen Image 2.1 seulement)")
+        : tr("Qwen-Edit 2509 · 1 réf. · sortie 1024×1024"),
       fields: [
-        { k: "engine", w: "moteur", label: "Moteur", type: "select", values: () => [["qwen_edit_2509", "Qwen-Edit 2509"], ["qwen21", "Qwen Image 2.1"]] },
+        { k: "engine", w: "moteur", label: "Moteur", type: "select", values: () => [["qwen_edit_2509", "Qwen-Edit 2509"], ["qwen21", "Qwen Image 2.1"]],
+          hint: "Entrée du haut : l'image à éditer. Entrée du bas : références supplémentaires, Qwen Image 2.1 seulement." },
         { k: "instruction", w: "instruction", label: "Instruction d'édition", type: "textarea", enhance: ENHANCE.qwenInstruction }
       ]
     },
@@ -963,7 +1004,6 @@
       titleBar: "#ffffff", titleBarSel: "#343ced",              // onDrawTitleBar : fond d'en-tête
       titleRule: "#e3e8ef", titleRuleSel: "rgba(255,255,255,.35)", // onDrawTitleBar : filet bas
       statusDot: "#94a3b8",                                     // onDrawTitleBox : pastille par défaut (idle)
-      tech: "#94a3b8", techSel: "rgba(255,255,255,.75)",        // onDrawTitle : type technique
       mediaBed: "#0e1524",                                      // onDrawBackground : lit du média généré
       footer: "#ffffff", footerRule: "#e3e8ef", footerText: "#94a3b8",
       selHalo: "rgba(52,60,237,.12)", selBorder: "#343ced", selHandleStroke: "#ffffff",
@@ -985,7 +1025,6 @@
       titleBar: "#1b1f2b", titleBarSel: "#5a63f5",
       titleRule: "#2c3244", titleRuleSel: "rgba(255,255,255,.35)",
       statusDot: "#94a3b8",
-      tech: "#8b98ad", techSel: "rgba(255,255,255,.75)",
       mediaBed: "#0b0e16",
       footer: "#1b1f2b", footerRule: "#2c3244", footerText: "#8b98ad",
       selHalo: "rgba(90,99,245,.22)", selBorder: "#5a63f5", selHandleStroke: "#12141c",
@@ -1078,15 +1117,15 @@
     ctx.fillStyle = this.boxcolor || TC().statusDot;
     ctx.fill();
   }
-  // Type technique, aligné à droite dans l'en-tête (ex. "charsheet").
-  function onDrawTitle(ctx) {
-    const s = skin(this), t = TC();
-    ctx.save();
-    ctx.font = "600 10.5px 'DM Sans', Inter, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillStyle = this.is_selected ? t.techSel : t.tech;
-    ctx.fillText(s.tech, this.size[0] - 12, -10);
-    ctx.restore();
+  // Carte au repos dont une carte amont connectée n'a pas encore de sortie : « À lancer après : … »
+  // (libellés traduits, dessiné à chaque repeint donc suit la langue). Chaîne vide sinon.
+  function waitingFor(node) {
+    const names = [];
+    for (let i = 0; i < (node.inputs || []).length; i++) {
+      const up = ignoredInput(node, node.inputs[i]) ? null : node.getInputNode(i);   // une entrée ignorée n'est pas attendue
+      if (up && !(up.properties && up.properties.outFile)) names.push(tr(skin(up).label));
+    }
+    return names.length ? tr("À lancer après : ") + names.join(", ") : "";
   }
   // Corps : vignette dégradée par type tant qu'aucun résultat n'est généré ; une fois
   // le résultat là, l'overlay média DOM (mécanisme du Lot 1) recouvre exactement cette zone.
@@ -1118,7 +1157,7 @@
     ctx.textAlign = "left";
     const running = this.status === "running" || this.status === "error";
     ctx.fillStyle = running ? STATUS_COLOR[this.status] : t.footerText;
-    ctx.fillText(shorten(ctx, running ? this.statusMsg : s.meta(this), w - 24), 12, bh + 15);
+    ctx.fillText(shorten(ctx, running ? this.statusMsg : (this.status === "idle" && waitingFor(this)) || s.meta(this), w - 24), 12, bh + 15);
     // Barre de progression alimentée par le WebSocket ComfyUI (Engine.registerJob,
     // js/engine.js) — `node.progress` (0-100) pendant qu'un job tourne, `null` sinon.
     if (this.status === "running" && typeof this.progress === "number") {
@@ -1146,15 +1185,20 @@
     // Slots DYNAMIQUES (autogrow) : le « + » se pose naturellement sur le slot libre du
     // groupe, puisqu'il n'y en a qu'un à la fois (growSlots de js/nodes-advanced.js).
     // LOT Qwen21 : [ADV.SLOT_IMG_REF] = références 2.1 supplémentaires (jusqu'à 9, plafond
-    // câblé sur QwenEditNode en fin de nodes-advanced.js) — sans effet en mode 2509.
+    // câblé sur QwenEditNode en fin de nodes-advanced.js) — sans effet en mode 2509, donc
+    // sans « + » dans ce mode (cf. plusSlots).
     "simple/qwen_edit": { image: "image", [ADV.SLOT_IMG_REF]: "image" },
     "adv/r2v": { charsheet: "image", locsheet: "image", [ADV.SLOT_IMG_REF]: "image", [ADV.SLOT_VID_REF]: "video" }
   };
+  // Édition d'image en 2509 : le slot de références est ignoré par le graphe (Qwen Image 2.1 seulement).
+  function ignoredInput(node, slot) {
+    return node.type === "simple/qwen_edit" && node.properties.engine !== "qwen21" && slot.name === ADV.SLOT_IMG_REF;
+  }
   function plusSlots(node) {
     const map = PLUS_INPUTS[node.type];
     if (!map || node.flags.collapsed) return [];
     return (node.inputs || [])
-      .map((s, i) => ({ i, kind: map[s.name] }))
+      .map((s, i) => ({ i, kind: ignoredInput(node, s) ? null : map[s.name] }))   // pas de « + » sur une entrée ignorée
       .filter(s => s.kind && node.inputs[s.i].link == null);
   }
   // Centre du bouton, en coordonnées locales : même rang que le connecteur d'entrée.
@@ -1223,7 +1267,6 @@
     if (!Ctor) continue;
     Ctor.prototype.onDrawTitleBar = onDrawTitleBar;
     Ctor.prototype.onDrawTitleBox = onDrawTitleBox;
-    Ctor.prototype.onDrawTitle = onDrawTitle;
     Ctor.prototype.onDrawBackground = onDrawBackground;   // seul onDrawBackground des 10 types (js/nodes-*.js n'en posent plus)
     Ctor.prototype.onDrawForeground = onDrawForeground;
     Ctor.prototype.getTitle = getTitle;
@@ -1325,6 +1368,7 @@
       // litegraph n'échoue pas sur `{"nodes":"x"}` : il fabrique une carte fantôme.
       if (state.nodes && !Array.isArray(state.nodes)) throw new Error("nodes n'est pas un tableau");
       graph.configure(state);
+      graph._nodes.forEach(syncWidgets);
     } catch (e) {
       console.warn("Canvas : état sauvegardé illisible", e);
       graph.clear(); mediaLayer.innerHTML = ""; localStorage.removeItem(STORAGE_KEY);
@@ -1364,6 +1408,7 @@
     n.pos = pos || nextAutoPos(n);
     if (props) Object.assign(n.properties, props);
     graph.add(n);
+    if (props) syncWidgets(n);
     if (props && n.buildOverlay) n.buildOverlay();
     save();
     return n;
@@ -1387,14 +1432,22 @@
     return n;
   }
 
-  // Écrit une propriété du nœud ET synchronise le widget homonyme (les widgets ne sont
-  // plus dessinés mais restent la source des `widgets_values` sérialisés).
+  // Pose la valeur du widget litegraph nommé (les widgets ne sont plus dessinés, mais leur `value`
+  // reste ce que litegraph lit ; `properties` est la source de vérité, la seule sérialisée).
+  function syncWidget(node, widgetName, value) {
+    const w = widgetName && node.widgets && node.widgets.find(x => x.name === widgetName);
+    if (w) w.value = value;
+  }
+  // Tous les widgets nommés par `fields[].w` reprennent la valeur de leur propriété. litegraph 0.7.18
+  // ne sérialise `widgets_values` que si `serialize_widgets` est vrai (jamais ici, le format sauvegardé
+  // ne change pas) : après graph.configure() chaque widget repartait de sa valeur de constructeur.
+  function syncWidgets(node) {
+    for (const f of skin(node).fields) if (node.properties[f.k] !== undefined) syncWidget(node, f.w, node.properties[f.k]);
+  }
+  // Écrit une propriété du nœud ET synchronise le widget homonyme.
   function setProp(node, key, widgetName, value) {
     node.properties[key] = value;
-    if (widgetName && node.widgets) {
-      const w = node.widgets.find(x => x.name === widgetName);
-      if (w) w.value = value;
-    }
+    syncWidget(node, widgetName, value);
     node.setDirtyCanvas(true, true);
     save();
   }
@@ -1403,7 +1456,7 @@
   const modelSelect = document.getElementById("modelSelect");
   const advCatImage = document.getElementById("advCatImage");
   const advCatVideo = document.getElementById("advCatVideo");
-  // Le sélecteur « Modèle » n'est actif que pour les types offrant réellement un choix
+  // Le sélecteur « Moteur » n'est actif que pour les types offrant réellement un choix
   // (seul `simple/video` en a un : widget "moteur" → LTX 2.5 / Minimax H3). Pour les
   // autres il affiche le modèle imposé par le pipeline, désactivé.
   function refreshModelSelect() {
@@ -1520,20 +1573,31 @@
     lgcanvas.selectNode(r2v); lgcanvas.onSelectionChange(lgcanvas.selected_nodes);
     if (MOBILE.matches) fitView();
   };
-  // Trailer complet : Charsheet + Locsheet → Storyboard → CutVideo → FinalVideo.
+  // Trailer complet : Charsheet + Locsheet → Storyboard → CutVideo → FinalVideo, posé de gauche à droite dans
+  // l'ordre du flux : colonne 1 = les 2 fiches empilées, colonnes 2 à 4 centrées verticalement sur la colonne 1.
+  // Départ à AUTO_GRID_START_X si le graphe était vide, sinon à droite de la boîte englobante des cartes
+  // existantes. Les cartes sont posées en [0,0] puis placées : leur taille n'est connue qu'une fois créées.
   document.getElementById("ucTrailer").onclick = () => {
     setTeaserOpen(false);
-    const charsheet = addNode("adv/charsheet");
-    const locsheet = addNode("adv/locsheet");
-    const storyboard = addNode("adv/storyboard");
-    const cutvideo = addNode("adv/cutvideo");
-    const finalVideo = addNode("adv/final_video");
+    const GAP_X = 80, GAP_Y = 60;   // GAP_Y > titre de carte (30) : le titre de la 2ᵉ fiche ne touche pas la 1ʳᵉ
+    const old = graph._nodes;
+    const x0 = old.length ? Math.max(...old.map(n => n.pos[0] + n.size[0])) + GAP_X : AUTO_GRID_START_X;
+    const y0 = old.length ? Math.min(...old.map(n => n.pos[1])) : AUTO_GRID_START_Y;
+    const [charsheet, locsheet, storyboard, cutvideo, finalVideo] =
+      ["adv/charsheet", "adv/locsheet", "adv/storyboard", "adv/cutvideo", "adv/final_video"].map(t => addNode(t, [0, 0]));
+    charsheet.pos = [x0, y0];
+    locsheet.pos = [x0, y0 + charsheet.size[1] + GAP_Y];
+    const mid = y0 + (charsheet.size[1] + GAP_Y + locsheet.size[1]) / 2;
+    let x = x0 + Math.max(charsheet.size[0], locsheet.size[0]);
+    for (const n of [storyboard, cutvideo, finalVideo]) { x += GAP_X; n.pos = [x, mid - n.size[1] / 2]; x += n.size[0]; }
     charsheet.connect(0, storyboard, 0);
     locsheet.connect(0, storyboard, 1);
     storyboard.connect(0, cutvideo, 0);
     cutvideo.connect(0, finalVideo, 0);
-    lgcanvas.selectNode(finalVideo); lgcanvas.onSelectionChange(lgcanvas.selected_nodes);
-    if (MOBILE.matches) fitView();
+    save();
+    // La 1ʳᵉ carte à lancer est sélectionnée ; la vue cadre le graphe (à toutes les largeurs).
+    lgcanvas.selectNode(charsheet); lgcanvas.onSelectionChange(lgcanvas.selected_nodes);
+    fitView();
   };
 
   advToggle.onclick = () => {
@@ -1544,7 +1608,7 @@
   };
 
   // ⤢ : cadre la vue sur la boîte englobante des cartes (barre de titre comprise), dans la zone
-  // que les panneaux laissent libre. Échelle = ce qui tient, jamais au-delà de 1 ni sous 0,25 ;
+  // que les panneaux laissent libre. Échelle = ce qui tient, jamais au-delà de 1 ni sous 0,2 (le trailer à 4 colonnes fait ~1 620 unités : il tient à 390 px à 0,21) ;
   // centrage par ds.offset (écran = (graphe + offset) × échelle). Graphe vide : vue d'origine.
   // Zone libre : au-dessus de 767 px, entre le bord droit de #palette et le bord gauche de #props
   // (s'il est visible) et au-dessus du tiroir de galerie ; sous 768 px, tout l'écran au-dessus de la
@@ -1560,7 +1624,7 @@
     const L = MOBILE.matches ? M : document.getElementById("palette").getBoundingClientRect().right + M;
     const R = MOBILE.matches || propsEl.hidden ? innerWidth - M : propsEl.getBoundingClientRect().left - M;
     const B = Math.min(innerHeight - M, MOBILE.matches ? top(document.getElementById(document.body.dataset.sheet) || document.getElementById("sheetBar")) : top(document.getElementById("cgDrawer")));
-    const s = Math.max(0.25, Math.min((R - L) / (x1 - x0), (B - M) / (y1 - y0), 1));
+    const s = Math.max(0.2, Math.min((R - L) / (x1 - x0), (B - M) / (y1 - y0), 1));
     ds.scale = s;
     ds.offset[0] = (L + R) / 2 / s - (x0 + x1) / 2;
     ds.offset[1] = (M + B) / 2 / s - (y0 + y1) / 2;
@@ -1586,6 +1650,7 @@
   const typeEl = document.getElementById("propsCardType");
   const previewEl = document.getElementById("propsPreview");
   const statusEl = document.getElementById("propsStatus");
+  const btnRegen = document.getElementById("btnRegen");
   let selected = null;
 
   // Bouton « ✨ Enrichir (LLM) » sous un champ textarea — mécanisme UNIQUE partagé par
@@ -1609,9 +1674,9 @@
     // Ollama peut être indisponible (conteneur arrêté, modèle absent) et gemma peut
     // renvoyer un JSON sans la clé attendue : l'erreur s'affiche ici, sous le bouton.
     // `setStatus` (js/nodes-simple.js) pose l'état d'une CARTE, pas un message du panneau —
-    // d'où le message inline, qui reprend seulement la couleur d'erreur de la palette.
+    // d'où le message inline, qui reprend la couleur d'erreur du thème (--st-error).
     const err = document.createElement("div");
-    err.style.cssText = "font-size:10.5px;margin-top:4px;color:" + STATUS_COLOR.error;
+    err.style.cssText = "font-size:12px;margin-top:4px;color:var(--st-error)";
     btn.onclick = async () => {
       const label = btn.textContent;
       btn.disabled = true; btn.textContent = tr("Enrichissement…"); err.textContent = "";
@@ -1661,6 +1726,8 @@
       // (qui n'a traduit que le DOM initial) ne les rattraperait pas. On traduit donc
       // ICI, à la construction — et applyLang() re-rend le panneau au changement de langue.
       const lab = document.createElement("label"); lab.textContent = tr(f.label); row.appendChild(lab);
+      const fid = "pf-" + f.k;   // id unique dans le panneau (chaque `k` est unique par carte) : label.htmlFor = id du champ
+      lab.htmlFor = fid;
       let inp;
       if (f.type === "textarea") {
         inp = document.createElement("textarea");
@@ -1690,7 +1757,7 @@
         // plus haut), le « bouton + audio de référence » vit ici, dans le panneau.
         inp = document.createElement("div");
         const list = document.createElement("div");
-        list.style.cssText = "font-size:11px;color:var(--text-2);margin-top:4px;word-break:break-all";
+        list.style.cssText = "font-size:12px;color:var(--text-2);margin-top:4px;word-break:break-all";
         const paint = () => {
           const names = node.properties[f.k] || [];
           list.textContent = names.length ? names.join(" · ") : tr("aucun");
@@ -1742,9 +1809,12 @@
         };
       }
       row.appendChild(inp);
-      if (f.hint) {   // aide courte sous le champ (traduite ici, comme les libellés)
+      const ctl = f.type === "audiofiles" ? inp.querySelector("input") : inp;   // le contrôle réel (le sélecteur de fichier pour les audios)
+      ctl.id = fid;
+      if (f.hint) {   // aide courte sous le champ (traduite ici, comme les libellés), reliée au champ
         const hint = document.createElement("div");
-        hint.style.cssText = "font-size:10.5px;margin-top:4px;color:var(--text-2)";
+        hint.id = fid + "-hint"; ctl.setAttribute("aria-describedby", hint.id);
+        hint.style.cssText = "font-size:12px;margin-top:4px;color:var(--text-2)";
         hint.textContent = tr(f.hint); row.appendChild(hint);
       }
       // Unique point d'accrochage du bouton « Enrichir » : il ne s'ajoute que sous un
@@ -1756,13 +1826,16 @@
   }
   // Rafraîchit ce qui bouge pendant une génération sans reconstruire les champs
   // (reconstruire écraserait la saisie en cours).
+  // Tourne à CHAQUE frame : le DOM n'est écrit que sur changement (m13 : 0 écriture au repos).
+  const STATUS_WORD = { idle: "En attente", running: "En cours", done: "Terminé", error: "Erreur" };
   function updateLiveProps() {
     if (!selected) return;
-    const color = STATUS_COLOR[selected.status] || "#94a3b8";
-    const text = selected.statusMsg || (selected.status ? selected.status : "");
-    // `style.color` relu serait normalisé en rgb(...) : on compare à la dernière valeur écrite.
-    if (statusEl._c !== color) { statusEl.style.color = color; statusEl._c = color; }
+    const st = selected.status || "";
+    const text = selected.statusMsg || (STATUS_WORD[st] ? tr(STATUS_WORD[st]) : st);
+    const action = tr(selected.properties.outFile ? "Régénérer" : "Générer");   // « Générer » tant que la carte n'a pas de sortie
+    if (statusEl.dataset.status !== st) statusEl.dataset.status = st;   // la couleur vient du CSS, par thème
     if (statusEl.textContent !== text) statusEl.textContent = text;
+    if (btnRegen.textContent !== action) btnRegen.textContent = action;
   }
 
   lgcanvas.onSelectionChange = function (sel) {
@@ -1772,7 +1845,7 @@
     showProps(ids.length === 1 ? sel[ids[0]] : null);
   };
 
-  document.getElementById("btnRegen").onclick = () => {
+  btnRegen.onclick = () => {
     if (selected && typeof selected.generate === "function") selected.generate();
   };
   document.getElementById("btnDup").onclick = () => {
@@ -1782,10 +1855,7 @@
     clone.size = selected.size.slice();
     Object.assign(clone.properties, JSON.parse(JSON.stringify(selected.properties)));
     graph.add(clone);
-    if (clone.widgets) for (const w of clone.widgets) {
-      const src = selected.widgets && selected.widgets.find(x => x.name === w.name);
-      if (src) w.value = src.value;
-    }
+    syncWidgets(clone);
     if (clone.buildOverlay) clone.buildOverlay();
     save();
     lgcanvas.selectNode(clone);

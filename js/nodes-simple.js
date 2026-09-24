@@ -163,7 +163,9 @@
       { values: ["qwen_edit_2509", "qwen21"] });
     this.addWidget("text", "instruction", this.properties.instruction, v => { this.properties.instruction = v; });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
-    this.size = [320, 240];
+    // 360 et non 320 : le pied « Qwen-Edit 2509 · références ignorées (Qwen Image 2.1 seulement) » (dessiné, sans retour à
+    // la ligne) doit tenir en entier en FR (~326 px) ; à 320 il serait tronqué au milieu de « ignorées ».
+    this.size = [360, 240];
     setStatus(this, "idle", "");
   }
   QwenEditNode.title = "Qwen-Edit 2509 (édition)";
