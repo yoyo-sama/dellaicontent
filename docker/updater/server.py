@@ -63,8 +63,8 @@ class Handler(BaseHTTPRequestHandler):
         local_sha = local.stdout.strip()
         remote_sha = parse_ls_remote_sha(remote.stdout)
         # An update only exists on main, and only if the remote is not already in our history
-        # (branch ahead = nothing to pull). No `git fetch`: the updater runs as root and would
-        # dirty .git; a SHA unknown locally (rc 128) means the remote moved on.
+        # (branch ahead = nothing to pull). No `git fetch` here (read-only status check);
+        # a SHA unknown locally (rc 128) means the remote moved on.
         branch = run_git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
         update = branch == "main" and run_git("merge-base", "--is-ancestor", remote_sha, "HEAD").returncode != 0
         payload = {
@@ -167,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "upload interrupted (byte count mismatch)"})
             return
 
-        # mkstemp creates 0600 and this container writes as root: ComfyUI (uid 1000) must read it.
+        # mkstemp creates 0600: ComfyUI (uid 1000) must be able to read the LoRA.
         os.chmod(part_path, 0o644)
         try:
             os.link(part_path, final_path)  # unlike rename, never overwrites
@@ -189,5 +189,4 @@ if __name__ == "__main__":
         print("self-check OK")
         sys.exit(0)
 
-    subprocess.run(["git", "config", "--global", "--add", "safe.directory", REPO_DIR])
     ThreadingHTTPServer(("127.0.0.1", 8093), Handler).serve_forever()

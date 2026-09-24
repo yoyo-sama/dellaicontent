@@ -385,7 +385,14 @@ fi
 # Created as the user before the updater's bind-mount: otherwise dockerd creates it as root
 # and uploading a LoRA from the UI fails.
 mkdir -p "$COMFY_MODELS_DIR/loras" 2>/dev/null || warn "cannot create $COMFY_MODELS_DIR/loras (permissions?)."
-echo "COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras" > "$REPO_ROOT/.env"
+# APP_UID/APP_GID: the updater runs as the repo owner (docker-compose.yml), not as root.
+printf 'COMFY_LORAS_DIR=%s\nAPP_UID=%s\nAPP_GID=%s\n' "$COMFY_MODELS_DIR/loras" "$(id -u)" "$(id -g)" > "$REPO_ROOT/.env"
+if [ -d "$REPO_ROOT/.git" ] && [ -n "$(find "$REPO_ROOT/.git" ! -user "$(id -un)" -print -quit 2>/dev/null)" ]; then
+  warn ".git contains files owned by someone else (an old root updater) — the updater and 'git add' will fail."
+  echo "  Take ownership, then recreate the updater:"
+  echo "    sudo chown -R \"$(id -un):$(id -gn)\" \"$REPO_ROOT/.git\""
+  echo "    docker compose up -d --build --force-recreate updater"
+fi
 echo "LoRA path persisted in .env: COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras"
 
 UPDATER_STATUS=""

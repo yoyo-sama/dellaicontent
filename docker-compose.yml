@@ -17,6 +17,9 @@ services:
   updater:
     build: ./docker/updater
     container_name: ai-content-studio-updater
+    # The repo is mounted rw: run as its owner (install.sh writes APP_UID/APP_GID to .env),
+    # otherwise git objects created as root break `git add` for the user.
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     network_mode: host
     environment:
       - REPO_DIR=/repo
