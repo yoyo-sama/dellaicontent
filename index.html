@@ -268,6 +268,9 @@
     }
 
     .flyout .gauge-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    /* Mémoire unifiée : #gaugeRam est masquée, les 2 jauges restantes se partagent la grille. */
+    .gauge-grid:has(> .gauge[hidden]) { grid-template-columns: repeat(2, minmax(84px, 130px)); }
+    .flyout .gauge-grid:has(> .gauge[hidden]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .flyout .events { max-height: 170px; }
 
     .panel-title {
@@ -2528,6 +2531,8 @@
       "Planches": { en: "Sheets", es: "Láminas", de: "Bögen" },
       "Vidéo": { en: "Video", es: "Vídeo", de: "Video" },
       "Mémoire GPU": { en: "GPU memory", es: "Memoria GPU", de: "GPU-Speicher" },
+      "Mémoire unifiée": { en: "Unified memory", es: "Memoria unificada", de: "Einheitlicher Speicher" },
+      "Mém. unifiée": { en: "Unified mem", es: "Mem. unificada", de: "Einh. Speicher" },
       "Générer les images des plans": { en: "Generate the shot images", es: "Generar las imágenes de los planos", de: "Bilder der Einstellungen generieren" },
       "Lancer l'animatic": { en: "Start the animatic", es: "Iniciar el animatic", de: "Animatic starten" },
       "Scène": { en: "Scene", es: "Escena", de: "Szene" },
@@ -2957,6 +2962,7 @@
       renderLoraSelect();
       renderSheetLoraSelect();
       refreshSessionBar();
+      renderMemTitle();
       refreshSubjectUI();
       refreshGenerateLabel();
       if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); renderRelay(); updateCutEngineHint(); updateGateState(); }
@@ -4307,12 +4313,35 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
     // Un seul format de pourcentage : « 87% » en EN, « 87 % » ailleurs (mis à jour au sondage suivant).
     const pctText = n => (LANG === "en" ? `${n}%` : `${n} %`);
+
+    // Mémoire unifiée (NVIDIA GB10) : CPU et GPU se partagent le même pool, et le vram_free de CUDA en exclut le
+    // cache de pages du noyau (récupérable à la demande) : il annonce ~95 % d'usage pour ~42 % réels. La pression
+    // réelle est ram_free (« available » de psutil) ; sur GPU discret, vram_free/vram_total reste la bonne mesure.
+    const isUnifiedMem = (dev, sys) => !!(dev?.vram_total && sys?.ram_total && Math.abs(dev.vram_total - sys.ram_total) / sys.ram_total < 0.05);
+    let memInfo = null; // { used, total } en octets tant que la mémoire est unifiée, sinon null
+    // Libellés en clé FR + translateTree (comme le reste) ; title « 50,9 / 121,6 Go » (GiB en EN) seulement en unifiée.
+    function renderMemTitle() {
+      const f = b => { const t = (b / 2 ** 30).toFixed(1); return LANG === "en" ? t : t.replace(".", ","); };
+      const t = memInfo ? `${f(memInfo.used)} / ${f(memInfo.total)} ${LANG === "en" ? "GiB" : "Go"}` : null;
+      for (const id of ["gaugeVram", "sbGpu"]) t ? $(id).title = t : $(id).removeAttribute("title");
+    }
+    function setMemMode(sys, unified) {
+      memInfo = unified ? { used: sys.ram_total - sys.ram_free, total: sys.ram_total } : null;
+      $("gaugeRam").hidden = unified;
+      $("gaugeVram").querySelector("span").textContent = unified ? "Mém. unifiée" : "GPU Mem";
+      $("sbGpu").firstElementChild.textContent = unified ? "Mémoire unifiée" : "Mémoire GPU";
+      translateTree($("gaugeVram")); translateTree($("sbGpu"));
+      renderMemTitle();
+    }
     async function pollMonitor() {
       if (document.hidden) return;
       try {
         const s = await (await fetch(`${COMFY}/system_stats`)).json();
         const dev = (s.devices || [])[0];
-        const vram = dev?.vram_total ? Math.round((1 - dev.vram_free / dev.vram_total) * 100) : null;
+        const unified = isUnifiedMem(dev, s.system);
+        setMemMode(s.system, unified);
+        const vram = unified ? Math.round((1 - s.system.ram_free / s.system.ram_total) * 100)
+          : dev?.vram_total ? Math.round((1 - dev.vram_free / dev.vram_total) * 100) : null;
         if (vram !== null) setGauge("gaugeVram", vram, pctText(vram));
         $("sbGpu").querySelector("strong").textContent = vram === null ? "—" : pctText(vram); // barre de session
         if (s.system && s.system.ram_total) {

@@ -1,5 +1,13 @@
 # Tour de contrôle — changelog
 
+## 2026-09-25 — correctif jauge mémoire (mémoire unifiée GB10)
+
+Le Studio affichait « Mémoire GPU 95 % » (`#sbGpu`, `#gaugeVram`) pour une machine à ~42 %. Cause : sur GB10 (CPU et GPU
+partagent 121,6 Gio), `vram_free` de `/comfy/system_stats` vient de CUDA et exclut le cache de pages du noyau (récupérable).
+`index.html` seul : `isUnifiedMem` (`vram_total` ≈ `ram_total` à 5 %) ; en unifiée, pourcentage = celui de la RAM
+(`ram_free`), jauge RAM masquée (grille à 2 colonnes), libellés « Mém. unifiée » / « Mémoire unifiée » (4 langues) et `title`
+« 50,9 / 121,6 Go ». GPU discret : comportement inchangé. Docs : `docs/ARCHITECTURE.md` (barre de session), `AGENTS.md` (pièges).
+
 ## 2026-09-25 — v1.3.0 — Clôture des Vagues 3 et 4 des revues du 2026-09-23 : UX Studio et Canvas, i18n, portage des prompts au Canvas
 
 Cahier des charges : `docs/CODE-REVIEW-ERGONOMIE.md` (34 trouvailles, chacune porte désormais sa ligne
