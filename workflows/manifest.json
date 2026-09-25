@@ -122,11 +122,25 @@
       "file": "api/krea2_t2i.json"
     },
     {
+      "id": "qwen21_t2i",
+      "label": "Qwen Image 2.1 — Text2Image",
+      "pipeline": "text2image",
+      "model": "Qwen Image 2.1",
+      "file": "api/qwen21_t2i.json"
+    },
+    {
       "id": "qwen_edit_i2i",
       "label": "Qwen-Edit 2509 — Localisation / édition",
       "pipeline": "image2image",
       "model": "Qwen-Image-Edit 2509 Lightning",
       "file": "api/qwen_edit_i2i.json"
+    },
+    {
+      "id": "qwen21_i2i",
+      "label": "Qwen Image 2.1 — Édition / références",
+      "pipeline": "image2image",
+      "model": "Qwen Image 2.1",
+      "file": "api/qwen21_i2i.json"
     },
     {
       "id": "ltx25_t2v",

@@ -3013,6 +3013,7 @@
     };
     const WORKFLOW_LABELS = {
       krea2_t2i: "Krea 2 Turbo", qwen_edit_i2i: "Qwen-Edit 2509",
+      qwen21_t2i: "Qwen Image 2.1", qwen21_i2i: "Qwen Image 2.1",
       ltx25_t2v: "LTX 2.5 · audio natif", ltx25_i2v: "LTX 2.5 · audio natif",
       minimax_h3_t2v: "Minimax H3 · audio natif", minimax_h3_i2v: "Minimax H3 · audio natif",
       minimax_h3_r2v: "Minimax H3 · références", flf2v_chain: "LTX 2.5 · chaîne d'images",
@@ -3102,6 +3103,7 @@
       return manifest.workflows.find(w => w.id === modelSelect.value);
     }
 
+    const hasControl = name => !!pipelineDef(pipelineSelect.value)?.controls?.includes(name);
     function updateModelLabel() {
       const wf = currentWorkflow();
       modelLabel.textContent = wf ? `${wf.model} · ${wf.pipeline}` : "—";
@@ -3125,6 +3127,10 @@
       const krea2 = isKrea2Workflow(wf);
       negative.disabled = krea2;
       $("negativeNote").style.display = krea2 ? "" : "none";
+      // Les LoRA de style listées sont celles de Krea 2 (renderLoraSelect) : jamais proposées à
+      // Qwen Image 2.1. Le contrôle "lora" est pipeline-level (manifest), on le masque donc ici,
+      // par moteur, et on le rétablit au retour sur Krea 2.
+      $("loraStyleWrap").style.display = hasControl("lora") && !wf?.id.startsWith("qwen21_") ? "" : "none";
     }
 
     // Workflows dont le template câble `last_frame` sur MiniMaxH3ImageToVideo, donc capables
@@ -3763,7 +3769,7 @@
         // reference2video n'a que des workflows minimax_h3_r2v : l'unité résout donc
         // naturellement à 32 sans branche séparée. Les autres pipelines gardent RATIOS.
         const MP_PIPELINES = ["text2video", "image2video", "reference2video"];
-        const [width, height] = MP_PIPELINES.includes(wf.pipeline)
+        let [width, height] = MP_PIPELINES.includes(wf.pipeline)
           ? computeMPResolution(parseFloat($("mpSelect").value), ratioSelect.value, mpUnitForEngine(wf.id.startsWith("ltx25_") ? "ltx25" : "minimax_h3"))
           : RATIOS[ratioSelect.value];
         const seedRaw = seedInput.value.trim().toLowerCase();
@@ -3793,6 +3799,15 @@
           })) continue;
           if (["image2image", "image2video"].includes(wf.pipeline) && !uploaded) {
             image = await uploadInputImage();
+            // Qwen Image 2.1 fixe son latent de départ (EmptyLatentImage) : pour retoucher sans
+            // recadrer, la taille suit l'image d'entrée (~1 MP, multiples de 32), comme la carte
+            // « Édition d'image » du Canvas (docs/NOUVEAUX-MODELES-QWEN21.md, contrat lots UI).
+            // Le contrôle ratio ne joue donc pas ici, comme avec Qwen-Edit 2509.
+            if (wf.id === "qwen21_i2i") {
+              const { w: iw, h: ih } = await imageSize(await getInputBlob());
+              width = Math.round(Math.sqrt(1024 * 1024 * iw / ih) / 32) * 32;
+              height = Math.round(Math.sqrt(1024 * 1024 * ih / iw) / 32) * 32;
+            }
             // Dernière image facultative : fournie ⇒ FL2VA, absente ⇒ i2v comme avant.
             // C'est le même nœud dans les deux cas, seul `last_frame` change.
             if (isH3LastFrameWorkflow(wf) && $("lastImageInput").files[0])
@@ -3807,9 +3822,11 @@
           const promptText = isH3LastFrameWorkflow(wf)
             ? capH3Prompt(`${h3Alignment(!!lastImage, duration)}\n\n${spec.prompt}`)
             : spec.prompt;
+          // batch: 1 sur Qwen Image 2.1 en retouche — Qwen-Edit 2509 ignore « Variantes » (pas de
+          // {{BATCH}} dans son gabarit), et un lot avec latents de référence n'est pas qualifié.
           const graph = buildGraph(raw, {
             prompt: promptText, negative: negative.value.trim(),
-            seed: seed + i, width, height, batch, duration, image, image2: lastImage, fps: wf.fps
+            seed: seed + i, width, height, batch: wf.id === "qwen21_i2i" ? 1 : batch, duration, image, image2: lastImage, fps: wf.fps
           });
           applyMinimaxLastFrame(graph, !!lastImage);
           // Audio : tous les moteurs vidéo restants (LTX 2.5, Minimax H3) câblent

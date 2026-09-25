@@ -468,6 +468,59 @@ sous-dossiers `diffusion_models/`, `text_encoders/`, `vae/`. **Ne pas** ajouter
 `qwen3.5_9b_qwen_image_2.1_pe_t2i/pe_i2i` (§2 : ce ne sont pas des encodeurs, 2 × 9 471 072 252
 octets inutiles) — la roadmap est à corriger sur ce point.
 
+## Extension aux pipelines Text2Image / Image2Image du Studio
+
+**Lot Q21-STUDIO (2026-09-25).** Jusque-là Qwen Image 2.1 n'était câblé que dans l'ancrage des keyframes
+(`storyboard_v2_qwen21`) et la carte Canvas « Édition d'image ». Il est désormais **sélectionnable dans la liste
+« Moteur »** des pipelines `text2image` et `image2image` du Studio, **en coexistence** : Krea 2 Turbo (t2i) et
+Qwen-Edit 2509 (i2i) restent premiers de la liste et moteurs par défaut.
+
+| Élément | Valeur |
+|---|---|
+| `workflows/api/qwen21_t2i.json` (nouveau) | `qwen21_i2i.json` sans `LoadImage` (nœud 10) ni entrée `images.image_1` de `TextEncodeQwenImage21` ; `SaveImage` `studio/qwen21_t2i` ; placeholders `{{PROMPT}} {{NEGATIVE_PROMPT}} {{WIDTH}} {{HEIGHT}} {{BATCH}} {{SEED}}` |
+| Manifest | `qwen21_t2i` (pipeline `text2image`, « Qwen Image 2.1 — Text2Image ») après `krea2_t2i` ; `qwen21_i2i` (pipeline `image2image`, « Qwen Image 2.1 — Édition / références », `api/qwen21_i2i.json`) après `qwen_edit_i2i` |
+| Modèles | les trois de `scripts/models.txt` (transformer, `qwen3vl_8b_int8_convrot`, VAE 2.1) : rien à ajouter |
+| Affichage | `WORKFLOW_LABELS` : « Qwen Image 2.1 » pour les deux (nom propre, comme « Krea 2 Turbo » et « Qwen-Edit 2509 » : aucune clé `I18N`, donc aucune orpheline) |
+
+Le graphe t2i est celui du § 9 moins la référence : c'est le graphe de travail qualifié au § 2 (`q21/t2i_vl8b`) et
+aux § 4 (10 rendus `q21/ref_*`), avec `QwenImage21Cache`. (Le gabarit officiel ComfyUI de t2i n'a pas ce nœud, sans
+objet sans référence ; on garde le graphe réellement rendu.)
+
+**Comportement dans le Studio** (`index.html`, aucun changement de `js/engine.js`) :
+
+- **LoRA** : jamais de LoRA Krea 2 sur ce moteur. `renderLoraSelect` ne liste déjà que « Aucun » hors Krea 2 / H3 ;
+  `updateModelLabel` masque en plus le contrôle « Style (LoRA) » pour tout id `qwen21_*` et le rétablit sur Krea 2.
+  Le style texte (`currentStyleText()`) reste : il est ajouté en fin de prompt à la soumission, pour tout moteur.
+- **Enrichissement** : chemin générique (`enrichBrief` → `ENRICH_SYSTEM`), jamais `KREA2_ENRICH_SYSTEM` (réservé à
+  `KREA2_WORKFLOWS`). C'est ce que fait déjà Qwen-Edit 2509 dans ce pipeline ; `QWEN_EDIT_ENRICH_SYSTEM` est propre
+  aux keyframes. Aucune nouvelle consigne. Le négatif enrichi est encodé (§ 1) mais inutilisé à cfg 1.
+- **Taille** : t2i = table `RATIOS` (~1 MP : 1280×720, 720×1280, 1024², 832×1040, tous dans la plage qualifiée).
+  i2i = ~1 MP au **ratio de l'image d'entrée**, multiples de 32, même formule que la carte Canvas (2.1 fixe son
+  latent de départ : un ratio faux recomposerait le cadre, § 3) — le contrôle Ratio ne joue donc pas en i2i, comme
+  avec 2509 (dont le latent vient de l'image).
+- **Variantes / marchés** : t2i, `batch_size` = « Variantes » comme Krea 2. i2i, `batch` reste à 1 : 2509 ignore
+  « Variantes » (pas de `{{BATCH}}` dans son gabarit) et un lot avec latents de référence n'a pas été qualifié. Les
+  marchés cibles font un job par marché (seed + i), comme pour 2509.
+- **Une image de référence** : `TextEncodeQwenImage21` en accepte 10 (§ 4) et `addQwen21Refs` sait les greffer, mais le
+  contrôle `image` du pipeline n'en expose qu'une et aucun contrôle de références supplémentaires n'existe pour
+  `image2image` (`#refExtrasWrap` est propre à `reference2video` / `storyboard_v2`, avec un texte et un plafond de 7 qui
+  ne conviennent pas). **Piste, non construite** : références supplémentaires en i2i (jusqu'à 9, `<image2>`…).
+- Rien ne part sans clic : changer de moteur, de pipeline, de langue ou ouvrir la liste ne soumet aucun job.
+
+**Rendus réels de ce lot** (2 jobs GPU exactement, file ComfyUI vide avant chacun, graphes construits par le Studio puis
+soumis à `:8188/prompt`, 33 s chacun) :
+
+- t2i, `output/studio/qwen21_t2i_00001_.png` (1280×720, seed 42, « A red apple and a green pear on a rustic wooden table
+  beside a window, soft morning light, realistic photograph, sharp focus, shallow depth of field. ») — regardé : pomme
+  rouge et poire verte sur une table en bois patiné devant une fenêtre givrée, lumière douce du matin, profondeur de
+  champ courte, texture du bois et de la peau des fruits nettes, aucun bruit ni artefact. Fidèle au prompt.
+- i2i, `output/studio/qwen21_i2i_00002_.png` (1376×768, ratio de la source 1280×720 ; source : `output/studio/q21/t2i_vl8b_00001_.png`,
+  « Change the orange fishing net held by the old fisherman in `<image1>` into a bright green net. Keep the fisherman,
+  his navy beanie, his beard, the wooden pier, the blue boats, the mist and the cold dawn light exactly unchanged. ») —
+  regardé : le filet est devenu vert vif, le pêcheur (visage, barbe grise, bonnet marine, caban), le ponton, les
+  barques bleues, la brume et la lumière froide sont conservés ; seul le cadrage est très légèrement élargi par le
+  passage de 1280×720 à 1376×768. Net, sans bruit.
+
 ## Problèmes relevés lors de l'inspection
 
 1. **`pe_t2i` / `pe_i2i` chargés comme encodeur = bruit pur, job `success`** (§2). Piège n°14

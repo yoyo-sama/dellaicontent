@@ -4,7 +4,7 @@
 
 **Current version: 1.3.0** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
 
-**Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from a small `updater` backend service that handles in-app updates — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
+**Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit, Qwen Image 2.1) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from a small `updater` backend service that handles in-app updates — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
 
 ## Deployment (clone & run)
 
@@ -337,8 +337,9 @@ full-screen studio — there is no auto mode, and nothing is ever sent to render
   a screenplay across the segments; any segment can be re-rendered on its own, its transition
   frame picked among the last five, and given an end frame (FL2VA).
 
-Generic pipelines available everywhere: text2image (Krea 2 Turbo), image2image (Qwen-Edit
-2509), text2video and image2video (LTX 2.5 and Minimax H3, selectable in the Model menu;
+Generic pipelines available everywhere: text2image (Krea 2 Turbo by default, Qwen Image 2.1
+selectable in the Engine menu), image2image (Qwen-Edit 2509 by default, Qwen Image 2.1
+selectable — one input image, output sized on the source), text2video and image2video (LTX 2.5 and Minimax H3, selectable in the Model menu;
 optional native audio, Minimax H3 turbo can be toggled on).
 
 **Style LoRAs**: text2image, text2video, image2video and reference2video (Minimax H3) offer an

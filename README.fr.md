@@ -4,7 +4,7 @@
 
 **Version actuelle : 1.3.0** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
-Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception d'un petit service `updater` dédié aux mises à jour, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
+Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit, Qwen Image 2.1) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception d'un petit service `updater` dédié aux mises à jour, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 
 ## Déploiement (clone & run)
 
@@ -342,8 +342,9 @@ studio plein écran — il n'y a pas de mode auto, et rien ne part jamais en ren
   entre les segments ; n'importe quel segment se re-rend seul, avec son image de transition au choix
   parmi les cinq dernières frames, et une image de fin possible (FL2VA).
 
-Pipelines génériques disponibles partout : text2image (Krea 2 Turbo), image2image (Qwen-Edit 2509),
-text2video et image2video (LTX 2.5 et Minimax H3, au choix dans le menu Modèle ; audio natif
+Pipelines génériques disponibles partout : text2image (Krea 2 Turbo par défaut, Qwen Image 2.1 au choix
+dans le menu Moteur), image2image (Qwen-Edit 2509 par défaut, Qwen Image 2.1 au choix — une image d'entrée,
+sortie à la taille de la source), text2video et image2video (LTX 2.5 et Minimax H3, au choix dans le menu Modèle ; audio natif
 optionnel, turbo Minimax H3 activable).
 
 **LoRA de style** : text2image, text2video, image2video et reference2video (Minimax H3) proposent

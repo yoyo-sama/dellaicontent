@@ -1,5 +1,25 @@
 # Tour de contrôle — changelog
 
+## 2026-09-25 — Lot Q21-STUDIO : Qwen Image 2.1 sélectionnable dans Text2Image et Image2Image du Studio
+
+Demande : l'utilisateur ne trouvait pas Qwen Image 2.1 dans les pipelines Text2Image et Image2Image (il n'était câblé que
+dans l'ancrage des keyframes de `storyboard_v2` et la carte Canvas « Édition d'image »). Il est maintenant un choix de la
+liste « Moteur », **à côté** de Krea 2 Turbo (t2i) et Qwen-Edit 2509 (i2i), qui restent premiers et défauts.
+- `workflows/api/qwen21_t2i.json` (nouveau, `qwen21_i2i.json` sans `LoadImage` ni `images.image_1`, `SaveImage`
+  `studio/qwen21_t2i`) ; `workflows/manifest.json` : entrées `qwen21_t2i` et `qwen21_i2i`, ordre existant inchangé ;
+  `scripts/models.txt` inchangé (les 3 modèles y sont déjà).
+- `index.html` seul : `WORKFLOW_LABELS` (« Qwen Image 2.1 », nom propre, aucune clé `I18N` ajoutée) ; `updateModelLabel`
+  masque le contrôle LoRA pour `qwen21_*` (jamais de LoRA Krea 2 sur Qwen) ; le handler Generate calcule la taille de l'i2i
+  2.1 depuis l'image d'entrée (~1 MP, multiples de 32, formule du Canvas) et garde `batch: 1`. Enrichissement : chemin
+  générique existant, aucune nouvelle consigne. `js/engine.js`, Canvas et prompts dupliqués intacts.
+- Preuves : matrice de 37 scénarios identique octet pour octet (112 corps `/prompt`, 407 243 o, 219 uploads, 17 corps
+  ollama, 15 103 o) ; banc neuf de 10 scénarios Qwen (t2i 1 et 4 variantes × 3 ratios, i2i 832×480 et 480×832, marchés,
+  enrichissement, témoins Krea 2 / 2509, zéro job) ; parité des prompts 52 119 contrôles ; audit i18n vide ×4 langues ;
+  2 rendus réels (33 s chacun, regardés) : `output/studio/qwen21_t2i_00001_.png`, `output/studio/qwen21_i2i_00002_.png`.
+- Pistes non construites : jusqu'à 10 références en i2i (`addQwen21Refs` sait le faire, aucun contrôle ne l'expose) ;
+  carte Canvas Text2Image Qwen Image 2.1. Détail : `docs/NOUVEAUX-MODELES-QWEN21.md` § « Extension aux pipelines
+  Text2Image / Image2Image du Studio ».
+
 ## 2026-09-25 — correctif jauge mémoire (mémoire unifiée GB10)
 
 Le Studio affichait « Mémoire GPU 95 % » (`#sbGpu`, `#gaugeVram`) pour une machine à ~42 %. Cause : sur GB10 (CPU et GPU
