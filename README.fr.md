@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — démo Media & Entertainment sur GB10
 
-**Version actuelle : 1.2.0** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
+**Version actuelle : 1.3.0** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
 Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception d'un petit service `updater` dédié aux mises à jour, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 
@@ -57,7 +57,7 @@ testé sur deux exécutions consécutives) :
 
 La sortie du script et ses commentaires de code sont en anglais.
 
-**`HF_TOKEN` (jeton Hugging Face, optionnel mais nécessaire pour LTX 2.5)** : les 4 fichiers
+**`HF_TOKEN` (jeton Hugging Face, optionnel mais nécessaire pour LTX 2.5)** : les 5 fichiers
 de modèle LTX 2.5 proviennent d'un dépôt Hugging Face **"gated"** (accès restreint) — un
 téléchargement anonyme échoue en 401 tant que vous n'avez pas accepté les conditions du
 modèle. Pour les récupérer :
@@ -73,8 +73,13 @@ HF_TOKEN=<votre_jeton> ./install.sh
 ```
 
 Sans `HF_TOKEN`, les autres modèles (Krea 2, Qwen-Edit, Minimax H3) se téléchargent
-normalement — seuls les 4 fichiers LTX 2.5 échouent proprement et remontent dans le
+normalement — seuls les 5 fichiers LTX 2.5 échouent proprement et remontent dans le
 récapitulatif final, sans bloquer le reste de l'installation.
+
+Le jeton ne passe jamais en argument de ligne de commande (`curl -K -`, invisible dans `ps`), et
+le gabarit de la stack ComfyUI le relaie en `HF_TOKEN: ${HF_TOKEN:-}`, jamais en dur : pour que le
+conteneur en marche le voie, mettez `HF_TOKEN=<jeton>` dans `~/comfyui-spark/.env` (mode 600), à
+côté de `compose.yaml` et non dedans.
 
 ### Installation manuelle / dépannage
 
@@ -98,6 +103,10 @@ Trois stacks distinctes, une par service, chacune à la racine du home :
 | `~/ollama` | `ollama-api` | `ollama/ollama:latest` | 11434 | LLM local pour l'enrichissement de prompt |
 
 ComfyUI n'écoute que sur `127.0.0.1` (accès distant à son interface par `:8090/comfy/`) ; une installation existante doit reporter à la main ces 3 changements dans `~/comfyui-spark/compose.yaml` (port `"127.0.0.1:8188:8188"`, `SECURITY_LEVEL: normal`, `--enable-cors-header` retiré de `COMFY_CMDLINE_EXTRA`), `install.sh` ne recopiant le gabarit que s'il est absent.
+
+Le conteneur `updater` tourne avec l'UID du propriétaire du dépôt, pas en root : `install.sh`
+écrit `APP_UID`/`APP_GID` (1000 par défaut) dans `.env`, et affiche le `chown` exact à lancer si
+`.git` contient des fichiers appartenant à quelqu'un d'autre (laissés par un ancien updater root).
 
 `install.sh` crée les deux stacks voisines à partir des gabarits `docker/stacks/*.yml`, en
 créant leurs dossiers **avant** les conteneurs : un bind-mount dont la source n'existe pas
@@ -203,12 +212,21 @@ curl -X POST http://localhost:11434/api/pull -d '{"model":"gemma4:e4b"}'
 
 En plus du formulaire `index.html`, l'application propose un second mode : `canvas.html`, un
 éditeur de nœuds façon ComfyUI (glisser-déposer de cartes, câblage visuel). Accessible via
-`http://<host>:8090/canvas.html`, ou via le bouton "Canvas" dans l'en-tête de l'interface
-principale. C'est un mode additionnel — il ne remplace pas le formulaire `index.html`, les
-deux coexistent et partagent la même origine (aucune configuration nginx/Docker
-supplémentaire n'est nécessaire). Un tiroir fixé en bas de l'écran donne accès à l'historique
-des générations (onglets Images/Vidéos), et une vignette peut être glissée sur une carte
-"Import média" pour la réutiliser directement.
+`http://<host>:8090/canvas.html`, ou via le bouton "Canvas" de la paire « Studio | Canvas » (même
+ordre sur les deux pages). C'est un mode additionnel — il ne remplace pas le formulaire
+`index.html`, les deux coexistent et partagent la même origine (aucune configuration
+nginx/Docker supplémentaire n'est nécessaire). Ils partagent aussi langue (FR/EN/ES/DE) et
+thème : les deux pages lisent et écrivent les mêmes clés navigateur `lang` et `theme`. Un tiroir
+fixé en bas de l'écran donne accès à l'historique des générations (onglets Images/Vidéos,
+traduit), et une vignette peut être glissée sur une carte "Import média" pour la réutiliser
+directement.
+
+Sous 768 px, la palette et le panneau Propriétés deviennent deux feuilles basculantes en bas
+d'écran (une seule ouverte à la fois) et le canvas prend toute la largeur ; le bouton ⤢ recadre
+la vue sur les cartes. La carte Fiche personnage a un sélecteur « Type de sujet » (auto /
+humain / autre) qui corrige le choix du LLM à la génération suivante, et les cartes Storyboard,
+Vidéo, Génération vidéo et Reference2Video composent leurs prompts avec les règles corrigées du Studio (planches
+selon le sujet, grammaire de prompt Minimax H3).
 
 ### Accélération `comfy_kitchen` (DGX Spark / ARM64)
 
@@ -268,9 +286,31 @@ git -C ~/comfyui-spark/run/ComfyUI checkout <ancien tag, ex. v0.36.0> && docker 
 | **Storyboard + Animatic** | `storyboard_v2` (charsheet+locsheet+keyframes+cuts), `reference2video` (Minimax H3, 1 seul job), `sequence2video` (FLF2V manuel) | Storyboard N plans + animatic assemblé, OU vidéo unique personnage+décor cohérents, OU animatic first-frame→last-frame manuel, avec audio |
 | **Localized Assets** | image2image + marchés cibles | Variantes par plaque (North America, Europe, Middle East, Asia…) via Qwen-Edit |
 
-Une couche de **navigation par profils métiers** (Réalisateur/Storyboard artist, DA/Motion designer,
-Social media/Marketing, Monteur/Post-production) présélectionne scénario + pipeline sans changer le
-routing ci-dessus.
+Le Studio s'ouvre sur quatre **cartes d'objectif** — Affiche / visuel, Pub courte / campagne,
+Trailer narratif (plusieurs plans), Déclinaisons locales — chacune avec une ligne de description.
+Une carte ne fait que présélectionner scénario + pipeline : elle n'écrit jamais dans le brief
+(l'exemple est un `placeholder`) et ne lance rien. Le libellé du bouton principal dit ce que le
+clic va lancer (« Générer les planches (étape 1/3) », « Lancer la campagne… »), et avec un brief
+vide il ne lance rien (sauf les déclinaisons par marché, dont le prompt vient des marchés choisis).
+
+### Ce que vous voyez en travaillant
+
+- **Barre de session**, sous l'en-tête : les deux planches ancrées en vignettes (clic =
+  agrandir), le stepper 1-2-3 (Planches › Storyboard › Montage, ou Planches › Vidéo),
+  « Job k/n · mm:ss » tant que des jobs tournent, et la mémoire GPU en permanence. Affichage seul.
+- **Annuler plutôt que confirmer** pour une suppression de galerie ou un sujet retiré : un
+  bandeau avec un bouton Annuler pendant 5 s, en pause tant qu'il a le focus clavier. Un sujet
+  retiré remet ses planches, variantes, étiquettes de plans et validation.
+- **Bande de vignettes des plans** en tête de la section Storyboard : une vignette par plan avec
+  son statut ; un clic défile jusqu'au plan et ne lance rien.
+- **Galerie lisible** : chaque carte affiche le nom du pipeline et un extrait du prompt (nom de
+  fichier en infobulle).
+- **Langues** : FR, EN, ES, DE, pour toute l'interface y compris infobulles et statuts de job ;
+  le français, l'espagnol et l'allemand s'adressent à vous au tutoiement (tu / tú / du). Le
+  journal d'événements et les messages d'erreur restent en français, non traduits.
+- **Petits écrans** : sous 768 px, le rail et l'en-tête restent dans le flux, les sections du
+  studio défilent jusqu'à elles, les actions de projet sont en bas, et chaque cible fait au moins
+  44 px.
 
 ### Le studio storyboard
 
@@ -318,7 +358,9 @@ pas de récupération par URL).
 ```
 index.html                  ← mode formulaire (CSS + HTML + JS)
 canvas.html                 ← mode éditeur de nœuds (façon ComfyUI)
-js/                         ← moteur du mode canvas (engine.js, nodes-simple.js, nodes-advanced.js)
+js/                         ← engine.js (partagé par les deux pages), nodes-simple.js, nodes-advanced.js,
+                              canvas-gallery.js (Canvas), update-check.js (les deux pages)
+js/vendor/                  ← litegraph.js 0.7.18 + CSS vendorisés (Canvas, sans CDN)
 install.sh                  ← installation/mise à jour idempotente en une commande (recommandé)
 docker-compose.yml          ← app seule : nginx (8090) + updater (8093)
 docker/stacks/*.yml         ← gabarits des stacks voisines : ~/comfyui-spark et ~/ollama
@@ -329,13 +371,14 @@ workflows/
   api/*.json                ← templates API mono-branche avec placeholders {{PROMPT}}…
   *.json                    ← workflows complets format UI (drag-drop dans ComfyUI)
   README.md                 ← détail des workflows
-tools/convert.py            ← convertisseur UI→API (voir docs/TESTING.md)
+tools/                      ← convert.py (UI→API), onboard.py, validate.py (voir docs/TESTING.md)
 docs/
   TROUBLESHOOTING.md        ← dépannage installation/déploiement (EN) : symptômes, diagnostic, réparation, remise à zéro
   TROUBLESHOOTING.fr.md     ← même guide en français
   ARCHITECTURE.md           ← anatomie de l'app et des formats
   LESSONS.md                ← pièges & patterns validés (LIRE AVANT DE MODIFIER)
-  TESTING.md                ← méthode de validation (rendus réels, extraction frames/audio)
+  TESTING.md                ← méthode de validation (rendus réels, bancs headless, extraction frames/audio)
+  CODE-REVIEW-*.md          ← revues de code et d'UX du 2026-09-23, avec l'état de chaque trouvaille
 ai_content_studio_media_entertainment_gb10.md   ← spec fonctionnelle d'origine
 dell_ai_content_studio_prototype.html           ← ancien prototype (legacy, non utilisé)
 ```

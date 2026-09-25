@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — Media & Entertainment demo on GB10
 
-**Current version: 1.2.0** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
+**Current version: 1.3.0** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
 
 **Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from a small `updater` backend service that handles in-app updates — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
 
@@ -58,7 +58,7 @@ across two consecutive runs):
 
 The script's output and code comments are in English.
 
-**`HF_TOKEN` (Hugging Face token, optional but required for LTX 2.5)**: the 4 LTX 2.5 model
+**`HF_TOKEN` (Hugging Face token, optional but required for LTX 2.5)**: the 5 LTX 2.5 model
 files come from a **"gated"** (access-restricted) Hugging Face repository — an anonymous
 download fails with a 401 until you've accepted the model's terms. To get them:
 
@@ -73,8 +73,13 @@ HF_TOKEN=<votre_jeton> ./install.sh
 ```
 
 Without `HF_TOKEN`, the other models (Krea 2, Qwen-Edit, Minimax H3) download normally — only
-the 4 LTX 2.5 files fail cleanly and are reported in the final summary, without blocking the
+the 5 LTX 2.5 files fail cleanly and are reported in the final summary, without blocking the
 rest of the installation.
+
+The token never goes through a command-line argument (`curl -K -`, invisible in `ps`), and the
+ComfyUI stack template forwards it as `HF_TOKEN: ${HF_TOKEN:-}`, never hardcoded: to make the
+running container see it, put `HF_TOKEN=<token>` in `~/comfyui-spark/.env` (mode 600), next to
+`compose.yaml`, not inside it.
 
 ### Manual installation / troubleshooting
 
@@ -98,6 +103,10 @@ Three separate stacks, one per service, each at the root of the home directory:
 | `~/ollama` | `ollama-api` | `ollama/ollama:latest` | 11434 | Local LLM for prompt enrichment |
 
 ComfyUI only listens on `127.0.0.1` (remote access to its UI goes through `:8090/comfy/`); an existing install must carry these 3 changes over by hand into `~/comfyui-spark/compose.yaml` (port `"127.0.0.1:8188:8188"`, `SECURITY_LEVEL: normal`, `--enable-cors-header` removed from `COMFY_CMDLINE_EXTRA`), since `install.sh` only copies the template when it is missing.
+
+The `updater` container runs as the repository owner, not as root: `install.sh` writes
+`APP_UID`/`APP_GID` (default 1000) to `.env`, and warns with the exact `chown` to run if `.git`
+holds files owned by someone else (left by an old root updater).
 
 `install.sh` creates the two sibling stacks from the `docker/stacks/*.yml` templates, and
 creates their folders **before** the containers: a bind-mount whose source does not exist
@@ -203,11 +212,20 @@ curl -X POST http://localhost:11434/api/pull -d '{"model":"gemma4:e4b"}'
 
 In addition to the `index.html` form, the application offers a second mode: `canvas.html`, a
 ComfyUI-style node editor (drag-and-drop cards, visual wiring). Accessible via
-`http://<host>:8090/canvas.html`, or via the "Canvas" button in the header of the main
-interface. This is an additional mode — it doesn't replace the `index.html` form, the two
-coexist and share the same origin (no extra nginx/Docker configuration is needed). A drawer
-docked at the bottom of the screen gives access to the generation history (Images/Videos
-tabs), and a thumbnail can be dragged onto a "Media import" card to reuse it directly.
+`http://<host>:8090/canvas.html`, or via the "Canvas" button of the "Studio | Canvas" pair
+(same order on both pages). This is an additional mode — it doesn't replace the `index.html`
+form, the two coexist and share the same origin (no extra nginx/Docker configuration is
+needed). They also share language (FR/EN/ES/DE) and theme: both pages read and write the same
+`lang` and `theme` browser keys. A drawer docked at the bottom of the screen gives access to
+the generation history (Images/Videos tabs, translated), and a thumbnail can be dragged onto a
+"Media import" card to reuse it directly.
+
+Below 768 px the palette and the Properties panel become two bottom sheets (one open at a
+time) and the canvas takes the full width; the ⤢ button fits the view to the cards. The
+character-sheet card has a "Subject type" selector (auto / human / other) that overrides the
+LLM's guess on the next generation, and the Storyboard, Video, Video generation and Reference2Video
+cards compile their prompts with the Studio's corrected rules (subject-aware sheets, Minimax H3
+prompt grammar).
 
 ### `comfy_kitchen` acceleration (DGX Spark / ARM64)
 
@@ -264,9 +282,30 @@ git -C ~/comfyui-spark/run/ComfyUI checkout <old tag, e.g. v0.36.0> && docker re
 | **Storyboard + Animatic** | `storyboard_v2` (charsheet+locsheet+keyframes+cuts), `reference2video` (Minimax H3, a single job), `sequence2video` (manual FLF2V) | N-shot storyboard + assembled animatic, OR a single video with a consistent character+setting, OR a manual first-frame→last-frame animatic, with audio |
 | **Localized Assets** | image2image + target markets | Per-market variants (North America, Europe, Middle East, Asia…) via Qwen-Edit |
 
-A **role-based navigation** layer (Director/Storyboard artist, Art director/Motion designer,
-Social media/Marketing, Editor/Post-production) preselects scenario + pipeline without
-changing the routing above.
+The Studio opens on four **goal cards** — Poster / visual, Short ad / campaign, Story trailer
+(several shots), Local variants — each with a one-line description. A card only
+presets scenario + pipeline: it never writes into the brief (the example text is a
+`placeholder`), never launches anything. The main button's label says what the click will
+start ("Generate sheets (step 1/3)", "Launch the campaign…"), and with an empty brief it
+starts nothing (except per-market variants, whose prompt comes from the chosen markets).
+
+### What you see while you work
+
+- **Session bar**, under the header: the two anchored sheets as thumbnails (click = enlarge),
+  the 1-2-3 stepper (Sheets › Storyboard › Montage, or Sheets › Video), "Job k/n · mm:ss"
+  while jobs run, and GPU memory at all times. Display only.
+- **Undo instead of confirmation** for a gallery delete or a removed subject: a banner
+  with an Undo button for 5 s, paused while it has keyboard focus. A subject removed restores its
+  sheets, variants, per-shot tags and validation.
+- **Shot strip** at the top of the Storyboard section: one thumbnail per shot with its status;
+  a click scrolls to the shot and launches nothing.
+- **Readable gallery**: each card shows the pipeline name and a prompt excerpt (file name in
+  the tooltip).
+- **Languages**: FR, EN, ES, DE, for the whole interface including tooltips and job statuses;
+  French, Spanish and German address you informally (tu / tú / du). The event log and error
+  messages stay in French, untranslated.
+- **Small screens**: below 768 px the rail and header stay in the flow, the studio sections
+  scroll into view, project actions sit at the bottom, and every target is at least 44 px.
 
 ### The storyboard studio
 
@@ -313,7 +352,9 @@ upload only, no download-by-URL).
 ```
 index.html                  ← form mode (CSS + HTML + JS)
 canvas.html                 ← node-editor mode (ComfyUI-style)
-js/                         ← canvas mode engine (engine.js, nodes-simple.js, nodes-advanced.js)
+js/                         ← engine.js (shared by both pages), nodes-simple.js, nodes-advanced.js,
+                              canvas-gallery.js (Canvas), update-check.js (both pages)
+js/vendor/                  ← litegraph.js 0.7.18 + CSS, vendored (Canvas, no CDN)
 install.sh                  ← one-command idempotent install/update (recommended)
 docker-compose.yml          ← app only: nginx (8090) + updater (8093)
 docker/stacks/*.yml         ← templates for the sibling stacks: ~/comfyui-spark and ~/ollama
@@ -324,13 +365,14 @@ workflows/
   api/*.json                ← single-branch API templates with {{PROMPT}}… placeholders
   *.json                    ← full UI-format workflows (drag-and-drop into ComfyUI)
   README.md                 ← workflow details
-tools/convert.py            ← UI→API converter (see docs/TESTING.md)
+tools/                      ← convert.py (UI→API), onboard.py, validate.py (see docs/TESTING.md)
 docs/
   TROUBLESHOOTING.md        ← install/deploy troubleshooting: symptoms, diagnosis, repair, clean reinstall
   TROUBLESHOOTING.fr.md     ← same guide in French
   ARCHITECTURE.md           ← anatomy of the app and its formats
   LESSONS.md                ← pitfalls & validated patterns (READ BEFORE MODIFYING)
-  TESTING.md                ← validation method (real renders, frame/audio extraction)
+  TESTING.md                ← validation method (real renders, headless benches, frame/audio extraction)
+  CODE-REVIEW-*.md          ← 2026-09-23 code and UX reviews, with the status of each finding
 ai_content_studio_media_entertainment_gb10.md   ← original functional spec
 dell_ai_content_studio_prototype.html           ← old prototype (legacy, unused)
 ```

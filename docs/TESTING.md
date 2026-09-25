@@ -49,7 +49,7 @@ Ollama ne tournent en session distante. Elle exécute **la vraie page**, pas un 
 voit les prompts réellement compilés, les graphes réellement soumis et l'état réellement persisté.
 
 Recette : copier le dépôt dans un dossier de travail, injecter dans la copie d'`index.html` un
-`stub.js` **avant** le `<script>` inline et un `drive.js` après `</body>`, servir le tout avec
+`stub.js` **avant** `<script src="js/engine.js">` (l'engine fait ses appels réseau, la copie doit donc contenir `js/`), lui-même avant le `<script>` inline et un `drive.js` après `</body>`, servir le tout avec
 `python3 -m http.server`, puis dumper le DOM et lire un `<pre id="testOut">` que le driver ajoute.
 
 ```js
@@ -102,7 +102,20 @@ Trois pièges qui coûtent du temps si on les redécouvre :
   toute la chaîne meurt sans autre trace qu'un WARN au journal. Monkeypatcher `addEvent` pour
   collecter les WARN est ce qui le révèle.
 
-Syntaxe JS : `node --check` sur le script extrait d'`index.html`, après CHAQUE modification.
+### Les bancs des Vagues 2 à 4 (Chromium + CDP + stubs) : la méthode, et ce qui fait foi
+
+Les bancs des Vagues 2 à 4 généralisent cette recette : la vraie page (`index.html` ou `canvas.html`, `js/*.js` compris) est servie par `python3 -m http.server`, pilotée dans un **Chromium headless par CDP** (Chrome DevTools Protocol : un mini client Node 22, `WebSocket` et `fetch` globaux, sur le binaire `chrome-headless-shell` de Playwright ; aucune bibliothèque), avec un **profil Chrome vierge à chaque comparaison** (sinon le cache HTTP peut servir un `engine.js` périmé) et **tous les backends bouchonnés** (ComfyUI, Ollama, WebSocket, un vrai PNG). Le bouchon de `/comfy/prompt` est obligatoire dès qu'un banc clique « Générer » : sans lui, un job réel part (un banc de la Vague 2 a ainsi soumis un vrai job Krea 2). Un banc compare deux états du dépôt (`HEAD` et la copie modifiée, deux ports) sur le même scénario, et vérifie qu'il ne mesure pas dans le vide (**témoin négatif** : le même banc doit échouer sur un état volontairement cassé).
+
+- **Matrice de graphes = l'étalon « graphes soumis identiques octet pour octet ».** Un scénario pilote l'UI (les 11 workflows du manifest et leurs variantes : LoRA, turbo 4/6/8/off, FL2VA, marchés, références r2v, bypass des fiches, keyframes à 1 et 2 sujets sur les deux moteurs, cuts LTX 2.5 et H3 avec tenue, relay 1 s / 2 s, annulation, vision gemma…) et enregistre ce que le réseau bouchonné a reçu : corps `POST /comfy/prompt` (`client_id` retiré, mais vérifié égal à celui du Studio), uploads (nom, `overwrite`, taille, type), corps `/ollama/api/chat`, WARN du journal. Avant/après doivent être **identiques au caractère près**. État de référence à HEAD : **37 scénarios · 112 corps `/prompt` (407 243 o) · 219 uploads · 17 corps ollama (15 103 o)**. Toute retouche d'UI, d'i18n ou de mise en page (Vagues 3 et 4) a été rendue à cette matrice ; une retouche de prompt ou d'`engine.js` doit la faire bouger **seulement là où c'est voulu**, et le dire.
+- **Zéro job sur simple interaction.** Chaque banc d'UI clique (cartes d'objectif, pipelines, langues, thème, feuilles du Canvas, ⤢, onglets, annuler, sélecteur « Type de sujet »…) avec `/comfy/prompt` bouchonné en compteur et exige **0 soumission** (règle d'AGENTS.md : rien ne part sans un clic sur un bouton de génération). Un témoin positif (un clic « Générer » = 1 prompt) prouve que le compteur compte.
+- **Preuves i18n sur le DOM après retrait des `<script>`.** Les chaînes françaises du code vivent aussi dans les balises `<script>` : un scan du texte de la page en allemand y trouverait tout le français du JS. Le banc dumpe le DOM, **retire les `<script>`** puis cherche le français restant (nœuds texte, `placeholder`, `title`, `aria-label`) dans chacune des 4 langues, hors journal d'événements. Vide attendu.
+- **Mesures d'UI** (aucun chevauchement, cibles ≥ 44 px sous 768 px, contraste ≥ 4,5:1 mesuré sur le fond réel, focus clavier, zéro écriture DOM au repos pour le Canvas) : par CDP, de 320 à 1440 px de large, en clair et en sombre.
+
+**Où vivent ces bancs.** Hors dépôt, dans `~/.cache/ai-content-studio/` (un dossier par vague et par lot : `vague2/…`, `vague3/3a…3d`, `vague4/4a…4c`, `i13/…` ; le pilote CDP est `cdp.js`, les bouchons `stubs-2e.js`, la matrice `bench-graphs.js` dans les dossiers de lot). Ils **ne sont pas dans le dépôt** et ne doivent pas y être ajoutés : ils dépendent de ports et de copies de travail locales. Cette page décrit la méthode ; le dépôt ne contient **aucun test automatisé de parité** entre le Studio et l'engine (voir `docs/ARCHITECTURE.md` § Code partagé).
+
+**Rejouabilité.** Les bancs des vagues antérieures ne sont **pas rejouables tels quels** : leurs assertions lisent des libellés que la Vague 4 a renommés (« Générer les keyframes » → « Générer les images des plans », « ✎ Prompt de l'action » → « ✎ Réécrire l'action », « Re-générer » → « Régénérer », « Auto-Enrich » → « Enrichissement auto »…) et les cartes d'objectif ont remplacé le sélecteur de scénario. Seuls les bancs de **graphes** (la matrice ci-dessus) font foi, parce qu'ils pilotent l'UI par identifiants de code et ne lisent que le réseau bouchonné ; en réécrire les sélecteurs si un id de DOM change.
+
+Syntaxe JS : `node --check` sur le script extrait d'`index.html` (et sur chaque `js/*.js`), après CHAQUE modification.
 
 ```bash
 python3 -c "
@@ -160,7 +173,7 @@ Largeurs à couvrir : 390 / 768 / 1250 / 1440. Pour capturer un état localStora
 
 1. `node --check` du JS extrait, et contrôle des clés `I18N` dupliquées.
 2. Modèles référencés présents sur disque.
-3. Banc headless (§3) : assertions sur les prompts compilés ET sur les graphes réellement soumis.
+3. Banc headless (§3) : assertions sur les prompts compilés ET sur les graphes réellement soumis ; pour tout changement d'UI, matrice de graphes identique octet pour octet et zéro job sur simple interaction.
 4. Rendu réel réduit **réussi** via les fonctions exactes de la page — impossible hors du GB10, donc
    à demander à l'utilisateur, en disant clairement ce qui est vérifié et ce qui ne l'est pas.
 5. Frames inspectées (et mp3 extrait si audio).

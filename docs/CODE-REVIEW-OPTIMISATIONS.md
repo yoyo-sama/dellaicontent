@@ -357,6 +357,8 @@ s'appliquent au Canvas. Si oui, les fonctions existent déjà dans `index.html` 
 
 **État (2026-09-24)** : non corrigé — décision de l'utilisateur en attente (porter ou non les corrections de prompt au Canvas)
 
+**État (2026-09-25)** : traité — l'utilisateur a décidé le 2026-09-24 de porter ces corrections au Canvas (Vague 3, lots A1 à A3) : `55b02ff` (portage dans `js/engine.js` : fiches selon le type de sujet, ancrages keyframe, grammaire H3, `STYLE_PACKS` à 14 styles, `Engine` de 57 à 75 clés), `4145b2c` (cartes branchées : fiches, cuts H3, carte Vidéo H3, r2v, « Enrichir »), `d001015` (cuts `minimax_h3_r2v` en grammaire Ref2VA, sélecteur « Type de sujet », `h3CutBodyText` exporté, `Engine` à 76 clés). **Reste ouvert** : le code est porté, donc dupliqué entre `index.html` et `js/engine.js` (I13-B, source unique : décision en attente) ; les keyframes à deux sujets ne sont pas câblées au Canvas (la 3ᵉ fiche reste une référence de plus) ; aucun test de parité dans le dépôt (banc hors dépôt, `docs/TESTING.md` § 3).
+
 ### I14 — Duplication Studio / Canvas : une vingtaine de fonctions « portées verbatim » à maintenir deux fois
 
 `index.html` recopie depuis `js/engine.js` : `buildGraph`, `getTemplate`, `extractFiles`,
@@ -545,7 +547,7 @@ le réseau à chaque chargement de page, sans cache. Tester
 `git merge-base --is-ancestor <remote> HEAD` (après un `fetch`), refuser `/apply` hors de `main`, et
 mettre le résultat de `/status` en cache une minute.
 
-**État (2026-09-24)** : corrigé — commit `90a0122` (sans `git fetch` : l'updater tourne en root)
+**État (2026-09-24)** : corrigé — commit `90a0122` (sans `git fetch` dans `/status` : lecture seule, le SHA distant vient de `git ls-remote`). Depuis le commit `3df4c65` (Vague 2, décision Q9) l'updater ne tourne plus en root mais avec l'UID du propriétaire du dépôt (`APP_UID`/`APP_GID` dans `.env`) ; seul `/apply` fait un `git fetch`.
 
 ### M17 — `nginx.conf` `/comfy/` : 50 Mo maximum par upload
 

@@ -19,6 +19,7 @@ unless explicitly stated.
 | `skipped (native Ollama installed but not started)` | Ollama is installed outside Docker and its service is stopped | [3](#3-ollama) |
 | `skipped (port 11434 busy)` / `port is already allocated` | Another process holds the port | [3](#3-ollama) |
 | You are reinstalling on a machine where a previous version of the script already ran | Migration from the old layout to the sibling stacks | [4](#4-reinstalling-on-a-machine-where-a-previous-version-of-the-script-already-ran) |
+| `git add` or an in-app update fails with "permission denied" under `.git/objects` | Git objects created as `root` by an old updater or a container | [8](#8-git-objects-owned-by-root) |
 
 **The prompt language is never the cause.** A `JSON.parse` failing at "line 1 column 1" means
 the very first character received is not JSON (typically the `<` of `<html>`): the error
@@ -34,7 +35,7 @@ for u in /comfy/system_stats /ollama/api/version /update/status; do printf '%s -
 ```
 
 Three `200` means the services answer. A `502` or `504` on `/comfy/` or `/ollama/` is exactly
-what produces the `JSON.parse` error in the browser. Then:
+what produces the `JSON.parse` error in the browser. A `504` can also mean a call outlived its proxy timeout (`/ollama/` 300 s, `/update/` 600 s; see `docs/ARCHITECTURE.md` § Backend `updater`). Then:
 
 ```bash
 docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' | grep -iE 'comfy|ollama|content-studio'
@@ -180,8 +181,8 @@ rm -rf ~/ai-content-studio/comfyui
 cd ~/ai-content-studio && HF_TOKEN=<your_hf_token> ./install.sh 2>&1 | tee ~/install-$(date +%F-%H%M).log
 ```
 
-`HF_TOKEN` is not optional in practice: the 4 LTX 2.5 files come from a *gated* Hugging Face
-repository and fail cleanly without a token (the other 16 download normally). The `tee` keeps a
+`HF_TOKEN` is not optional in practice: the 5 LTX 2.5 files come from a *gated* Hugging Face
+repository and fail cleanly without a token (the other 17 download normally). The `tee` keeps a
 trace: the command runs for hours, and most of the errors scroll by during the downloads.
 
 Order of operations, with the durations to expect:
@@ -231,7 +232,7 @@ Run the script again: it is idempotent, and that is the best test.
 cd ~/ai-content-studio && ./install.sh 2>&1 | tail -25
 ```
 
-Expected: `reused` on all three services, `already present (not re-downloaded) : 20`,
+Expected: `reused` on all three services, `already present (not re-downloaded) : 22`,
 `Ollama model gemma4:e4b: present`, four `HTTP 200`. Then the check that really matters — does
 ComfyUI see its models:
 
@@ -239,7 +240,7 @@ ComfyUI see its models:
 docker inspect comfyui-nvidia --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' && curl -s http://localhost:8188/object_info/UNETLoader | grep -o 'minimax_h3[^"]*' | head -3
 ```
 
-Finally, in the application (`http://<ip>:8090`): **✨ Enhance (LLM)** on a prompt field, then a
+Finally, in the application (`http://<ip>:8090`): **✨ Enrich brief (LLM)** on a prompt field, then a
 simple image generation (Krea 2) before trying video.
 
 ### If the script stops midway
@@ -322,9 +323,9 @@ The best test is to run the script again: it is idempotent.
 cd ~/ai-content-studio && ./install.sh 2>&1 | tail -25
 ```
 
-Expected: `reused` on all three services, `already present (not re-downloaded) : 20`,
+Expected: `reused` on all three services, `already present (not re-downloaded) : 22`,
 `Ollama model gemma4:e4b: present`, and four `HTTP 200` health checks. Only then open
-`http://<ip>:8090`, test **✨ Enhance (LLM)** on a prompt field, then a simple image generation
+`http://<ip>:8090`, test **✨ Enrich brief (LLM)** on a prompt field, then a simple image generation
 (Krea 2) before trying video.
 
 ## 7. Rolling back a ComfyUI update
@@ -341,3 +342,16 @@ git -C ~/comfyui-spark/run/ComfyUI checkout v0.36.0 && docker restart comfyui-nv
 If the update went through but ComfyUI does not answer after ~3 min, read
 `docker logs comfyui-nvidia --tail 50`. If the ComfyUI-Manager itself was upgraded in the process,
 the reboot (`execv`) does not replay the container's userscripts: `docker restart comfyui-nvidia`.
+
+## 8. Git objects owned by root
+
+The `updater` container runs as the repository owner (`user: "${APP_UID:-1000}:${APP_GID:-1000}"`,
+values written to `.env` by `install.sh`). An older updater ran as root and left root-owned
+folders in `.git/objects`, which breaks `git add` for you. `install.sh` detects it and prints the
+fix; to check and repair by hand:
+
+```bash
+find ~/ai-content-studio/.git ! -user "$(id -un)" -print -quit        # any output = wrong owner
+sudo chown -R "$(id -un):$(id -gn)" ~/ai-content-studio/.git
+cd ~/ai-content-studio && docker compose up -d --build --force-recreate updater
+```

@@ -1,5 +1,103 @@
 # Tour de contrôle — changelog
 
+## 2026-09-25 — v1.3.0 — Clôture des Vagues 3 et 4 des revues du 2026-09-23 : UX Studio et Canvas, i18n, portage des prompts au Canvas
+
+Cahier des charges : `docs/CODE-REVIEW-ERGONOMIE.md` (34 trouvailles, chacune porte désormais sa ligne
+d'état) et `docs/CODE-REVIEW-OPTIMISATIONS.md` (I13). `VERSION` 1.2.0 → 1.3.0
+(aucun tag git posé). Chaque lot Studio (A1, 3A, 3B, 3C, 4A, 4B) a été rendu à la même matrice de graphes :
+**37 scénarios · 112 corps `/prompt` (407 243 o) · 219 uploads · 17 corps ollama (15 103 o), identiques octet
+pour octet** avant/après ; les lots Canvas (3D, 4C) à leurs bancs Canvas (graphes identiques, 0 écart), et A2/A3
+changent volontairement des textes de cartes, mesurés par le banc de cartes. Zéro job soumis sur simple
+interaction partout. Méthode et emplacement des bancs : `docs/TESTING.md` § 3.
+
+### Compléments de la Vague 2 (livrés après sa documentation, `103ae30`)
+- `3df4c65` — updater non root (Q9) : `user: "${APP_UID:-1000}:${APP_GID:-1000}"`, `APP_UID`/`APP_GID` écrits dans
+  `.env` par `install.sh`, qui signale un `.git` appartenant à quelqu'un d'autre (`docker-compose.yml`,
+  `docker/updater/server.py`, `install.sh`).
+- `ed6b216` — `tools/validate.py --no-submit` : validation structurelle après une mise à jour de ComfyUI, sans GPU.
+- `ecd141c` — `workflows/manifest.json` déclare `"comfyui": {"min": "0.37.0"}` ; `js/update-check.js` propose la
+  mise à jour par le ComfyUI-Manager (`/comfy/v2/manager/`) avec un seul `confirm` par session, refusée tant que la
+  file n'est pas vide, retour arrière rappelé (`git -C ~/comfyui-spark/run/ComfyUI checkout <tag> && docker restart comfyui-nvidia`).
+- Jeton Hugging Face : `install.sh` le passe à `curl -K -` (jamais en argument) ; la stack ComfyUI le lit dans
+  `~/comfyui-spark/.env` (`HF_TOKEN`), plus jamais en dur dans son `compose.yaml` (hors dépôt).
+
+### Vague 3 — portage des prompts au Canvas (I13) et UX
+Décision de l'utilisateur du 2026-09-24 : porter au Canvas les corrections de prompt qualifiées dans le Studio.
+- **A1** — `55b02ff` (`js/engine.js`) : fiches selon le type de sujet, keyframe à un sujet et branche à deux sujets prête,
+  `stripPromptPadding`, grammaire H3 Ref2VA et cuts H3, `STYLE_PACKS` 5 → 14 styles, `KREA2_ENRICH_SYSTEM`
+  exporté ; `Engine` 57 → 75 clés, dépendances en arguments. Banc de texte : 3 232 contrôles contre les fonctions
+  du Studio (témoin négatif : 3 071 échecs contre l'ancien engine.js).
+- **A2** — `4145b2c` (`canvas.html`, `js/nodes-advanced.js`, `js/nodes-simple.js`) : cartes branchées (type de sujet détecté
+  transmis à la planche, cuts H3 et carte Vidéo H3 en grammaire, r2v, « Enrichir » avec la consigne du Studio),
+  9 libellés de style traduits. Banc de cartes réelles : 355 contrôles, 130 clés changent (cuts H3, carte Vidéo H3, r2v),
+  533 identiques.
+- **A3** — `d001015` (`canvas.html`, `js/engine.js`, `js/nodes-advanced.js`) : cuts `minimax_h3_r2v` en grammaire Ref2VA
+  (`<Picture 3>` = keyframe du plan), sélecteur « Type de sujet » (auto / humain / autre) sur la fiche personnage,
+  `characterSheetFromBrief(scene, onEvent, forceKind)` et `h3CutBodyText` exportés : `Engine` 75 → **76 clés**, les
+  25 noms du Studio inchangés. 550 contrôles de texte, 29 contrôles d'interface. Un rendu réel : cut r2v de 2 s
+  (56 images, 24 fps, audio), identité et décor tenus. Non qualifié : un seul rendu r2v (sujet animal), pas de rendu
+  Krea 2 avec type imposé, pas d'essai à plusieurs cuts.
+- **3A** — `04e5161` (`index.html`) : quatre cartes d'objectif à la place des profils métiers et des onglets (S1, S5, S6, X2,
+  S8 partiel) ; le brief n'est plus jamais écrit par l'app (l'exemple est un `placeholder`) ; garde de brief vide ;
+  libellé du bouton principal selon le pipeline. 38 preuves spécifiques. Écart assumé : un brief vide bloque aussi
+  `sequence2video` (l'app y écrivait auparavant un exemple).
+- **3B** — `057bc1f` (`index.html`) : barre de session `#sessionBar` (vignettes ancrées, stepper 1-2-3, « Job k/n · mm:ss »,
+  mémoire GPU), en-tête en grille, jauges réparées (S3, S10 stepper, S12, S13, S15, S16, S17). 41 preuves ; jauge
+  remplie sur 583 px contre 0 avant.
+- **3C** — `7764e91` (`index.html`) : mise en page sous 768 px, rail dans le flux, en-tête compact (213 → 93 px à 390 px),
+  cibles de 44 px, contrôles de génération remontés au-dessus du bouton (S4, S14, S19). 70 preuves dont zéro job sur
+  108 pages d'interaction ; desktop et 768 px inchangés (captures identiques à l'octet, sauf 4 états à 12–78 pixels de bruit).
+- **3D** — `f95edd8` (`canvas.html`) : Canvas sous 768 px, palette et Propriétés en feuilles basculantes, ⤢ qui cadre les
+  cartes, `resize` corrigé à la racine (C1, C8, C9 partiel). 68 cas, 0 écriture DOM au repos (M13 non régressé).
+
+### Vague 4 — i18n, vocabulaire, annulation, Canvas résiduel
+- **4A** — `692f0c0` (`index.html`) : `tr()` applique les entrées `fr:` (cause racine de S7), `translateTree` traduit `title` et
+  `aria-label`, statuts de job traduits, `PIPELINE_LABELS`/`WORKFLOW_LABELS` (le manifest garde ses libellés techniques),
+  vocabulaire unifié (image du plan, « Plan-séquence (Relay) », « Moteur », « Régénérer », « ✎ Réécrire l'action »,
+  « ✎ Prompt image complet », « ✨ Enrichissement auto »), tutoiement en FR/ES/DE (S7, S8, S9, X4, C11). Le journal et
+  les erreurs restent non traduits (contrat des benches). 159 preuves, audit i18n vide dans les 4 langues.
+- **4B** — `703994e` (`index.html`) : `undoToast` (suppression de galerie et `removeSubject` annulables, 5 s, garde « projet
+  changé »), titres de galerie lisibles (`assetTitle`, extrait du prompt), bande de vignettes `#shotStrip` (S11, S18, S10).
+  159 + 92 preuves, 0 `/comfy/prompt` sur les 37 pages.
+- **4C** — `7fb2df2` (`canvas.html`, `js/canvas-gallery.js`, `js/nodes-advanced.js`, `js/nodes-simple.js`) : UX résiduelle du
+  Canvas (C2 à C11, X1, X3, X4) : plus de « + » inopérant en 2509, `syncWidgets` après `graph.configure`, « Générer »/« Régénérer »
+  et statuts traduits, chevron des listes, étiquette technique retirée de l'en-tête de carte, trailer de gauche à droite,
+  textes ≥ 12 px, tiroir traduit et au clavier, clés `theme`/`lang` partagées avec le Studio, ordre « Studio | Canvas ».
+  Bancs canvas : 550 contrôles, 0 écart ; 170 preuves.
+- **doc** — ce lot : `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/TROUBLESHOOTING.md` et `.fr.md`,
+  états des deux revues, `README.md` et `README.fr.md`, `VERSION`, ce changelog.
+
+### Écarts assumés
+- **Duplication Studio/Canvas maintenue** : le code de compilation de prompts est porté dans `js/engine.js`, pas partagé ;
+  les deux copies doivent rester identiques jusqu'à I13-B (source unique, décision de l'utilisateur en attente). Aucun test
+  de parité n'existe dans le dépôt ; les bancs vivent hors dépôt (`~/.cache/ai-content-studio/`).
+- **Non traité** : Trailer illisible à 768 px (C7) ; texte dessiné du canvas litegraph à ≈ 2,6:1 en thème clair (C10) ;
+  « Mégapixels » et « Style H3 (LoRA) » sans clé `I18N` au Canvas ; sélection d'entrée non rétablie après « Annuler » d'une
+  suppression de galerie (S11) ; compteur de jobs par rafale (le relay repart à 1/1 à chaque segment, S12) ; gestes tactiles
+  réels non validés sur appareil (C1) ; forme du sélecteur de langue (X1) et icônes SVG/émojis (X4) non harmonisées ; keyframes
+  à deux sujets non câblées au Canvas.
+- Les bancs des vagues antérieures ne sont pas rejouables tels quels (libellés renommés) : seuls les bancs de graphes font foi.
+
+### Incidents et leçons
+- Des **limites de dépense mensuelle** ont interrompu des agents en cours de lot (comme déjà pour 2B en Vague 2).
+- Un banc a **soumis par erreur un vrai job Krea 2** (même famille d'erreur que 2D) ; le PNG produit a été supprimé à la
+  demande de l'utilisateur. Règle : un banc qui clique « Générer » bouche `/comfy/prompt` et compte les soumissions.
+- Une affirmation « aucun job GPU » s'est révélée fausse et a été corrigée : ne jamais l'écrire sans le compteur de
+  soumissions du banc qui la prouve.
+- `.git/objects` appartenait à **root** (écritures d'une session ou d'un conteneur), ce qui cassait `git add` : corrigé par
+  `chown -R` sur `.git` ; `install.sh` détecte désormais le cas et affiche la commande (`docs/TROUBLESHOOTING.md` § 8).
+
+### Retour arrière
+- Vague 4 : `git revert 703994e 692f0c0 7fb2df2` (4B, 4A, 4C, du plus récent au plus ancien : 4B s'appuie sur 4A dans
+  `index.html`). Les lots 3A à 3D et I13 sont antérieurs et ne dépendent pas de la Vague 4.
+- Vague 3 : `git revert` des commits `f95edd8 7764e91 057bc1f 04e5161` ; I13 : `d001015 4145b2c 55b02ff`, du plus récent au plus ancien.
+- Mise à jour de ComfyUI : commande de retour arrière de la section « Compléments de la Vague 2 » ci-dessus.
+
+### Reste à faire
+- I13-B (source unique Studio/Canvas pour la compilation de prompts) : décision de l'utilisateur.
+- Décisions de l'utilisateur, toutes tranchées : Q1 porter les prompts au Canvas (I13, fait) ; Q2 ne pas fermer Ollama au LAN (`0.0.0.0:11434` reste voulu) ; Q4 jeton HF en `.env` (fait) ; Q8 tutoiement (fait, Studio et Canvas) ; Q9 updater non root + mise à jour de ComfyUI (`3df4c65`, `ecd141c`).
+- Les réserves de la section « Écarts assumés ».
+
 ## 2026-09-24 (suite) — Vague 2 des revues du 2026-09-23 : infra, Canvas, storyboard, E/S, nettoyage, dédoublonnage
 
 Cahier des charges : `docs/CODE-REVIEW-OPTIMISATIONS.md` (état de chaque trouvaille renseigné en
