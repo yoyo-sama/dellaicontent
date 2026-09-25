@@ -880,6 +880,14 @@
       font-size: 12px;
     }
     .ref-subject .rs-tag { color: var(--accent); font-weight: 600; white-space: nowrap; }
+    /* i2i Qwen 2.1 : une croix par ligne pour retirer une référence ; au-delà du plafond, la ligne est grisée. */
+    .ref-subject.ref-removable { grid-template-columns: auto 1fr auto; }
+    .ref-subject.ref-ignored .rs-tag { color: var(--text-2); }
+    .ref-subject.ref-ignored .rs-name { text-decoration: line-through; }
+    .ref-subject .rs-x {
+      border: 1px solid var(--border-light); background: var(--card-2); color: var(--text-2);
+      border-radius: var(--pill); padding: 2px 9px; font-size: 11px; cursor: pointer;
+    }
     .ref-subject .rs-name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .seq-list { display: grid; gap: 8px; }
     .seq-item {
@@ -2042,12 +2050,14 @@
               <h3 class="section-title">Références supplémentaires</h3>
               <p class="hint r2v-only">En plus des fiches personnage/décor générées automatiquement (ref_image_0/1). Aucune obligatoire.</p>
               <p class="hint q21-only" style="display:none">Ajoutées à chaque image de plan Qwen Image 2.1, après les planches : &lt;image3&gt;, &lt;image4&gt;… (un rang plus loin sur un plan à deux sujets). Nomme-les dans l'action du plan.</p>
+              <p class="hint i2i-only" style="display:none">Qwen Image 2.1 accepte jusqu'à 10 images en tout. L'image d'entrée est &lt;image1&gt; ; tes références sont &lt;image2&gt;, &lt;image3&gt;… dans l'ordre de la liste ci-dessous. Cite-les dans ta consigne, par exemple : « mets le personnage de &lt;image1&gt; dans le décor de &lt;image2&gt; ». Le résultat garde la taille de l'image d'entrée ; chaque référence allonge le rendu.</p>
               <label>
-                Images de référence supplémentaires (max 7)
+                <span class="ref-max7">Images de référence supplémentaires (max 7)</span>
+                <span class="ref-max9" style="display:none">Images de référence supplémentaires (max 9)</span>
                 <input type="file" id="refImagesInput" accept="image/*" multiple />
               </label>
               <p class="hint r2v-only">Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.</p>
-              <div class="ref-subjects r2v-only" id="refSubjects"></div>
+              <div class="ref-subjects" id="refSubjects"></div>
               <label class="r2v-only">
                 Vidéos de référence (max 3)
                 <input type="file" id="refVideosInput" accept="video/*" multiple />
@@ -2792,6 +2802,13 @@
       "Asia": { fr: "Asie", es: "Asia", de: "Asien" },
       "Style fiches perso/décor (LoRA)": { en: "Character/location sheet style (LoRA)", es: "Estilo de fichas de personaje/decorado (LoRA)", de: "Stil der Figuren-/Schauplatzblätter (LoRA)" },
       "Images de référence supplémentaires (max 7)": { en: "Additional reference images (max 7)", es: "Imágenes de referencia adicionales (máx. 7)", de: "Zusätzliche Referenzbilder (max. 7)" },
+      "Images de référence supplémentaires (max 9)": { en: "Additional reference images (max 9)", es: "Imágenes de referencia adicionales (máx. 9)", de: "Zusätzliche Referenzbilder (max. 9)" },
+      "Qwen Image 2.1 accepte jusqu'à 10 images en tout. L'image d'entrée est <image1> ; tes références sont <image2>, <image3>… dans l'ordre de la liste ci-dessous. Cite-les dans ta consigne, par exemple : « mets le personnage de <image1> dans le décor de <image2> ». Le résultat garde la taille de l'image d'entrée ; chaque référence allonge le rendu.": {
+        en: "Qwen Image 2.1 takes up to 10 images in all. The input image is <image1>; your references are <image2>, <image3>… in the order of the list below. Name them in your prompt, for example: “put the character from <image1> into the setting of <image2>”. The result keeps the size of the input image; each reference makes the render longer.",
+        es: "Qwen Image 2.1 admite hasta 10 imágenes en total. La imagen de entrada es <image1>; tus referencias son <image2>, <image3>… en el orden de la lista de abajo. Cítalas en tu instrucción, por ejemplo: «pon al personaje de <image1> en el decorado de <image2>». El resultado conserva el tamaño de la imagen de entrada; cada referencia alarga el renderizado.",
+        de: "Qwen Image 2.1 nimmt insgesamt bis zu 10 Bilder an. Das Eingabebild ist <image1>; deine Referenzen sind <image2>, <image3>… in der Reihenfolge der Liste unten. Nenne sie in deiner Anweisung, zum Beispiel: „Setze die Figur aus <image1> in den Schauplatz von <image2>“. Das Ergebnis behält die Größe des Eingabebilds; jede Referenz verlängert das Rendern." },
+      "ignorée (max 9)": { en: "ignored (max 9)", es: "ignorada (máx. 9)", de: "ignoriert (max. 9)" },
+      "Retirer cette référence": { en: "Remove this reference", es: "Quitar esta referencia", de: "Diese Referenz entfernen" },
       "Vidéos de référence (max 3)": { en: "Reference videos (max 3)", es: "Vídeos de referencia (máx. 3)", de: "Referenzvideos (max. 3)" },
       "Audios de référence (max 3)": { en: "Reference audios (max 3)", es: "Audios de referencia (máx. 3)", de: "Referenz-Audios (max. 3)" },
       "Ignorer les fiches, mes références seulement — utilise les 2 premières images de « Images de référence supplémentaires » comme ref_image_0/1": {
@@ -3116,12 +3133,16 @@
       if (!lastOk) $("lastImageInput").value = "";
       // Références supplémentaires (#refExtrasWrap, contrôle "refs" de reference2video) :
       // montrées aussi sur storyboard_v2 quand le moteur d'ancrage est Qwen Image 2.1, qui
-      // les consomme (submitKeyframeJob). Qwen-Edit 2509 n'en consomme aucune : masquées.
-      // Un seul contrôle, un seul plafond (7) ; seules les lignes propres à H3 changent.
-      const q21 = wf?.anchor === "api/qwen21_dual.json";
-      if (pipelineSelect.value === "storyboard_v2") $("refExtrasWrap").style.display = q21 ? "" : "none";
-      document.querySelectorAll("#refExtrasWrap .r2v-only").forEach(el => { el.style.display = q21 ? "none" : ""; });
-      document.querySelectorAll("#refExtrasWrap .q21-only").forEach(el => { el.style.display = q21 ? "" : "none"; });
+      // les consomme (submitKeyframeJob), et sur image2image avec le moteur Qwen Image 2.1
+      // (qwen21_i2i, plafond 9). Qwen-Edit 2509 n'en consomme aucune : masquées.
+      // Un seul composant ; le contexte (refCtx) choisit le plafond, le texte d'aide et la liste.
+      const ctx = refCtx(wf), sb = ctx === "sb", i2i = ctx === "i2i";
+      if (["storyboard_v2", "image2image"].includes(pipelineSelect.value)) $("refExtrasWrap").style.display = ctx ? "" : "none";
+      swapRefFiles(i2i);
+      const showRef = (sel, on) => document.querySelectorAll(`#refExtrasWrap ${sel}`).forEach(el => { el.style.display = on ? "" : "none"; });
+      showRef(".r2v-only", !sb && !i2i); showRef(".q21-only", sb); showRef(".i2i-only", i2i);
+      showRef(".ref-max7", !i2i); showRef(".ref-max9", i2i);
+      $("refSubjects").style.display = sb ? "none" : "";
       // Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a pas de
       // placeholder {{NEGATIVE_PROMPT}} (piège n°16) : champ désactivé plutôt que sans effet.
       const krea2 = isKrea2Workflow(wf);
@@ -3745,6 +3766,16 @@
     // passerait sinon l'index comme nom à uploadBlob.
     function uploadRefFile(file) { return uploadBlob(file, file.name); }
 
+    // Références Qwen Image 2.1 en Image2Image : <image2>, <image3>… dans l'ordre de la liste, plafond
+    // appliqué ici aussi (l'UI n'est pas la seule barrière) : les 9 premières sont gardées.
+    async function collectQ21I2IRefs() {
+      swapRefFiles(true);   // le champ contient bien les images de l'i2i, même si l'UI n'a pas été rafraîchie
+      const files = Array.from($("refImagesInput").files);
+      if (files.length > Q21_I2I_REFS_MAX)
+        addEvent("WARN", `Références Qwen Image 2.1 limitées à ${Q21_I2I_REFS_MAX} (10 images avec l'image d'entrée) — ${files.length - Q21_I2I_REFS_MAX} fichier(s) ignoré(s).`, "warn");
+      return Promise.all(files.slice(0, Q21_I2I_REFS_MAX).map(uploadRefFile));
+    }
+
     $("generateBtn").addEventListener("click", async () => {
       const wf = currentWorkflow();
       if (!wf) { addEvent("WARN", "Aucun workflow sélectionné.", "warn"); return; }
@@ -3791,7 +3822,7 @@
         const jobsSpec = wf.pipeline === "image2image" && selectedMarkets.size
           ? [...selectedMarkets].map(id => ({ prompt: withStyle(marketPrompt(id)), tag: MARKETS[id].label }))
           : [{ prompt: withStyle(brief.value.trim()), tag: null }];
-        let image = "", lastImage = "", uploaded = false;
+        let image = "", lastImage = "", uploaded = false, q21Refs = [];
         for (let i = 0; i < jobsSpec.length; i++) {
           const spec = jobsSpec[i];
           if (await tryCloudGeneration(wf, {
@@ -3807,6 +3838,7 @@
               const { w: iw, h: ih } = await imageSize(await getInputBlob());
               width = Math.round(Math.sqrt(1024 * 1024 * iw / ih) / 32) * 32;
               height = Math.round(Math.sqrt(1024 * 1024 * ih / iw) / 32) * 32;
+              q21Refs = await collectQ21I2IRefs();   // <image2>… : uploadées une fois, partagées par tous les marchés
             }
             // Dernière image facultative : fournie ⇒ FL2VA, absente ⇒ i2v comme avant.
             // C'est le même nœud dans les deux cas, seul `last_frame` change.
@@ -3828,6 +3860,7 @@
             prompt: promptText, negative: negative.value.trim(),
             seed: seed + i, width, height, batch: wf.id === "qwen21_i2i" ? 1 : batch, duration, image, image2: lastImage, fps: wf.fps
           });
+          if (wf.id === "qwen21_i2i") addQwen21Refs(graph, q21Refs);   // aucune référence : graphe inchangé
           applyMinimaxLastFrame(graph, !!lastImage);
           // Audio : tous les moteurs vidéo restants (LTX 2.5, Minimax H3) câblent
           // CreateVideo.audio nativement dans leur template — rien à ajouter côté JS.
@@ -4112,19 +4145,28 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // remplir laisserait croire qu'il agit. Le style courant est transmis en PRIMARY_STYLE
     // pour que gemma compose autour de lui au lieu d'en inventer un concurrent — il n'est
     // pas réécrit dans le prompt, il est ajouté en fin de prompt au moment de la soumission.
+    const Q21_TOKEN_RE = /[<>]\s*image\s*(\d+)\s*[<>]/gi, Q21_STUB_RE = /\bQ21IMAGEREF\s*_?(\d+)\b/gi;
     async function enrichBrief(wf) {
       const krea2 = isKrea2Workflow(wf);
       const system = krea2 ? KREA2_ENRICH_SYSTEM : ENRICH_SYSTEM;
       const styleText = krea2 ? currentStyleText() : "";
-      const user = brief.value.trim() + (styleText ? `\nPRIMARY_STYLE: ${styleText}` : "");
+      // i2i Qwen Image 2.1 : les <imageN> du brief ne traversent pas gemma (strip-then-reappend, comme
+      // les <Subject N> de H3) ; si l'une manque à la sortie, le brief d'origine est conservé.
+      const q21 = wf?.id === "qwen21_i2i", src = brief.value.trim();
+      const cited = q21 ? [...src.matchAll(Q21_TOKEN_RE)].map(m => m[1]) : [];
+      const user = (q21 ? src.replace(Q21_TOKEN_RE, (_, n) => `Q21IMAGEREF${n}`) : src) + (styleText ? `\nPRIMARY_STYLE: ${styleText}` : "");
       $("stepEnrich").classList.add("active");
       try {
         const out = await gemmaJSON(system, user);
         let stripped = 0;
         if (out.positive_prompt) {
-          const raw = out.positive_prompt;
-          brief.value = krea2 ? stripPromptPadding(raw) : raw;
-          stripped = raw.length - brief.value.length;
+          const raw = q21 ? out.positive_prompt.replace(Q21_STUB_RE, (_, n) => `<image${n}>`).replace(Q21_TOKEN_RE, (_, n) => `<image${n}>`) : out.positive_prompt;
+          if (cited.some(n => !raw.includes(`<image${n}>`)))
+            addEvent("WARN", "Enrichissement écarté : les mentions <imageN> de ta consigne avaient disparu de la sortie de gemma — consigne d'origine conservée.", "warn");
+          else {
+            brief.value = krea2 ? stripPromptPadding(raw) : raw;
+            stripped = out.positive_prompt.length - brief.value.length;
+          }
         }
         if (!krea2 && out.negative_prompt) negative.value = out.negative_prompt;
         addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
@@ -5651,6 +5693,33 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     function refImageFiles() {
       return Array.from($("refImagesInput").files).slice(0, REF_EXTRA_CAPS.refImagesInput[0]);
     }
+    // Un seul composant « Références supplémentaires » pour trois usages : "r2v" (reference2video),
+    // "sb" (storyboard_v2 + ancrage Qwen Image 2.1), "i2i" (image2image + Qwen Image 2.1, plafond 9 :
+    // 10 images avec l'image d'entrée, plafond prouvé, docs/NOUVEAUX-MODELES-QWEN21.md §4). "" = masqué.
+    const Q21_I2I_REFS_MAX = 9;
+    function refCtx(wf = currentWorkflow()) {
+      const p = pipelineSelect.value;
+      if (p === "reference2video") return "r2v";
+      if (p === "storyboard_v2" && wf?.anchor === "api/qwen21_dual.json") return "sb";
+      if (p === "image2image" && wf?.id === "qwen21_i2i") return "i2i";
+      return "";
+    }
+    // #refImagesInput est partagé : les images de l'i2i sont mises de côté quand on quitte ce
+    // contexte (autre moteur, autre pipeline) et rendues au retour — jamais perdues, jamais
+    // envoyées à un autre pipeline (ni les images r2v/storyboard à l'i2i).
+    const refStash = { i2i: [], other: [] };
+    let refInI2I = false;
+    function setRefFiles(files) {
+      const dt = new DataTransfer(); files.forEach(f => dt.items.add(f));
+      $("refImagesInput").files = dt.files;
+    }
+    function swapRefFiles(toI2I) {
+      if (toI2I === refInI2I) return;
+      refStash[refInI2I ? "i2i" : "other"] = Array.from($("refImagesInput").files);
+      setRefFiles(refStash[toI2I ? "i2i" : "other"]);
+      refInI2I = toI2I;
+      refreshSubjectUI();
+    }
     // Liste ordonnée {kind, name} des sujets du prochain job r2v, slots dans l'ordre.
     function plannedSubjects() {
       const files = refImageFiles();
@@ -5692,18 +5761,27 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     function renderRefSubjects() {
       const list = $("refSubjects");
       list.innerHTML = "";
-      const skip = $("skipSheetsToggle").checked;
-      refImageFiles().forEach((file, i) => {
+      const skip = $("skipSheetsToggle").checked, i2i = refCtx() === "i2i";
+      (i2i ? Array.from($("refImagesInput").files) : refImageFiles()).forEach((file, i) => {
         const n = skip ? i + 1 : i + 3;
+        const ignored = i2i && i >= Q21_I2I_REFS_MAX;
         const row = document.createElement("div");
-        row.className = "ref-subject";
+        row.className = "ref-subject" + (i2i ? " ref-removable" : "") + (ignored ? " ref-ignored" : "");
         const tag = document.createElement("div");
         tag.className = "rs-tag";
-        tag.textContent = `${tr("Sujet")} ${n}`;
+        // i2i : l'étiquette est le jeton que le prompt cite (<image2>, <image3>…), image 1 = l'image d'entrée.
+        tag.textContent = ignored ? tr("ignorée (max 9)") : i2i ? `<image${i + 2}>` : `${tr("Sujet")} ${n}`;
         const name = document.createElement("div");
         name.className = "rs-name";
         name.textContent = file.name;
         row.append(tag, name);
+        if (i2i) {
+          const x = document.createElement("button");
+          x.type = "button"; x.className = "rs-x"; x.textContent = "✕";
+          x.title = x.ariaLabel = tr("Retirer cette référence");
+          x.addEventListener("click", () => { setRefFiles(Array.from($("refImagesInput").files).filter((_, j) => j !== i)); refreshSubjectUI(); });
+          row.appendChild(x);
+        }
         list.appendChild(row);
       });
     }

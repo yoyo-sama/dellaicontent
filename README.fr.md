@@ -345,9 +345,14 @@ studio plein écran — il n'y a pas de mode auto, et rien ne part jamais en ren
   parmi les cinq dernières frames, et une image de fin possible (FL2VA).
 
 Pipelines génériques disponibles partout : text2image (Krea 2 Turbo par défaut, Qwen Image 2.1 au choix
-dans le menu Moteur), image2image (Qwen-Edit 2509 par défaut, Qwen Image 2.1 au choix — une image d'entrée,
+dans le menu Moteur), image2image (Qwen-Edit 2509 par défaut, Qwen Image 2.1 au choix — image d'entrée plus jusqu'à 9 références,
 sortie à la taille de la source), text2video et image2video (LTX 2.5 et Minimax H3, au choix dans le menu Modèle ; audio natif
 optionnel, turbo Minimax H3 activable).
+
+L'image2image Qwen Image 2.1 accepte jusqu'à 10 images en tout : l'image d'entrée plus jusqu'à 9 références supplémentaires (bloc
+« Références supplémentaires », affiché pour ce seul moteur). L'image d'entrée est `<image1>`, les références sont `<image2>`,
+`<image3>`… dans l'ordre de la liste ; cite-les dans la consigne (ex. : « mets le personnage de `<image1>` dans le décor de
+`<image2>` »). Qwen-Edit 2509 reste à une image.
 
 **LoRA de style** : text2image, text2video, image2video et reference2video (Minimax H3) proposent
 un sélecteur de LoRA de style optionnel, aussi bien dans Studio que dans Canvas. La liste est

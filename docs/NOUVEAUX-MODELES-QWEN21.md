@@ -501,10 +501,10 @@ objet sans référence ; on garde le graphe réellement rendu.)
 - **Variantes / marchés** : t2i, `batch_size` = « Variantes » comme Krea 2. i2i, `batch` reste à 1 : 2509 ignore
   « Variantes » (pas de `{{BATCH}}` dans son gabarit) et un lot avec latents de référence n'a pas été qualifié. Les
   marchés cibles font un job par marché (seed + i), comme pour 2509.
-- **Une image de référence** : `TextEncodeQwenImage21` en accepte 10 (§ 4) et `addQwen21Refs` sait les greffer, mais le
+- **[Levé par le lot Q21-REFS, voir la dernière section] Une image de référence** : `TextEncodeQwenImage21` en accepte 10 (§ 4) et `addQwen21Refs` sait les greffer, mais le
   contrôle `image` du pipeline n'en expose qu'une et aucun contrôle de références supplémentaires n'existe pour
   `image2image` (`#refExtrasWrap` est propre à `reference2video` / `storyboard_v2`, avec un texte et un plafond de 7 qui
-  ne conviennent pas). **Piste, non construite** : références supplémentaires en i2i (jusqu'à 9, `<image2>`…).
+  ne conviennent pas). Construit depuis : références supplémentaires en i2i (jusqu'à 9, `<image2>`…).
 - Rien ne part sans clic : changer de moteur, de pipeline, de langue ou ouvrir la liste ne soumet aucun job.
 
 **Rendus réels de ce lot** (2 jobs GPU exactement, file ComfyUI vide avant chacun, graphes construits par le Studio puis
@@ -579,3 +579,57 @@ est un peu fantaisiste. Pas d'artefact de bruit ni de tuile.
 5. **2509 fait des fautes de texte** (« GOS TEMPES », « / ACCÉS ») et laisse un liseré clair en
    bordure ; 2.1 écrit juste.
 6. `tools/object_info.json` est ignoré par git : le rafraîchir ne laisse aucune trace versionnée.
+
+## Références multiples en Image2Image du Studio
+
+**Lot Q21-REFS (2026-09-25).** Suite de Q21-STUDIO : la piste « références supplémentaires en i2i » de la section précédente
+est construite. Avec le moteur « Qwen Image 2.1 » (`qwen21_i2i`) du pipeline `image2image`, le Studio envoie **jusqu'à 10 images
+en tout** : l'image d'entrée (`<image1>`, contrôle `image`) + **9 références** (`<image2>`…`<image10>`). Le plafond est celui prouvé
+au § 4 (10 rendus fidèles) ; il vaut 9 ici parce que l'image principale occupe déjà `image_1`. Qwen-Edit 2509 (`qwen_edit_i2i`)
+reste **strictement inchangé** (une image, aucune référence, même avec des références en mémoire).
+
+**Contrat des entrées** (identique au Canvas et aux keyframes : `addQwen21Refs` de `js/engine.js`, aucune logique de graphe neuve) :
+
+| Entrée | Contenu | Cité dans la consigne |
+|---|---|---|
+| `images.image_1` | l'image d'entrée (`{{IMAGE}}` du gabarit) — la taille de sortie la suit (~1 MP, multiples de 32) | `<image1>` |
+| `images.image_2` … `images.image_10` | les références, **dans l'ordre affiché** de la liste, ids de nœud `q21ref1`…`q21ref9` | `<image2>` … `<image10>` |
+
+Tous les marchés cibles partagent les mêmes références (un job par marché, seed + i) ; les images sont téléversées **une seule fois**
+(`uploadRefFile` dans le bloc `!uploaded` du handler Generate, comme l'image principale). **0 référence ⇒ graphe identique octet pour
+octet** à celui de 6315fb1 (`addQwen21Refs` avec une liste vide ne touche à rien).
+
+**UI.** Un seul composant, le bloc « Références supplémentaires » (`#refExtrasWrap`, champ `#refImagesInput`), pour trois usages
+choisis par `refCtx()` : `r2v` (reference2video, plafond 7), `sb` (storyboard_v2 + ancrage Qwen Image 2.1, plafond 7), `i2i`
+(image2image + Qwen Image 2.1, plafond `Q21_I2I_REFS_MAX` = 9). Le contexte choisit le libellé (« max 7 » / « max 9 »), le texte
+d'aide (clé `I18N` propre à l'i2i, écrite d'après le contrat ci-dessus : image d'entrée = `<image1>`, références = `<image2>`,
+`<image3>`… dans l'ordre de la liste, à citer dans la consigne, taille du résultat = celle de l'image d'entrée) et la liste
+ordonnée (`#refSubjects` : étiquette `<imageN>`, nom du fichier, croix pour retirer). Au-delà de 9, les lignes en trop sont barrées
+« ignorée (max 9) ». Le bloc est masqué pour Qwen-Edit 2509 et pour tous les autres pipelines/moteurs. Aucun contrôle de manifest n'a été
+ajouté : la visibilité est décidée par moteur dans `updateModelLabel` (comme le contrôle LoRA), le manifest `image2image` n'expose pas `refs`.
+
+**État des images.** Les fichiers de l'i2i sont mis de côté (`refStash`/`swapRefFiles`) quand on quitte le contexte i2i Qwen 2.1
+(autre moteur, autre pipeline) et rendus au retour : rien ne se perd au changement de moteur, et rien ne fuit vers reference2video /
+storyboard (ni l'inverse) alors que le champ `<input type="file">` est partagé.
+
+**Plafond dans le code.** `collectQ21I2IRefs` garde les 9 premières références et journalise un WARN nouveau
+(« Références Qwen Image 2.1 limitées à 9 (10 images avec l'image d'entrée) — N fichier(s) ignoré(s). ») ; le message existant
+« Images de référence limitées à 7 » (r2v/storyboard) n'a pas changé.
+
+**Enrichissement.** `ENRICH_SYSTEM` ne change pas et aucune consigne LLM n'est ajoutée. Mais un brief qui cite `<image1>`/`<image2>` ne
+doit pas être défiguré par gemma (cas connu pour `<Subject N>` : chevron inversé, espace parasite). `enrichBrief` applique donc, pour
+`qwen21_i2i` seulement, le « strip-then-reappend » de l'AGENTS.md : les jetons sont remplacés par un mot nu (`Q21IMAGEREF<N>`) avant l'appel
+et remis après (la sortie est aussi réparée si gemma a abîmé les chevrons) ; si une mention du brief manque encore à la sortie, le brief
+d'origine est conservé et un WARN le dit (même filet que les keyframes). Vérifié au banc avec un gemma bouchonné (jetons recopiés, abîmés,
+perdus) ; le comportement du vrai gemma4:e4b sur ce mot nu n'a **pas** été mesuré (pas de rendu Ollama dans ce lot, le mécanisme ne dépend pas de lui).
+
+**Rendu réel (1 job GPU, file ComfyUI vide avant, 111 s, `success`).** Graphe construit par le Studio (`image2image` + `qwen21_i2i`, image
+principale + 2 références), soumis tel quel : `output/studio/qwen21_i2i_00005_.png` (1376×768, ratio de la source, seed 42).
+Image principale `image_1` = `output/studio/q21/t2i_vl8b_00001_.png` (le pêcheur) ; `image_2` = `output/studio/qwen21_t2i_00001_.png` (pomme rouge + poire) ;
+`image_3` = `output/studio/q21/ref_03_duck_00001_.png` (canard en caoutchouc au tricorne). Consigne : « Add the red apple from `<image2>`
+on the wooden pier in front of the fisherman of `<image1>`, and place the pirate rubber duck from `<image3>` beside it. Keep the scene of
+`<image1>` exactly unchanged: the fisherman, his navy beanie, his beard, the pier, the blue boats, the mist and the cold dawn light. »
+Regardé : la pomme (seule, sans la poire, rouge à reflets) et le canard (tricorne à tête de mort fidèle) sont **intégrés** au premier plan, à
+l'échelle plausible et avec un éclairage cohérent avec la scène ; le pêcheur (visage, barbe grise, bonnet marine, caban), les barques bleues, la
+brume et la lumière froide sont conservés, le cadrage est à peine élargi (1280×720 → 1376×768). Ni bruit ni artefact. Écart honnête : les deux objets sont posés
+sur le filet orange qui occupe le premier plan plutôt que sur les planches nues du ponton (le filet recouvre le devant du ponton dans la source).

@@ -19,6 +19,24 @@ Suite de Q21-STUDIO (piste « carte Canvas Text2Image Qwen Image 2.1 »). La car
   `output/canvas/qwen21_t2i_00001_.png`. Détail : `docs/NOUVEAUX-MODELES-QWEN21.md` § « Canvas : carte Text2Image Qwen
   Image 2.1 ».
 
+## 2026-09-25 — Lot Q21-REFS : jusqu'à 10 images en Image2Image Qwen Image 2.1 (Studio)
+
+Suite de Q21-STUDIO (piste « références supplémentaires en i2i »). Avec le moteur Qwen Image 2.1 du pipeline `image2image`, le Studio
+envoie l'image d'entrée (`<image1>`) + jusqu'à 9 références (`<image2>`…), dans l'ordre affiché. Qwen-Edit 2509 strictement inchangé.
+- `index.html` seul (`js/engine.js` intact : `addQwen21Refs` existait, aucune ligne ajoutée) : le bloc « Références supplémentaires »
+  (`#refExtrasWrap`/`#refImagesInput`) est réutilisé, pas dupliqué ; `refCtx()` (`r2v`/`sb`/`i2i`) choisit plafond (7/7/9), texte d'aide
+  et liste ordonnée (étiquettes `<imageN>`, croix de retrait, lignes au-delà de 9 barrées). Visible pour `qwen21_i2i` seulement, sans
+  contrôle de manifest ; images de l'i2i mises de côté hors contexte (`refStash`/`swapRefFiles`, ni perdues au changement de moteur, ni
+  partagées avec r2v/storyboard). Handler Generate : `collectQ21I2IRefs` (upload unique partagé par les marchés, plafond 9 avec WARN nouveau)
+  puis `addQwen21Refs` ; 0 référence ⇒ graphe identique octet pour octet. `enrichBrief` protège les `<imageN>` du brief (jeton nu
+  `Q21IMAGEREF<N>` retiré/remis, brief d'origine gardé + WARN si gemma les perd), `ENRICH_SYSTEM` inchangé. 4 clés `I18N` neuves FR/EN/ES/DE.
+- Preuves : matrice 37 scénarios identique (112 corps `/prompt`, 407 243 o, 219 uploads, 17 corps ollama, 15 103 o) ; `bench-q21` vert ;
+  banc neuf 18 scénarios (0/1/3/9/12 références, marchés, 2509 avec références en mémoire, zéro job, retrait, persistance, enrichissement) ;
+  parité 52 119 contrôles ; audit i18n vide ×4 langues ; proofs 4a/4b/mem 159/92/44 PASS ; 1 rendu réel (111 s, regardé) :
+  `output/studio/qwen21_i2i_00005_.png` (pêcheur + pomme + canard pirate, les deux références intégrées, scène source respectée).
+- Non mesuré : le comportement du vrai gemma4:e4b sur le jeton nu (le mécanisme n'en dépend pas). Détail :
+  `docs/NOUVEAUX-MODELES-QWEN21.md` § « Références multiples en Image2Image du Studio ».
+
 ## 2026-09-25 — Lot Q21-STUDIO : Qwen Image 2.1 sélectionnable dans Text2Image et Image2Image du Studio
 
 Demande : l'utilisateur ne trouvait pas Qwen Image 2.1 dans les pipelines Text2Image et Image2Image (il n'était câblé que

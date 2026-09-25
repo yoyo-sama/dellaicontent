@@ -341,8 +341,13 @@ full-screen studio — there is no auto mode, and nothing is ever sent to render
 
 Generic pipelines available everywhere: text2image (Krea 2 Turbo by default, Qwen Image 2.1
 selectable in the Engine menu), image2image (Qwen-Edit 2509 by default, Qwen Image 2.1
-selectable — one input image, output sized on the source), text2video and image2video (LTX 2.5 and Minimax H3, selectable in the Model menu;
+selectable — input image plus up to 9 references, output sized on the source), text2video and image2video (LTX 2.5 and Minimax H3, selectable in the Model menu;
 optional native audio, Minimax H3 turbo can be toggled on).
+
+Image2Image with Qwen Image 2.1 takes up to 10 images in all: the input image plus up to 9 extra references ("Additional
+references" block, shown only for that engine). The input image is `<image1>`, the references are `<image2>`, `<image3>`… in the
+listed order; cite them in the prompt (e.g. "put the character from `<image1>` into the setting of `<image2>`"). Qwen-Edit 2509 still
+takes one image.
 
 **Style LoRAs**: text2image, text2video, image2video and reference2video (Minimax H3) offer an
 optional style-LoRA selector, in both Studio and Canvas. The list is discovered live from
