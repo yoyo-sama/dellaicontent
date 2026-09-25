@@ -36,6 +36,10 @@
       --shadow-sm: 0 8px 22px rgba(15, 23, 42, 0.06);
       --grad: linear-gradient(135deg, var(--brand), var(--highlight));
       --on-grad: #ffffff;
+      --ok-text: #5f6e12;     /* statuts : ≥ 4,5:1 sur leur fond teinté */
+      --hot-text: #a83a08;
+      --warn-text: #7a5f00;
+      --run-text: var(--image);
       --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
       --sans: "DM Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
@@ -522,6 +526,7 @@
     .generate-bar .gb-prompt { flex: 4 1 260px; }
     .generate-bar .gb-prompt textarea { min-height: 64px; }
     .generate-bar .gb-field { flex: 0 1 165px; min-width: 130px; }
+    .generate-bar .gb-field:has(> #pipelineSelect), .generate-bar .gb-field:has(> #modelSelect) { flex: 1 1 250px; }
     .generate-bar .tpl-field { flex: 1 1 100%; }
     .generate-bar .gb-wide { flex: 0 1 240px; }
     .generate-bar #marketsWrap { flex: 1 1 100%; }
@@ -660,10 +665,10 @@
       white-space: nowrap;
     }
 
-    .status.running { background: rgba(52, 60, 237, 0.12); color: var(--image); }
-    .status.done { background: rgba(130, 149, 30, 0.16); color: var(--ok); }
-    .status.error { background: rgba(239, 96, 27, 0.16); color: var(--hot); }
-    .status.fallback { background: rgba(205, 165, 21, 0.16); color: var(--warn); }
+    .status.running { background: rgba(52, 60, 237, 0.12); color: var(--run-text); }
+    .status.done { background: rgba(130, 149, 30, 0.16); color: var(--ok-text); }
+    .status.error { background: rgba(239, 96, 27, 0.16); color: var(--hot-text); }
+    .status.fallback { background: rgba(205, 165, 21, 0.16); color: var(--warn-text); }
 
     .gallery {
       display: grid;
@@ -790,6 +795,7 @@
       font-size: 11px;
       color: var(--text-2);
     }
+    .input-chip[hidden] { display: none; }
     .input-chip button { border: 0; background: none; color: var(--text); cursor: pointer; font-size: 12px; }
 
     .gallery-header {
@@ -991,7 +997,6 @@
     .relay-seg .seg-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .relay-seg .seg-row label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
     .relay-seg .seg-row input[type="number"] { width: 72px; }
-    .relay-seg .seg-link.active { border-color: var(--accent); color: var(--accent); }
     .relay-seg video { grid-column: 1 / -1; width: 100%; border-radius: 8px; }
     .relay-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .relay-composer {
@@ -1213,8 +1218,12 @@
       --card-2: rgba(27, 35, 54, 0.92);
       --shadow: 0 18px 45px rgba(0, 0, 0, 0.5);
       --shadow-sm: 0 8px 22px rgba(0, 0, 0, 0.34);
-      --grad: linear-gradient(135deg, #4f5bff, #2f7fd6);
-      --on-grad: #f4f8ff;
+      --grad: linear-gradient(135deg, #4f5bff, #2a6fc4);
+      --on-grad: #ffffff;
+      --ok-text: var(--ok);
+      --hot-text: var(--hot);
+      --warn-text: var(--warn);
+      --run-text: #a3aaff;
     }
 
     :root[data-theme="dark"] body {
@@ -1294,6 +1303,7 @@
       }
       /* S19 : cibles tactiles de 44 px. */
       button, select, summary, a.control-btn, .rail-btn, label.check-row, input:not([type="checkbox"]) { min-height: 44px; }
+      button { min-width: 44px; }
       .header-controls button { width: 44px; height: 44px; }
       .pipeline-flow, .two-cols, .actions {
         grid-template-columns: 1fr;
@@ -1425,7 +1435,7 @@
       border-radius: 999px;
       font-size: 10px;
       font-weight: 700;
-      background: var(--highlight);
+      background: var(--grad);
       color: var(--on-grad);
     }
     .variant-thumb .variant-meta {
@@ -1511,7 +1521,7 @@
     .montage-clip .clip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
     .montage-clip .clip-head strong { font-size: 13px; }
     .montage-clip .clip-head .clip-meta { font-size: 11px; color: var(--text-2); }
-    .montage-clip .clip-meta .stale { color: var(--warn); font-weight: 700; }
+    .montage-clip .clip-meta .stale { color: var(--warn-text); font-weight: 700; }
     .montage-clip label { flex-direction: row; align-items: center; gap: 8px; }
     .montage-clip label input { width: 90px; }
     .clip-actions { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1591,16 +1601,16 @@
   <div class="app-shell">
     <nav class="app-rail" aria-label="Navigation studio">
       <div class="rail-top">
-        <button type="button" class="rail-btn active" data-panel="studio" title="Studio" aria-label="Studio">
+        <button type="button" class="rail-btn active" data-panel="studio" title="Studio">
           <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9h18v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 9V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><path d="M8.5 4 6.5 9M14.5 4l-2 5"/></svg>
           <span class="rail-name">Studio</span>
         </button>
-        <a href="canvas.html" class="rail-btn rail-canvas" title="Canvas" aria-label="Canvas">
+        <a href="canvas.html" class="rail-btn rail-canvas" title="Canvas">
           <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M12 7.2 6.3 16.2M12 7.2l5.7 9M7.2 18h9.6"/></svg>
           <span class="rail-name">Canvas</span>
         </a>
       </div>
-      <button type="button" class="rail-btn" data-panel="monitor" title="Node Monitor" aria-label="Node Monitor">
+      <button type="button" class="rail-btn" data-panel="monitor" title="Node Monitor">
         <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2.5-6.5 4 13L16 12h5"/></svg>
         <span class="rail-name">Node Monitor</span>
       </button>
@@ -1643,7 +1653,7 @@
 
           <div class="events" id="events"></div>
       </div>
-      <button type="button" class="rail-btn" data-panel="models" title="Model Management" aria-label="Model Management">
+      <button type="button" class="rail-btn" data-panel="models" title="Model Management">
         <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 21 7.5 12 12 3 7.5 12 3Z"/><path d="M3 12 12 16.5 21 12"/><path d="M3 16.5 12 21 21 16.5"/></svg>
         <span class="rail-name">Model Management</span>
       </button>
@@ -1679,7 +1689,7 @@
             </div>
           </details>
       </div>
-      <button type="button" class="rail-btn" data-panel="llm" title="Local LLM" aria-label="Local LLM">
+      <button type="button" class="rail-btn" data-panel="llm" title="Local LLM">
         <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>
         <span class="rail-name">Local LLM</span>
       </button>
@@ -1691,7 +1701,7 @@
             <div class="model-list" id="llmModels"></div>
           </details>
       </div>
-      <button type="button" class="rail-btn" data-panel="advanced" title="Advanced" aria-label="Advanced">
+      <button type="button" class="rail-btn" data-panel="advanced" title="Advanced">
         <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 8-4.5 4.5L8 17"/><path d="m16 8 4.5 4.5L16 17"/><path d="M13.5 4 10.5 20"/></svg>
         <span class="rail-name">Advanced</span>
       </button>
@@ -1811,7 +1821,7 @@
                 <select id="pipelineSelect"></select>
               </label>
               <label class="gb-field">
-                Modèle / Workflow
+                Moteur
                 <select id="modelSelect"></select>
               </label>
               <label class="gb-field" id="styleWrap" style="display:none">
@@ -1939,12 +1949,12 @@
                   <textarea id="negative" class="small">low quality, blurry, distorted faces, unreadable text, watermark, extra limbs</textarea>
                 </label>
                 <!-- Hors du <label> : celui-ci force text-transform:uppercase, illisible pour une phrase. -->
-                <small id="negativeNote" class="hint" style="display:none">Krea 2 n'encode aucun prompt négatif : exprimez la contrainte positivement dans le brief.</small>
+                <small id="negativeNote" class="hint" style="display:none">Krea 2 n'encode aucun prompt négatif : exprime la contrainte positivement dans le brief.</small>
                 <div class="actions">
                   <button class="secondary-btn" id="enrichBtn"
-                    title="Réécrit votre brief en prompt de diffusion détaillé (+ negative prompt) via le LLM, une seule fois, sans lancer de génération">Enrichir le brief (LLM)</button>
+                    title="Réécrit ton brief en prompt de diffusion détaillé (+ negative prompt) via le LLM, une seule fois, sans lancer de génération">✨ Enrichir le brief (LLM)</button>
                   <button class="secondary-btn" id="autoEnrichBtn"
-                    title="Enrichit automatiquement le brief via gemma4:e4b avant chaque génération (sauf workflows avec enrichissement intégré)">Auto-Enrich (gemma4:e4b) : OFF</button>
+                    title="Enrichit automatiquement le brief via gemma4:e4b avant chaque génération (sauf workflows avec enrichissement intégré)">✨ Enrichissement auto (gemma4:e4b) : non</button>
                 </div>
                 <button class="secondary-btn" id="fallbackBtn">Use Fallback Asset</button>
               </div>
@@ -1961,7 +1971,7 @@
             <div class="form-stack" id="refExtrasWrap" style="display:none; margin-top:22px">
               <h3 class="section-title">Références supplémentaires</h3>
               <p class="hint r2v-only">En plus des fiches personnage/décor générées automatiquement (ref_image_0/1). Aucune obligatoire.</p>
-              <p class="hint q21-only" style="display:none">Ajoutées à chaque keyframe Qwen Image 2.1, après les planches : &lt;image3&gt;, &lt;image4&gt;… (un rang plus loin sur un plan à deux sujets). Nommez-les dans l'action du plan.</p>
+              <p class="hint q21-only" style="display:none">Ajoutées à chaque image de plan Qwen Image 2.1, après les planches : &lt;image3&gt;, &lt;image4&gt;… (un rang plus loin sur un plan à deux sujets). Nomme-les dans l'action du plan.</p>
               <label>
                 Images de référence supplémentaires (max 7)
                 <input type="file" id="refImagesInput" accept="image/*" multiple />
@@ -1995,7 +2005,7 @@
                 </div>
               </div>
               <div class="gallery" id="galleryImages">
-                <div class="gallery-empty" id="galleryImagesEmpty">Aucune image générée pour l'instant. Lancez une génération.</div>
+                <div class="gallery-empty" id="galleryImagesEmpty">Aucune image générée pour l'instant. Lance une génération.</div>
               </div>
               <div class="gallery" id="galleryVideos" style="display:none">
                 <div class="gallery-empty" id="galleryVideosEmpty">Aucune vidéo générée pour l'instant.</div>
@@ -2013,7 +2023,7 @@
         <button type="button" class="studio-nav-btn" data-section="location">Décor</button>
         <button type="button" class="studio-nav-btn locked" data-section="storyboard" disabled>Storyboard</button>
         <button type="button" class="studio-nav-btn locked" data-section="montage" disabled>Montage</button>
-        <button type="button" class="studio-nav-btn locked" data-section="relay" disabled>Relay</button>
+        <button type="button" class="studio-nav-btn locked" data-section="relay" disabled>Plan-séquence (Relay)</button>
         <button type="button" class="studio-nav-btn locked" data-section="video" disabled style="display:none">Vidéo</button>
         <div class="studio-nav-foot">
           <button type="button" class="primary-btn" id="directorValidateBtn" disabled>Valider les planches</button>
@@ -2028,7 +2038,7 @@
       <div id="studioPanel">
         <section id="studioCharacter" class="studio-section">
           <h3 class="section-title">Planche personnage</h3>
-          <p class="hint">Modifiez les champs puis régénérez pour créer une nouvelle variante ; cliquez une vignette pour choisir la planche active.</p>
+          <p class="hint">Modifie les champs puis régénère pour créer une nouvelle variante ; clique une vignette pour choisir la planche active.</p>
           <div class="subject-tabs" id="subjectTabs" hidden></div>
           <div class="subject-tabs" id="charKindToggle" hidden>
             <span class="kind-label">Type de sujet</span>
@@ -2058,7 +2068,7 @@
 
         <section id="studioLocation" class="studio-section" style="display:none">
           <h3 class="section-title">Planche décor</h3>
-          <p class="hint">Modifiez les champs puis régénérez pour créer une nouvelle variante ; cliquez une vignette pour choisir la planche active.</p>
+          <p class="hint">Modifie les champs puis régénère pour créer une nouvelle variante ; clique une vignette pour choisir la planche active.</p>
           <div class="sheet-layout">
             <div class="form-stack">
               <label>Lieu<input type="text" data-field="place" /></label>
@@ -2084,13 +2094,13 @@
           <h3 class="section-title">Storyboard</h3>
           <div class="form-stack">
             <div class="shot-edit-list" id="shotEditList" style="display:none"></div>
-            <button type="button" class="secondary-btn" id="directorKeyframesBtn" style="display:none">Générer les keyframes</button>
+            <button type="button" class="secondary-btn" id="directorKeyframesBtn" style="display:none">Générer les images des plans</button>
           </div>
         </section>
 
         <section id="studioMontage" class="studio-section" style="display:none">
           <h3 class="section-title">Montage</h3>
-          <p class="hint">Générez les cuts, réordonnez ou re-rendez chaque plan, puis assemblez l'animatic. Réordonner ne relance rien.</p>
+          <p class="hint">Génère les cuts, réordonne ou régénère chaque plan, puis assemble l'animatic. Réordonner ne relance rien.</p>
           <label class="cut-engine">Moteur des cuts
             <select id="cutEngineSelect">
               <option value="ltx25">LTX 2.5 i2v</option>
@@ -2105,8 +2115,8 @@
         </section>
 
         <section id="studioRelay" class="studio-section" style="display:none">
-          <h3 class="section-title">Prompt Relay</h3>
-          <p class="hint">Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle keyframe est composée sur les planches validées.</p>
+          <h3 class="section-title">Plan-séquence (Relay)</h3>
+          <p class="hint">Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle image de plan est composée sur les planches validées.</p>
           <label class="cut-engine">Moteur des segments
             <select id="relayEngineSelect">
               <option value="ltx25">LTX 2.5 i2v</option>
@@ -2122,7 +2132,7 @@
               <label>Durée par segment (s) <input type="number" id="relaySegDur" min="2" max="8" value="3" /></label>
               <button type="button" class="secondary-btn" id="relayComposeBtn" disabled>✨ Découper le scénario</button>
             </div>
-            <p class="hint">Le scénario est découpé en autant de plans consécutifs, chacun écrit pour la grammaire de Minimax H3, les sujets désignés par le numéro que l'app leur attribue. Rien n'est généré : relisez et corrigez chaque segment avant de lancer la chaîne.</p>
+            <p class="hint">Le scénario est découpé en autant de plans consécutifs, chacun écrit pour la grammaire de Minimax H3, les sujets désignés par le numéro que l'app leur attribue. Rien n'est généré : relis et corrige chaque segment avant de lancer la chaîne.</p>
           </div>
           <div class="relay-list" id="relayList"></div>
           <div class="relay-foot">
@@ -2136,7 +2146,7 @@
 
         <section id="studioVideoR2V" class="studio-section" style="display:none">
           <h3 class="section-title">Vidéo</h3>
-          <p class="hint" id="studioVideoR2VStatus">Validez les planches personnage et décor pour activer le lancement.</p>
+          <p class="hint" id="studioVideoR2VStatus">Valide les planches personnage et décor pour activer le lancement.</p>
           <button type="button" class="primary-btn" id="directorR2VLaunchBtn" disabled>Lancer la vidéo</button>
         </section>
       </div>
@@ -2293,10 +2303,10 @@
         en: "Insert this subject's label into the brief", es: "Insertar la etiqueta de este sujeto en el brief",
         de: "Label dieses Subjekts in das Briefing einfügen" },
       "Références supplémentaires": { en: "Additional references", es: "Referencias adicionales", de: "Zusätzliche Referenzen" },
-      "Ajoutées à chaque keyframe Qwen Image 2.1, après les planches : <image3>, <image4>… (un rang plus loin sur un plan à deux sujets). Nommez-les dans l'action du plan.": {
-        en: "Added to every Qwen Image 2.1 keyframe, after the sheets: <image3>, <image4>… (one rank further on a two-subject shot). Name them in the shot's action.",
-        es: "Se añaden a cada keyframe Qwen Image 2.1, tras las fichas: <image3>, <image4>… (un puesto más allá en un plano con dos sujetos). Nómbrelas en la acción del plano.",
-        de: "Werden jedem Qwen-Image-2.1-Keyframe nach den Blättern angefügt: <image3>, <image4>… (bei einer Einstellung mit zwei Subjekten eine Stelle weiter). Nennen Sie sie in der Aktion der Einstellung." },
+      "Ajoutées à chaque image de plan Qwen Image 2.1, après les planches : <image3>, <image4>… (un rang plus loin sur un plan à deux sujets). Nomme-les dans l'action du plan.": {
+        en: "Added to every Qwen Image 2.1 shot image, after the sheets: <image3>, <image4>… (one rank further on a two-subject shot). Name them in the shot's action.",
+        es: "Se añaden a cada imagen de plano Qwen Image 2.1, tras las fichas: <image3>, <image4>… (un puesto más allá en un plano con dos sujetos). Nómbralas en la acción del plano.",
+        de: "Werden jedem Qwen-Image-2.1-Bild der Einstellung nach den Blättern angefügt: <image3>, <image4>… (bei einer Einstellung mit zwei Subjekten eine Stelle weiter). Nenne sie in der Aktion der Einstellung." },
       "Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.": {
         en: "Each image gets a subject number, carried into the prompt automatically.",
         es: "Cada imagen recibe un número de sujeto, incorporado automáticamente al prompt.",
@@ -2330,7 +2340,7 @@
       "Creative Control": { fr: "Contrôle créatif", es: "Control creativo", de: "Kreativsteuerung" },
       "Prompt ou brief": { en: "Prompt or brief", es: "Prompt o brief", de: "Prompt oder Briefing" },
       "Negative prompt": { fr: "Prompt négatif", es: "Prompt negativo", de: "Negativ-Prompt" },
-      "Modèle / Workflow": { en: "Model / Workflow", es: "Modelo / Workflow", de: "Modell / Workflow" },
+      "Moteur": { en: "Engine", es: "Motor", de: "Engine" },
       "Image d'entrée": { en: "Input image", es: "Imagen de entrada", de: "Eingabebild" },
       "Marchés cibles — Localized Assets": { en: "Target markets — Localized Assets", es: "Mercados objetivo — Localized Assets", de: "Zielmärkte — Localized Assets" },
       "Un job par marché sélectionné, avec adaptation culturelle du prompt. Aucun sélectionné = prompt tel quel.":
@@ -2356,7 +2366,7 @@
       "Générer les planches (étape 1/2)": { en: "Generate sheets (step 1/2)", es: "Generar las láminas (paso 1/2)", de: "Bögen generieren (Schritt 1/2)" },
       "Lancer la campagne (affiches + miniatures + teaser)":
         { en: "Launch campaign (posters + thumbnails + teaser)", es: "Lanzar la campaña (pósters + miniaturas + teaser)", de: "Kampagne starten (Poster + Thumbnails + Teaser)" },
-      "Enrichir le brief (LLM)": { en: "Enrich brief (LLM)", es: "Enriquecer el brief (LLM)", de: "Briefing anreichern (LLM)" },
+      "✨ Enrichir le brief (LLM)": { en: "✨ Enrich brief (LLM)", es: "✨ Enriquecer el brief (LLM)", de: "✨ Briefing anreichern (LLM)" },
       "Use Fallback Asset": { fr: "Utiliser l'asset de secours", es: "Usar asset de respaldo", de: "Fallback-Asset verwenden" },
       "Animatic multi-images (FLF2V)": { en: "Multi-image animatic (FLF2V)", es: "Animatic multi-imagen (FLF2V)", de: "Multi-Bild-Animatic (FLF2V)" },
       "2 à 6 images clés : la vidéo démarre sur la 1ʳᵉ, se termine sur la dernière, chaque paire d'images devient un segment interpolé (first→last frame) de durée réglable. Le format vidéo suit la 1ʳᵉ image ; les suivantes sont recadrées au même format. Le brief sert de prompt de mouvement.":
@@ -2370,11 +2380,11 @@
       "Model Selector": { fr: "Sélecteur de modèle", es: "Selector de modelo", de: "Modellauswahl" },
       "GB10 Inference": { fr: "Inférence GB10", es: "Inferencia GB10", de: "GB10-Inferenz" },
       "Gallery": { fr: "Galerie", es: "Galería", de: "Galerie" },
-      "Assets + export": { de: "Assets + Export" },
+      "Assets + export": { es: "Assets + exportación", de: "Assets + Export" },
       "Job Queue": { fr: "File de jobs", es: "Cola de trabajos", de: "Job-Warteschlange" },
       "Generated Gallery": { fr: "Galerie générée", es: "Galería generada", de: "Generierte Galerie" },
-      "Aucune image générée pour l'instant. Lancez une génération.":
-        { en: "No image generated yet. Start a generation.", es: "Aún no hay imágenes generadas. Inicie una generación.", de: "Noch kein Bild generiert. Starten Sie eine Generierung." },
+      "Aucune image générée pour l'instant. Lance une génération.":
+        { en: "No image generated yet. Start a generation.", es: "Aún no hay imágenes generadas. Inicia una generación.", de: "Noch kein Bild generiert. Starte eine Generierung." },
       "Aucune vidéo générée pour l'instant.":
         { en: "No video generated yet.", es: "Aún no hay vídeos generados.", de: "Noch kein Video generiert." },
       "Model Management": { fr: "Gestion des modèles", es: "Gestión de modelos", de: "Modellverwaltung" },
@@ -2446,7 +2456,7 @@
       "Planches": { en: "Sheets", es: "Láminas", de: "Bögen" },
       "Vidéo": { en: "Video", es: "Vídeo", de: "Video" },
       "Mémoire GPU": { en: "GPU memory", es: "Memoria GPU", de: "GPU-Speicher" },
-      "Générer les keyframes": { en: "Generate keyframes", es: "Generar keyframes", de: "Keyframes generieren" },
+      "Générer les images des plans": { en: "Generate the shot images", es: "Generar las imágenes de los planos", de: "Bilder der Einstellungen generieren" },
       "Lancer l'animatic": { en: "Start the animatic", es: "Iniciar el animatic", de: "Animatic starten" },
       "Scène": { en: "Scene", es: "Escena", de: "Szene" },
       "Angle": { es: "Ángulo", de: "Kamerawinkel" },
@@ -2478,15 +2488,15 @@
         { en: "Editing: available in a later step.", es: "Montaje: disponible en una próxima etapa.", de: "Schnitt: in einem späteren Schritt verfügbar." },
       "Nouveau projet": { en: "New project", es: "Nuevo proyecto", de: "Neues Projekt" },
       "Quitter le studio": { en: "Leave the studio", es: "Salir del estudio", de: "Studio verlassen" },
-      "Modifiez les champs puis régénérez pour créer une nouvelle variante ; cliquez une vignette pour choisir la planche active.":
+      "Modifie les champs puis régénère pour créer une nouvelle variante ; clique une vignette pour choisir la planche active.":
         { en: "Edit the fields then regenerate to create a new variant; click a thumbnail to pick the active sheet.",
-          es: "Edite los campos y regenere para crear una nueva variante; haga clic en una miniatura para elegir la lámina activa.",
+          es: "Edita los campos y regenera para crear una nueva variante; haz clic en una miniatura para elegir la lámina activa.",
           de: "Felder bearbeiten und neu generieren, um eine neue Variante zu erzeugen; auf eine Miniatur klicken, um den aktiven Bogen zu wählen." },
       "🔄 Régénérer la planche": { en: "🔄 Regenerate the sheet", es: "🔄 Regenerar la lámina", de: "🔄 Bogen neu generieren" },
       "Générer la planche": { en: "Generate the sheet", es: "Generar la lámina", de: "Bogen generieren" },
-      "Aucune planche : décrivez le sujet (ou ✎ Prompt) puis générez.":
+      "Aucune planche : décris le sujet (ou ✎ Prompt) puis génère.":
         { en: "No sheet yet: describe the subject (or ✎ Prompt), then generate.",
-          es: "Sin lámina: describa el sujeto (o ✎ Prompt) y luego genere.",
+          es: "Sin lámina: describe el sujeto (o ✎ Prompt) y luego genera.",
           de: "Noch kein Bogen: Motiv beschreiben (oder ✎ Prompt) und dann generieren." },
       "📥 Importer une image": { en: "📥 Import an image", es: "📥 Importar una imagen", de: "📥 Bild importieren" },
       "Visage": { en: "Face", es: "Rostro", de: "Gesicht" },
@@ -2526,10 +2536,10 @@
       "Sérigraphie": { en: "Screen print", es: "Serigrafía", de: "Siebdruck" },
       "Peinture à l'huile": { en: "Oil painting", es: "Pintura al óleo", de: "Ölgemälde" },
       "Onirique": { en: "Dreamlike", es: "Onírico", de: "Traumhaft" },
-      "Krea 2 n'encode aucun prompt négatif : exprimez la contrainte positivement dans le brief.": {
+      "Krea 2 n'encode aucun prompt négatif : exprime la contrainte positivement dans le brief.": {
         en: "Krea 2 encodes no negative prompt: state the constraint positively in the brief.",
-        es: "Krea 2 no codifica ningún prompt negativo: exprese la restricción en positivo en el brief.",
-        de: "Krea 2 kodiert keinen Negativ-Prompt: Formulieren Sie die Einschränkung positiv im Brief." },
+        es: "Krea 2 no codifica ningún prompt negativo: expresa la restricción en positivo en el brief.",
+        de: "Krea 2 kodiert keinen Negativ-Prompt: Formuliere die Einschränkung positiv im Brief." },
       // Presets caméra (Scene DNA)
       "Très gros plan": { en: "Extreme close-up", es: "Primerísimo plano", de: "Extreme Nahaufnahme" },
       "Gros plan": { en: "Close-up", es: "Primer plano", de: "Nahaufnahme" },
@@ -2568,37 +2578,38 @@
       "Enrichissement…": { en: "Enriching…", es: "Enriqueciendo…", de: "Anreicherung…" },
       "Prompt de la planche personnage": { en: "Character sheet prompt", es: "Prompt de la lámina de personaje", de: "Prompt des Charakterbogens" },
       "Prompt de la planche décor": { en: "Location sheet prompt", es: "Prompt de la lámina de decorado", de: "Prompt des Kulissenbogens" },
-      "Prompt de la keyframe": { en: "Keyframe prompt", es: "Prompt del fotograma clave", de: "Keyframe-Prompt" },
-      "✎ Prompt de l'action": { en: "✎ Action prompt", es: "✎ Prompt de la acción", de: "✎ Aktions-Prompt" },
+      "Prompt de l'image du plan": { en: "Shot image prompt", es: "Prompt de la imagen del plano", de: "Prompt des Bildes der Einstellung" },
+      "✎ Réécrire l'action": { en: "✎ Rewrite the action", es: "✎ Reescribir la acción", de: "✎ Aktion umschreiben" },
+      "✎ Prompt image complet": { en: "✎ Full image prompt", es: "✎ Prompt de imagen completo", de: "✎ Vollständiger Bild-Prompt" },
+      "✎ Prompt image complet ✱": { en: "✎ Full image prompt ✱", es: "✎ Prompt de imagen completo ✱", de: "✎ Vollständiger Bild-Prompt ✱" },
       "Prompt de l'action du plan": { en: "Shot action prompt", es: "Prompt de la acción del plano", de: "Aktions-Prompt der Einstellung" },
-      "Ce texte décrit ce qui se passe dans le plan. Il est repris tel quel dans la keyframe puis dans le cut ; le cadrage, la lumière et le style sont ajoutés par l'app.":
-        { en: "This text describes what happens in the shot. It is carried as is into the keyframe then into the cut; framing, lighting and style are added by the app.",
-          es: "Este texto describe lo que ocurre en el plano. Se traslada tal cual al fotograma clave y luego al corte; el encuadre, la luz y el estilo los añade la app.",
-          de: "Dieser Text beschreibt, was in der Einstellung geschieht. Er wird unverändert in den Keyframe und dann in den Cut übernommen; Bildausschnitt, Licht und Stil ergänzt die App." },
+      "Ce texte décrit ce qui se passe dans le plan. Il est repris tel quel dans l'image du plan puis dans le cut ; le cadrage, la lumière et le style sont ajoutés par l'app.":
+        { en: "This text describes what happens in the shot. It is carried as is into the shot image then into the cut; framing, lighting and style are added by the app.",
+          es: "Este texto describe lo que ocurre en el plano. Se traslada tal cual a la imagen del plano y luego al corte; el encuadre, la luz y el estilo los añade la app.",
+          de: "Dieser Text beschreibt, was in der Einstellung geschieht. Er wird unverändert in das Bild der Einstellung und dann in den Cut übernommen; Bildausschnitt, Licht und Stil ergänzt die App." },
       "Prompt du cut": { en: "Cut prompt", es: "Prompt del corte", de: "Cut-Prompt" },
-      "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement. Un ré-enrichissement ne réécrit que la description du sujet — la composition de la planche est toujours remise après.":
+      "Krea 2 n'encode aucun prompt négatif : formule chaque contrainte positivement. Un ré-enrichissement ne réécrit que la description du sujet — la composition de la planche est toujours remise après.":
         { en: "Krea 2 encodes no negative prompt: phrase every constraint positively. A re-enrichment rewrites the subject description only — the sheet layout is always restored afterwards.",
-          es: "Krea 2 no codifica ningún prompt negativo: formule cada restricción en positivo. Un reenriquecimiento solo reescribe la descripción del sujeto: la composición de la lámina siempre se restablece después.",
-          de: "Krea 2 kodiert keinen negativen Prompt: Formulieren Sie jede Vorgabe positiv. Eine Neuanreicherung schreibt nur die Motivbeschreibung um — das Layout des Blatts wird danach immer wiederhergestellt." },
-      "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passez par « ✎ Prompt de l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.":
-        { en: "This text is the prompt sent to the engine, not a shot description: it must keep the sentences stating what each reference image is for. To describe the action only, use \"\u270e Prompt de l'action\" on the shot. \"\u21a9 Original prompt\" restores the compiled one, and the closing anchor block is always restored.",
-          es: "Este texto es el prompt enviado al motor, no una descripción del plano: debe conservar las frases que indican para qué sirve cada imagen de referencia. Para describir solo la acción, use «\u270e Prompt de l'action» en el plano. «\u21a9 Prompt original» restaura la compilación, y el bloque de anclaje final siempre se restablece.",
-          de: "Dieser Text ist der an die Engine gesendete Prompt, keine Einstellungsbeschreibung: Die Sätze, die den Zweck jedes Referenzbilds nennen, müssen erhalten bleiben. Für eine reine Handlungsbeschreibung „\u270e Prompt de l'action“ an der Einstellung verwenden. „\u21a9 Ursprünglicher Prompt“ stellt die Kompilierung wieder her, und der abschließende Ankerblock wird immer wiederhergestellt." },
+          es: "Krea 2 no codifica ningún prompt negativo: formula cada restricción en positivo. Un reenriquecimiento solo reescribe la descripción del sujeto: la composición de la lámina siempre se restablece después.",
+          de: "Krea 2 kodiert keinen negativen Prompt: Formuliere jede Vorgabe positiv. Eine Neuanreicherung schreibt nur die Motivbeschreibung um — das Layout des Blatts wird danach immer wiederhergestellt." },
+      "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passe par « ✎ Réécrire l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.":
+        { en: "This text is the prompt sent to the engine, not a shot description: it must keep the sentences stating what each reference image is for. To describe the action only, use “✎ Rewrite the action” on the shot. “↩ Original prompt” restores the compiled one, and the closing anchor block is always restored.",
+          es: "Este texto es el prompt enviado al motor, no una descripción del plano: debe conservar las frases que indican para qué sirve cada imagen de referencia. Para describir solo la acción, usa «✎ Reescribir la acción» en el plano. «↩ Prompt original» restaura la compilación, y el bloque de anclaje final siempre se restablece.",
+          de: "Dieser Text ist der an die Engine gesendete Prompt, keine Einstellungsbeschreibung: Die Sätze, die den Zweck jedes Referenzbilds nennen, müssen erhalten bleiben. Für eine reine Handlungsbeschreibung „✎ Aktion umschreiben“ an der Einstellung verwenden. „↩ Ursprünglicher Prompt“ stellt die Kompilierung wieder her, und der abschließende Ankerblock wird immer wiederhergestellt." },
       "Bloc à champs Minimax H3 : le ré-enrichissement ne réécrit que detailed_description, les définitions de sujets restent en place.":
         { en: "Minimax H3 field block: re-enrichment only rewrites detailed_description, the subject definitions stay in place.",
           es: "Bloque de campos Minimax H3: el reenriquecimiento solo reescribe detailed_description, las definiciones de sujetos permanecen.",
           de: "Minimax-H3-Feldblock: Die Neuanreicherung schreibt nur detailed_description um, die Motivdefinitionen bleiben bestehen." },
-      "LTX 2.5 tourne à cfg 1 : son enhancer intégré fait loi, gardez l'identité du personnage et le décor dans le prompt.":
+      "LTX 2.5 tourne à cfg 1 : son enhancer intégré fait loi, garde l'identité du personnage et le décor dans le prompt.":
         { en: "LTX 2.5 runs at cfg 1: its built-in enhancer rules, keep the character identity and the location in the prompt.",
-          es: "LTX 2.5 funciona con cfg 1: su enhancer integrado manda, mantenga la identidad del personaje y el decorado en el prompt.",
+          es: "LTX 2.5 funciona con cfg 1: su enhancer integrado manda, mantén la identidad del personaje y el decorado en el prompt.",
           de: "LTX 2.5 läuft mit cfg 1: Sein integrierter Enhancer entscheidet, Charakteridentität und Kulisse im Prompt belassen." },
       // Prompt Relay
-      "Relay": {},
-      "Prompt Relay": {},
-      "Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle keyframe est composée sur les planches validées.":
-        { en: "A chain of short video segments rather than one long shot: each segment has its own prompt and duration, and continuity comes from the chaining. Link 🔗: the segment picks up the previous one's last frame, exactly. Link 🎞: an assumed cut, a new keyframe is composed on the validated sheets.",
-          es: "Una cadena de segmentos de vídeo cortos en lugar de un único plano largo: cada segmento tiene su prompt y su duración, y la coherencia viene del encadenado. Enlace 🔗: el segmento retoma el último fotograma del anterior, exactamente. Enlace 🎞: corte asumido, se compone un nuevo fotograma clave sobre las láminas validadas.",
-          de: "Eine Kette kurzer Videosegmente statt einer einzigen langen Einstellung: Jedes Segment hat eigenen Prompt und eigene Dauer, die Kohärenz entsteht durch die Verkettung. Verbindung 🔗: Das Segment übernimmt exakt das letzte Bild des vorherigen. Verbindung 🎞: bewusster Schnitt, ein neues Keyframe wird auf den bestätigten Bögen komponiert." },
+      "Plan-séquence (Relay)": { en: "Long take (Relay)", es: "Plano secuencia (Relay)", de: "Plansequenz (Relay)" },
+      "Une chaîne de segments vidéo courts plutôt qu'un seul long plan : chaque segment a son prompt et sa durée, et la cohérence vient du chaînage. Liaison 🔗 : le segment reprend la dernière frame du précédent, exactement. Liaison 🎞 : coupure assumée, une nouvelle image de plan est composée sur les planches validées.":
+        { en: "A chain of short video segments rather than one long shot: each segment has its own prompt and duration, and continuity comes from the chaining. Link 🔗: the segment picks up the previous one's last frame, exactly. Link 🎞: an assumed cut, a new shot image is composed on the validated sheets.",
+          es: "Una cadena de segmentos de vídeo cortos en lugar de un único plano largo: cada segmento tiene su prompt y su duración, y la coherencia viene del encadenado. Enlace 🔗: el segmento retoma el último fotograma del anterior, exactamente. Enlace 🎞: corte asumido, se compone una nueva imagen de plano sobre las láminas validadas.",
+          de: "Eine Kette kurzer Videosegmente statt einer einzigen langen Einstellung: Jedes Segment hat eigenen Prompt und eigene Dauer, die Kohärenz entsteht durch die Verkettung. Verbindung 🔗: Das Segment übernimmt exakt das letzte Bild des vorherigen. Verbindung 🎞: bewusster Schnitt, ein neues Bild der Einstellung wird auf den bestätigten Bögen komponiert." },
       "Moteur des segments": { en: "Segment engine", es: "Motor de los segmentos", de: "Segment-Engine" },
       "＋ Ajouter un segment": { en: "＋ Add a segment", es: "＋ Añadir un segmento", de: "＋ Segment hinzufügen" },
       "Générer la chaîne": { en: "Generate the chain", es: "Generar la cadena", de: "Kette generieren" },
@@ -2607,11 +2618,10 @@
       "À générer": { en: "To generate", es: "Por generar", de: "Zu generieren" },
       "🎞 Premier segment": { en: "🎞 First segment", es: "🎞 Primer segmento", de: "🎞 Erstes Segment" },
       "Continu (frame exacte)": { en: "Continuous (exact frame)", es: "Continuo (fotograma exacto)", de: "Fortlaufend (exaktes Bild)" },
-      "Coupure (nouvelle keyframe)": { en: "Cut (new keyframe)", es: "Corte (nuevo fotograma clave)", de: "Schnitt (neues Keyframe)" },
+      "Coupure (nouvelle image du plan)": { en: "Cut (new shot image)", es: "Corte (nueva imagen del plano)", de: "Schnitt (neues Bild der Einstellung)" },
       "✨ Enrichir": { en: "✨ Enrich", es: "✨ Enriquecer", de: "✨ Anreichern" },
       "✕ Retirer": { en: "✕ Remove", es: "✕ Quitar", de: "✕ Entfernen" },
-      "🔄 Re-générer": { en: "🔄 Re-generate", es: "🔄 Volver a generar", de: "🔄 Neu generieren" },
-      "À re-générer": { en: "To re-generate", es: "Por volver a generar", de: "Neu zu generieren" },
+      "À régénérer": { en: "To regenerate", es: "Por regenerar", de: "Neu zu generieren" },
       "Image de transition": { en: "Transition frame", es: "Imagen de transición", de: "Übergangsbild" },
       "🎯 Image de fin": { en: "🎯 End frame", es: "🎯 Imagen final", de: "🎯 Endbild" },
       "🎯 Changer l'image de fin": { en: "🎯 Change the end frame", es: "🎯 Cambiar la imagen final", de: "🎯 Endbild ändern" },
@@ -2632,18 +2642,18 @@
         { en: "Replace the current segments with the screenplay split?",
           es: "¿Sustituir los segmentos actuales por la división del guion?",
           de: "Aktuelle Segmente durch die Drehbuchaufteilung ersetzen?" },
-      "Le scénario est découpé en autant de plans consécutifs, chacun écrit pour la grammaire de Minimax H3, les sujets désignés par le numéro que l'app leur attribue. Rien n'est généré : relisez et corrigez chaque segment avant de lancer la chaîne.":
+      "Le scénario est découpé en autant de plans consécutifs, chacun écrit pour la grammaire de Minimax H3, les sujets désignés par le numéro que l'app leur attribue. Rien n'est généré : relis et corrige chaque segment avant de lancer la chaîne.":
         { en: "The screenplay is split into that many consecutive shots, each written for the Minimax H3 grammar, the subjects named by the number the app assigns them. Nothing is generated: read and correct each segment before running the chain.",
-          es: "El guion se divide en otros tantos planos consecutivos, cada uno escrito para la gramática de Minimax H3, con los sujetos designados por el número que les asigna la app. No se genera nada: relea y corrija cada segmento antes de lanzar la cadena.",
-          de: "Das Drehbuch wird in ebenso viele aufeinanderfolgende Einstellungen aufgeteilt, jede für die Minimax-H3-Grammatik geschrieben, die Motive mit der von der App vergebenen Nummer benannt. Es wird nichts generiert: Lesen und korrigieren Sie jedes Segment, bevor Sie die Kette starten." },
+          es: "El guion se divide en otros tantos planos consecutivos, cada uno escrito para la gramática de Minimax H3, con los sujetos designados por el número que les asigna la app. No se genera nada: relee y corrige cada segmento antes de lanzar la cadena.",
+          de: "Das Drehbuch wird in ebenso viele aufeinanderfolgende Einstellungen aufgeteilt, jede für die Minimax-H3-Grammatik geschrieben, die Motive mit der von der App vergebenen Nummer benannt. Es wird nichts generiert: Lies und korrigiere jedes Segment, bevor du die Kette startest." },
       // Moteur des cuts
       "Moteur des cuts": { en: "Cut engine", es: "Motor de los cortes", de: "Cut-Engine" },
       "Minimax H3 i2v (grammaire Prompt Composer)":
         { en: "Minimax H3 i2v (Prompt Composer grammar)", es: "Minimax H3 i2v (gramática Prompt Composer)", de: "Minimax H3 i2v (Prompt-Composer-Grammatik)" },
-      "Chemin qualifié en rendu réel. Le prompt est ancré sur le contenu de la keyframe.":
-        { en: "Path qualified on real renders. The prompt is anchored on the keyframe's own content.",
-          es: "Ruta cualificada en renderizado real. El prompt se ancla en el contenido del fotograma clave.",
-          de: "In echten Renderings qualifizierter Pfad. Der Prompt ist am Inhalt des Keyframes verankert." },
+      "Moteur par défaut, éprouvé en rendu. Le prompt part du contenu de l'image du plan.":
+        { en: "Default engine, proven in real renders. The prompt starts from the content of the shot image.",
+          es: "Motor por defecto, probado en renderizado real. El prompt parte del contenido de la imagen del plano.",
+          de: "Standard-Engine, im echten Rendering bewährt. Der Prompt geht vom Inhalt des Bildes der Einstellung aus." },
       "Grammaire du Prompt Composer (subject_definitions / retention_analysis) et turbo 8 steps.":
         { en: "Prompt Composer grammar (subject_definitions / retention_analysis) and turbo 8 steps.",
           es: "Gramática del Prompt Composer (subject_definitions / retention_analysis) y turbo 8 steps.",
@@ -2651,14 +2661,14 @@
       // Menu Montage
       "Générer les cuts": { en: "Generate the cuts", es: "Generar los cortes", de: "Cuts generieren" },
       "Assembler l'animatic": { en: "Assemble the animatic", es: "Ensamblar el animatic", de: "Animatic zusammensetzen" },
-      "Générez les cuts, réordonnez ou re-rendez chaque plan, puis assemblez l'animatic. Réordonner ne relance rien.":
-        { en: "Generate the cuts, reorder or re-render each shot, then assemble the animatic. Reordering re-runs nothing.",
-          es: "Genere los cortes, reordene o vuelva a renderizar cada plano y luego ensamble el animatic. Reordenar no relanza nada.",
-          de: "Cuts generieren, jede Einstellung umsortieren oder neu rendern, dann das Animatic zusammensetzen. Umsortieren startet nichts neu." },
-      "à re-rendre": { en: "to re-render", es: "volver a renderizar", de: "neu rendern" },
+      "Génère les cuts, réordonne ou régénère chaque plan, puis assemble l'animatic. Réordonner ne relance rien.":
+        { en: "Generate the cuts, reorder or regenerate each shot, then assemble the animatic. Reordering re-runs nothing.",
+          es: "Genera los cortes, reordena o regenera cada plano y luego ensambla el animatic. Reordenar no relanza nada.",
+          de: "Cuts generieren, jede Einstellung umsortieren oder neu generieren, dann das Animatic zusammensetzen. Umsortieren startet nichts neu." },
+      "à régénérer": { en: "to regenerate", es: "por regenerar", de: "neu zu generieren" },
       "↑ Monter": { en: "↑ Move up", es: "↑ Subir", de: "↑ Nach oben" },
       "↓ Descendre": { en: "↓ Move down", es: "↓ Bajar", de: "↓ Nach unten" },
-      "🔄 Re-rendre ce plan": { en: "🔄 Re-render this shot", es: "🔄 Volver a renderizar este plano", de: "🔄 Diese Einstellung neu rendern" },
+      "🔄 Régénérer ce plan": { en: "🔄 Regenerate this shot", es: "🔄 Regenerar este plano", de: "🔄 Diese Einstellung neu generieren" },
       "⤢ Aperçu": { en: "⤢ Preview", es: "⤢ Vista previa", de: "⤢ Vorschau" },
       // ── LOT C : persistance de session ──
       "Reprendre le projet": { en: "Resume the project", es: "Reanudar el proyecto", de: "Projekt fortsetzen" },
@@ -2667,6 +2677,89 @@
         { en: "Stop the generation in progress and clear the job queue?",
           es: "¿Detener la generación en curso y vaciar la cola de trabajos?",
           de: "Laufende Generierung stoppen und die Job-Warteschlange leeren?" },
+      // ── 4A : chaînes jusqu'ici sans entrée (audit par script, vague4/4a/audit.js) ──
+      "Thème clair / sombre": { en: "Light / dark theme", es: "Tema claro / oscuro", de: "Helles / dunkles Design" },
+      "Navigation studio": { en: "Studio navigation", es: "Navegación del estudio", de: "Studio-Navigation" },
+      "Canvas": {},
+      "Campaign pipeline": { fr: "Pipeline campagne", es: "Pipeline de campaña", de: "Kampagnen-Pipeline" },
+      "Storyboard pipeline": { fr: "Pipeline storyboard", es: "Pipeline de storyboard", de: "Storyboard-Pipeline" },
+      "Localization pipeline": { fr: "Pipeline localisation", es: "Pipeline de localización", de: "Lokalisierungs-Pipeline" },
+      "GPU Mem": { fr: "Mém. GPU", es: "Mem. GPU", de: "GPU-Speicher" },
+      "Queue": { fr: "File", es: "Cola", de: "Schlange" },
+      "Queue depth": { fr: "Jobs en file", es: "Trabajos en cola", de: "Jobs in Warteschlange" },
+      "Last job": { fr: "Dernier job", es: "Último trabajo", de: "Letzter Job" },
+      "Ollama LLM": { fr: "LLM Ollama", es: "LLM Ollama", de: "Ollama-LLM" },
+      "ComfyUI diffusion": { fr: "Diffusion ComfyUI", es: "Difusión ComfyUI", de: "ComfyUI-Diffusion" },
+      "Live": { fr: "En ligne", es: "Activo", de: "Live" },
+      "Offline": { fr: "Hors ligne", es: "Sin conexión", de: "Offline" },
+      "offline": { fr: "hors ligne", es: "sin conexión", de: "offline" },
+      "Ready": { fr: "Prêt", es: "Listo", de: "Bereit" },
+      "up": { fr: "actif", es: "activo", de: "aktiv" },
+      "diffusion · GB10": { fr: "diffusion · GB10", es: "difusión · GB10", de: "Diffusion · GB10" },
+      "lora · GB10": {},
+      "LLM · prompt enrichment": { fr: "LLM · enrichissement du prompt", es: "LLM · enriquecimiento del prompt", de: "LLM · Prompt-Anreicherung" },
+      "Aucun modèle détecté.": { en: "No model detected.", es: "Ningún modelo detectado.", de: "Kein Modell erkannt." },
+      "Aucun pipeline": { en: "No pipeline", es: "Ningún pipeline", de: "Keine Pipeline" },
+      "Aucun modèle": { en: "No engine", es: "Ningún motor", de: "Keine Engine" },
+      "Fallback Demo Asset": { fr: "Asset de démo de secours", es: "Asset de demo de respaldo", de: "Fallback-Demo-Asset" },
+      "Pre-generated · safe demo mode": { fr: "Pré-généré · mode démo sécurisé", es: "Pregenerado · modo demo seguro", de: "Vorab generiert · sicherer Demomodus" },
+      "North America": { fr: "Amérique du Nord", es: "Norteamérica", de: "Nordamerika" },
+      "Latin America": { fr: "Amérique latine", es: "Latinoamérica", de: "Lateinamerika" },
+      "Europe": { es: "Europa", de: "Europa" },
+      "Middle East": { fr: "Moyen-Orient", es: "Oriente Medio", de: "Naher Osten" },
+      "Africa": { fr: "Afrique", es: "África", de: "Afrika" },
+      "Asia": { fr: "Asie", es: "Asia", de: "Asien" },
+      "Style fiches perso/décor (LoRA)": { en: "Character/location sheet style (LoRA)", es: "Estilo de fichas de personaje/decorado (LoRA)", de: "Stil der Figuren-/Schauplatzblätter (LoRA)" },
+      "Images de référence supplémentaires (max 7)": { en: "Additional reference images (max 7)", es: "Imágenes de referencia adicionales (máx. 7)", de: "Zusätzliche Referenzbilder (max. 7)" },
+      "Vidéos de référence (max 3)": { en: "Reference videos (max 3)", es: "Vídeos de referencia (máx. 3)", de: "Referenzvideos (max. 3)" },
+      "Audios de référence (max 3)": { en: "Reference audios (max 3)", es: "Audios de referencia (máx. 3)", de: "Referenz-Audios (max. 3)" },
+      "Ignorer les fiches, mes références seulement — utilise les 2 premières images de « Images de référence supplémentaires » comme ref_image_0/1": {
+        en: "Skip the sheets, my references only — uses the first 2 images of “Additional reference images” as ref_image_0/1",
+        es: "Omitir las fichas, solo mis referencias — usa las 2 primeras imágenes de «Imágenes de referencia adicionales» como ref_image_0/1",
+        de: "Blätter überspringen, nur meine Referenzen — verwendet die ersten 2 Bilder aus „Zusätzliche Referenzbilder“ als ref_image_0/1" },
+      "Fournie, la vidéo se termine dessus ; laissée vide, le clip part de la première image comme avant.": {
+        en: "If provided, the video ends on it; if left empty, the clip starts from the first image as before.",
+        es: "Si se proporciona, el vídeo termina en ella; si se deja vacía, el clip parte de la primera imagen como antes.",
+        de: "Wenn angegeben, endet das Video darauf; leer gelassen, startet der Clip wie bisher vom ersten Bild." },
+      "Réécrit ton brief en prompt de diffusion détaillé (+ negative prompt) via le LLM, une seule fois, sans lancer de génération": {
+        en: "Rewrites your brief into a detailed diffusion prompt (+ negative prompt) via the LLM, once, without starting a generation",
+        es: "Reescribe tu brief como un prompt de difusión detallado (+ negative prompt) con el LLM, una sola vez, sin lanzar ninguna generación",
+        de: "Schreibt dein Briefing mit dem LLM einmalig in einen detaillierten Diffusions-Prompt (+ Negativ-Prompt) um, ohne eine Generierung zu starten" },
+      "Enrichit automatiquement le brief via gemma4:e4b avant chaque génération (sauf workflows avec enrichissement intégré)": {
+        en: "Automatically enriches the brief via gemma4:e4b before each generation (except workflows with built-in enrichment)",
+        es: "Enriquece automáticamente el brief con gemma4:e4b antes de cada generación (salvo workflows con enriquecimiento integrado)",
+        de: "Reichert das Briefing vor jeder Generierung automatisch mit gemma4:e4b an (außer bei Workflows mit integrierter Anreicherung)" },
+      "✨ Enrichissement auto (gemma4:e4b) : non": { en: "✨ Auto-enrichment (gemma4:e4b): off", es: "✨ Enriquecimiento auto (gemma4:e4b): no", de: "✨ Auto-Anreicherung (gemma4:e4b): aus" },
+      "✨ Enrichissement auto (gemma4:e4b) : oui": { en: "✨ Auto-enrichment (gemma4:e4b): on", es: "✨ Enriquecimiento auto (gemma4:e4b): sí", de: "✨ Auto-Anreicherung (gemma4:e4b): an" },
+      "Retirer l'asset sélectionné": { en: "Clear the selected asset", es: "Quitar el asset seleccionado", de: "Ausgewähltes Asset entfernen" },
+      "Supprimer de la galerie": { en: "Remove from the gallery", es: "Quitar de la galería", de: "Aus der Galerie entfernen" },
+      "Ajouter à l'animatic multi-images": { en: "Add to the multi-image animatic", es: "Añadir al animatic multi-imagen", de: "Zum Multi-Bild-Animatic hinzufügen" },
+      "Monter": { en: "Move up", es: "Subir", de: "Nach oben" },
+      "Descendre": { en: "Move down", es: "Bajar", de: "Nach unten" },
+      "Retirer": { en: "Remove", es: "Quitar", de: "Entfernen" },
+      "Valide les planches personnage et décor pour activer le lancement.": {
+        en: "Approve the character and location sheets to enable the launch.",
+        es: "Valida las láminas de personaje y decorado para activar el lanzamiento.",
+        de: "Bestätige die Figuren- und Schauplatzbögen, um den Start freizugeben." },
+      "Prêt à lancer la vidéo.": { en: "Ready to start the video.", es: "Listo para iniciar el vídeo.", de: "Bereit, das Video zu starten." },
+      "Lancer la vidéo": { en: "Start the video", es: "Iniciar el vídeo", de: "Video starten" },
+      "En attente": { en: "Queued", es: "En cola", de: "Wartend" },
+      "Terminé": { en: "Done", es: "Terminado", de: "Fertig" },
+      "Annulé": { en: "Cancelled", es: "Cancelado", de: "Abgebrochen" },
+      // Libellés d'affichage des listes Pipeline et Moteur (PIPELINE_LABELS / WORKFLOW_LABELS)
+      "Image à partir d'un texte (Text2Image)": { en: "Image from text (Text2Image)", es: "Imagen a partir de un texto (Text2Image)", de: "Bild aus Text (Text2Image)" },
+      "Retouche d'image (Image2Image)": { en: "Image editing (Image2Image)", es: "Retoque de imagen (Image2Image)", de: "Bildbearbeitung (Image2Image)" },
+      "Vidéo à partir d'une image (Image2Video)": { en: "Video from an image (Image2Video)", es: "Vídeo a partir de una imagen (Image2Video)", de: "Video aus einem Bild (Image2Video)" },
+      "Vidéo à partir d'un texte (Text2Video)": { en: "Video from text (Text2Video)", es: "Vídeo a partir de un texto (Text2Video)", de: "Video aus Text (Text2Video)" },
+      "Storyboard + animatic (planches, plans, cuts)": { en: "Storyboard + animatic (sheets, shots, cuts)", es: "Storyboard + animatic (láminas, planos, cortes)", de: "Storyboard + Animatic (Bögen, Einstellungen, Cuts)" },
+      "Personnage + décor cohérents (Minimax H3)": { en: "Consistent character + location (Minimax H3)", es: "Personaje + decorado coherentes (Minimax H3)", de: "Konsistente Figur + Schauplatz (Minimax H3)" },
+      "Campagne complète (affiches + miniatures + teaser)": { en: "Full campaign (posters + thumbnails + teaser)", es: "Campaña completa (pósters + miniaturas + teaser)", de: "Komplette Kampagne (Poster + Thumbnails + Teaser)" },
+      "LTX 2.5 · audio natif": { en: "LTX 2.5 · native audio", es: "LTX 2.5 · audio nativo", de: "LTX 2.5 · natives Audio" },
+      "Minimax H3 · audio natif": { en: "Minimax H3 · native audio", es: "Minimax H3 · audio nativo", de: "Minimax H3 · natives Audio" },
+      "Minimax H3 · références": { en: "Minimax H3 · references", es: "Minimax H3 · referencias", de: "Minimax H3 · Referenzen" },
+      "LTX 2.5 · chaîne d'images": { en: "LTX 2.5 · image chain", es: "LTX 2.5 · cadena de imágenes", de: "LTX 2.5 · Bilderkette" },
+      "Images des plans : Qwen-Edit 2509": { en: "Shot images: Qwen-Edit 2509", es: "Imágenes de los planos: Qwen-Edit 2509", de: "Bilder der Einstellungen: Qwen-Edit 2509" },
+      "Images des plans : Qwen Image 2.1": { en: "Shot images: Qwen Image 2.1", es: "Imágenes de los planos: Qwen Image 2.1", de: "Bilder der Einstellungen: Qwen Image 2.1" },
       "Manquant": { en: "Missing", es: "Falta", de: "Fehlt" },
       "Supprimer définitivement ce projet et repartir de zéro ?":
         { en: "Permanently delete this project and start over?",
@@ -2697,9 +2790,9 @@
         fr: i => `Sujet ${i}`, en: i => `Subject ${i}`,
         es: i => `Sujeto ${i}`, de: i => `Motiv ${i}` },
       subjectsPick: {
-        fr: n => `Sujets du plan — cliquez pour en ancrer jusqu'à ${n}`,
+        fr: n => `Sujets du plan — clique pour en ancrer jusqu'à ${n}`,
         en: n => `Subjects in this shot — click to anchor up to ${n}`,
-        es: n => `Sujetos del plano — haga clic para anclar hasta ${n}`,
+        es: n => `Sujetos del plano — haz clic para anclar hasta ${n}`,
         de: n => `Motive dieser Einstellung — bis zu ${n} per Klick verankern` },
       subjectsCap: {
         fr: n => `Sujets du plan — ${n} au maximum par plan`,
@@ -2709,6 +2802,14 @@
       sessionJob: {
         fr: (k, n, t) => `Job ${k}/${n} · ${t}`, en: (k, n, t) => `Job ${k}/${n} · ${t}`,
         es: (k, n, t) => `Trabajo ${k}/${n} · ${t}`, de: (k, n, t) => `Job ${k}/${n} · ${t}` },
+      jobRunning: {
+        fr: p => `En cours ${p} %`, en: p => `Running ${p}%`,
+        es: p => `En curso ${p} %`, de: p => `Läuft ${p} %` },
+      jobsN: {
+        fr: n => `${n} job${n > 1 ? "s" : ""}`, en: n => `${n} job${n > 1 ? "s" : ""}`,
+        es: n => `${n} trabajo${n > 1 ? "s" : ""}`, de: n => `${n} Job${n > 1 ? "s" : ""}` },
+      assetChip: {
+        fr: f => `Asset : ${f}`, en: f => `Asset: ${f}`, es: f => `Asset: ${f}`, de: f => `Asset: ${f}` },
       sessionNode: {
         fr: p => `nœud ${p} %`, en: p => `node ${p}%`, es: p => `nodo ${p} %`, de: p => `Knoten ${p} %` },
       relaySegment: {
@@ -2724,7 +2825,7 @@
         de: (d, r) => `Dauer: standardmäßig ergeben ${d} s angefordert ${r} s (17n+5-Raster des Modells); jede Einstellung zeigt ihre eigene.` }
     };
     let LANG = localStorage.getItem("lang") || "fr";
-    function tr(key) { return LANG === "fr" ? key : (I18N[key]?.[LANG] ?? key); }
+    function tr(key) { return I18N[key]?.[LANG] ?? key; }
     function dyn(name, ...args) { return (DYN_I18N[name][LANG] || DYN_I18N[name].fr)(...args); }
     function translateTree(root) {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -2740,6 +2841,19 @@
           if (I18N[orig]) el.placeholder = tr(orig);
         }
       }
+      // title et aria-label. Garde de fraîcheur : si la valeur n'est plus celle que nous avons
+      // écrite en dernier, le code l'a réécrite et c'est elle la nouvelle origine.
+      for (const el of [root, ...root.querySelectorAll?.("[title],[aria-label]") ?? []]) {
+        for (const a of ["title", "aria-label"]) {
+          const v = el.getAttribute?.(a);
+          if (!v) continue;
+          const m = (el.__att ??= {});
+          if (!m[a] || v !== m[a].last) m[a] = { orig: v, last: v };
+          if (I18N[m[a].orig]) el.setAttribute(a, m[a].last = tr(m[a].orig));
+        }
+        // Nom accessible d'un bouton sans lettre (✕, 🗑, 🌙, ↑) : son title traduit.
+        if (el.tagName === "BUTTON" && el.title && !/\p{L}/u.test(el.textContent)) el.setAttribute("aria-label", el.title);
+      }
     }
     function applyLang(lang) {
       LANG = lang;
@@ -2754,6 +2868,8 @@
       renderSeqList();
       refreshCloudUI();
       updateStudioJobs(0);
+      for (const j of Object.values(jobs)) if (j.pct != null) j.statusEl.textContent = dyn("jobRunning", j.pct);
+      if (selectedAsset) $("assetChipName").textContent = dyn("assetChip", selectedAsset.filename);
       renderStyleOptions();
       renderSheetTemplateOptions();
       renderLoraSelect();
@@ -2761,7 +2877,7 @@
       refreshSessionBar();
       refreshSubjectUI();
       refreshGenerateLabel();
-      if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); renderRelay(); }
+      if (director) { renderSheetMenu("char"); renderSheetMenu("loc"); updateValidateButtonState(); renderShotDNAList(); renderMontage(); renderFooterTimeline(); renderRelay(); updateCutEngineHint(); updateGateState(); }
     });
 
     // ── Events log ─────────────────────────────────────────────────
@@ -2780,14 +2896,32 @@
 
     let activeScenario = "campaign";
 
+    // Libellés d'AFFICHAGE des deux listes (S8) : le manifest garde ses libellés techniques, que les
+    // jobs, la galerie et le journal continuent d'utiliser. Id absent de la table = label du manifest.
+    const PIPELINE_LABELS = {
+      text2image: "Image à partir d'un texte (Text2Image)", image2image: "Retouche d'image (Image2Image)",
+      image2video: "Vidéo à partir d'une image (Image2Video)", text2video: "Vidéo à partir d'un texte (Text2Video)",
+      sequence2video: "Animatic multi-images (FLF2V)", storyboard_v2: "Storyboard + animatic (planches, plans, cuts)",
+      reference2video: "Personnage + décor cohérents (Minimax H3)",
+      campaign_full: "Campagne complète (affiches + miniatures + teaser)"
+    };
+    const WORKFLOW_LABELS = {
+      krea2_t2i: "Krea 2 Turbo", qwen_edit_i2i: "Qwen-Edit 2509",
+      ltx25_t2v: "LTX 2.5 · audio natif", ltx25_i2v: "LTX 2.5 · audio natif",
+      minimax_h3_t2v: "Minimax H3 · audio natif", minimax_h3_i2v: "Minimax H3 · audio natif",
+      minimax_h3_r2v: "Minimax H3 · références", flf2v_chain: "LTX 2.5 · chaîne d'images",
+      storyboard_v2: "Images des plans : Qwen-Edit 2509", storyboard_v2_qwen21: "Images des plans : Qwen Image 2.1",
+      campaign_full: "Krea 2 + LTX 2.5"
+    };
     function refreshPipelineOptions() {
       // Certains pipelines sont réservés à un ou plusieurs scénarios (manifest v2 : pipelines[].scenario)
       const pipelines = [...new Set(manifest.workflows.map(w => w.pipeline))]
         .filter(p => { const s = pipelineScenarios(p); return !s || s.includes(activeScenario); });
       const prev = pipelineSelect.value;
       pipelineSelect.innerHTML = pipelines
-        .map(p => `<option value="${p}">${pipelineDef(p)?.label || p}</option>`).join("")
+        .map(p => `<option value="${p}">${PIPELINE_LABELS[p] || pipelineDef(p)?.label || p}</option>`).join("")
         || "<option value=''>Aucun pipeline</option>";
+      translateTree(pipelineSelect);   // options créées en FR : translateTree mémorise la clé (comme canvas.html)
       if (pipelines.includes(prev)) pipelineSelect.value = prev;
       updateModelOptions();
     }
@@ -2816,8 +2950,9 @@
     };
     function updateModelOptions() {
       const wfs = manifest.workflows.filter(w => w.pipeline === pipelineSelect.value);
-      modelSelect.innerHTML = wfs.map(w => `<option value="${w.id}">${w.label}</option>`).join("")
+      modelSelect.innerHTML = wfs.map(w => `<option value="${w.id}">${WORKFLOW_LABELS[w.id] || w.label}</option>`).join("")
         || "<option value=''>Aucun modèle</option>";
+      translateTree(modelSelect);
       const p = pipelineSelect.value;
       const def = pipelineDef(p);
       const controls = def?.controls || [];
@@ -2939,6 +3074,7 @@
     function selectScenario(scenario, pipeline = SCENARIOS[scenario].pipeline) {
       activeScenario = scenario;
       routeLabel.textContent = SCENARIOS[scenario].route;
+      translateTree(routeLabel);   // la route est une clé I18N : le journal garde le texte anglais
       refreshPipelineOptions();
       if ([...pipelineSelect.options].some(o => o.value === pipeline)) {
         pipelineSelect.value = pipeline;
@@ -3036,7 +3172,8 @@
       const job = jobs[d.prompt_id];
       if (msg.type === "progress" && job) {
         const pct = Math.round((d.value / d.max) * 100);
-        job.statusEl.textContent = `Running ${pct}%`;
+        job.pct = pct;
+        job.statusEl.textContent = dyn("jobRunning", pct);
         job.statusEl.className = "status running";
         $("stepInference").classList.add("active");
         burst.pct = pct;
@@ -3045,7 +3182,8 @@
         for (const f of extractFiles(d.output)) addAsset(f, job.label);
       } else if (msg.type === "execution_success" && job) {
         if (!activeJobIds.delete(d.prompt_id)) return; // job déjà annulé : ne pas le repasser en Done
-        job.statusEl.textContent = "Done";
+        job.statusEl.textContent = "Terminé";
+        translateTree(job.statusEl);
         job.statusEl.className = "status done";
         const secs = ((Date.now() - job.start) / 1000).toFixed(1);
         $("latency").textContent = `${secs}s`;
@@ -3056,7 +3194,8 @@
         delete jobs[d.prompt_id];
       } else if ((msg.type === "execution_error" || msg.type === "execution_interrupted") && job) {
         if (!activeJobIds.delete(d.prompt_id)) return; // job déjà annulé : erreur attendue, ignorée
-        job.statusEl.textContent = "Error";
+        job.statusEl.textContent = "Erreur";
+        translateTree(job.statusEl);
         job.statusEl.className = "status error";
         addEvent("WARN", msg.type === "execution_interrupted" ? `${job.label} interrompu.`
           : `Erreur d'exécution : ${d.exception_message || "voir logs ComfyUI"}`, "warn");
@@ -3160,7 +3299,7 @@
     let selectedAsset = null; // {filename, url}
     function setSelectedAsset(f, url) {
       selectedAsset = { filename: f.filename, url };
-      $("assetChipName").textContent = `Asset : ${f.filename}`;
+      $("assetChipName").textContent = dyn("assetChip", f.filename);
       $("assetChip").hidden = false;
       imageInput.value = "";
       const target = ["image2image", "image2video"].includes(pipelineSelect.value)
@@ -3382,11 +3521,12 @@
     function trackJob(promptId, label, sub) {
       const el = document.createElement("div");
       el.className = "job fade-in";
-      el.innerHTML = `<div><strong></strong><span class="sub"></span></div><span class="status running">Queued</span>`;
+      el.innerHTML = `<div><strong></strong><span class="sub"></span></div><span class="status running">En attente</span>`;
       el.querySelector("strong").textContent = label;
       el.querySelector(".sub").textContent = sub;
       jobList.prepend(el);
       jobs[promptId] = { el, statusEl: el.querySelector(".status"), label, start: Date.now() };
+      translateTree(jobs[promptId].statusEl);
       activeJobIds.add(promptId);
       while (jobList.children.length > 8) jobList.lastChild.remove();
       updateStudioJobs(1);
@@ -3398,7 +3538,7 @@
     function updateStudioJobs(delta) {
       if (delta > 0 && !runningJobs) burst = { n: 0, done: 0, start: Date.now(), pct: null };
       if (delta > 0) burst.n += delta;
-      else if (delta < 0 && runningJobs) burst.done -= delta;
+      else if (delta < 0) { burst.pct = null; if (runningJobs) burst.done -= delta; }   // succès, erreur ou annulation : plus de « nœud p % »
       runningJobs = Math.max(0, runningJobs + delta);
       renderSessionJobs();
       updateCancelButton();
@@ -3838,7 +3978,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       autoEnrich = !autoEnrich;
       const b = $("autoEnrichBtn");
       b.classList.toggle("active", autoEnrich);
-      b.textContent = `Auto-Enrich (${OLLAMA_MODEL}) : ${autoEnrich ? "ON" : "OFF"}`;
+      b.textContent = autoEnrich ? "✨ Enrichissement auto (gemma4:e4b) : oui" : "✨ Enrichissement auto (gemma4:e4b) : non";
+      translateTree(b);   // clé FR + translateTree : le libellé suit les changements de langue
       addEvent("SYS", `Auto-enrichissement ${autoEnrich ? "activé" : "désactivé"} (${OLLAMA_MODEL}).`, "sys");
     });
 
@@ -4004,6 +4145,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const card = document.createElement("div");
       card.className = "asset placeholder fade-in";
       card.innerHTML = `<div class="thumb"></div><div class="meta"><strong>Fallback Demo Asset</strong><span>Pre-generated · safe demo mode</span></div>`;
+      translateTree(card);
       galleryImages.prepend(card);
       addEvent("WARN", "Fallback demo asset injecté dans la galerie.", "warn");
     });
@@ -4015,29 +4157,35 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       g.querySelector("strong").textContent = text;
     }
 
+    // Un seul format de pourcentage : « 87% » en EN, « 87 % » ailleurs (mis à jour au sondage suivant).
+    const pctText = n => (LANG === "en" ? `${n}%` : `${n} %`);
     async function pollMonitor() {
       if (document.hidden) return;
       try {
         const s = await (await fetch(`${COMFY}/system_stats`)).json();
         const dev = (s.devices || [])[0];
         const vram = dev?.vram_total ? Math.round((1 - dev.vram_free / dev.vram_total) * 100) : null;
-        if (vram !== null) setGauge("gaugeVram", vram, `${vram}%`);
-        $("sbGpu").querySelector("strong").textContent = vram === null ? "—" : `${vram} %`; // barre de session
+        if (vram !== null) setGauge("gaugeVram", vram, pctText(vram));
+        $("sbGpu").querySelector("strong").textContent = vram === null ? "—" : pctText(vram); // barre de session
         if (s.system && s.system.ram_total) {
           const pct = Math.round((1 - s.system.ram_free / s.system.ram_total) * 100);
-          setGauge("gaugeRam", pct, `${pct}%`);
+          setGauge("gaugeRam", pct, pctText(pct));
         }
         $("comfyVersion").textContent = s.system?.comfyui_version || "up";
+        translateTree($("comfyVersion"));
         const q = await (await fetch(`${COMFY}/queue`)).json();
         const depth = (q.queue_running?.length || 0) + (q.queue_pending?.length || 0);
-        $("queueDepth").textContent = `${depth} job${depth > 1 ? "s" : ""}`;
+        $("queueDepth").textContent = dyn("jobsN", depth);
         setGauge("gaugeQueue", depth * 20, String(depth));
         $("nodeState").textContent = "Live";
+        translateTree($("nodeState"));
         $("nodeDot").classList.remove("offline");
       } catch {
         $("nodeState").textContent = "Offline";
+        translateTree($("nodeState"));
         $("nodeDot").classList.add("offline");
         $("comfyVersion").textContent = "offline";
+        translateTree($("comfyVersion"));
         $("sbGpu").querySelector("strong").textContent = "—";
       }
       try {
@@ -4046,6 +4194,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       } catch {
         $("ollamaState").textContent = "Offline";
       }
+      translateTree($("ollamaState"));
     }
 
     // ── Model management panel ─────────────────────────────────────
@@ -4053,6 +4202,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       el.innerHTML = names.length
         ? names.map(n => `<div class="model"><strong>${n}</strong><small>${sub}</small></div>`).join("")
         : `<div class="model"><small>Aucun modèle détecté.</small></div>`;
+      translateTree(el);   // sous-titres et message vide : clés FR, traduites à la création et au changement de langue
     }
 
     async function loadModels() {
@@ -4065,6 +4215,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       }
       renderModels($("diffusionModels"), names, "diffusion · GB10");
       $("mmState").textContent = names.length ? "Ready" : "Offline";
+      translateTree($("mmState"));
       try {
         const loraNames = await (await fetch(`${COMFY}/models/loras`)).json();
         renderModels($("loraModels"), loraNames, "lora · GB10");
@@ -4156,17 +4307,18 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         row.appendChild(dur);
         const ctl = document.createElement("div");
         ctl.className = "seq-ctl";
-        [["↑", () => { if (i > 0) { [seqImages[i - 1], seqImages[i]] = [seqImages[i], seqImages[i - 1]]; renderSeqList(); } }],
-         ["↓", () => { if (i < seqImages.length - 1) { [seqImages[i + 1], seqImages[i]] = [seqImages[i], seqImages[i + 1]]; renderSeqList(); } }],
-         ["✕", () => { seqImages.splice(i, 1); renderSeqList(); }]].forEach(([txt, fn]) => {
+        [["↑", "Monter", () => { if (i > 0) { [seqImages[i - 1], seqImages[i]] = [seqImages[i], seqImages[i - 1]]; renderSeqList(); } }],
+         ["↓", "Descendre", () => { if (i < seqImages.length - 1) { [seqImages[i + 1], seqImages[i]] = [seqImages[i], seqImages[i + 1]]; renderSeqList(); } }],
+         ["✕", "Retirer", () => { seqImages.splice(i, 1); renderSeqList(); }]].forEach(([txt, title, fn]) => {
           const b = document.createElement("button");
-          b.type = "button"; b.textContent = txt;
+          b.type = "button"; b.textContent = txt; b.title = tr(title);
           b.addEventListener("click", fn);
           ctl.appendChild(b);
         });
         row.appendChild(ctl);
         list.appendChild(row);
       });
+      translateTree(list);   // nom accessible (aria-label) des boutons ↑ ↓ ✕
       const total = seqImages.slice(0, -1).reduce((s, it) => s + it.dur, 0);
       const sz = seqTargetSize();
       $("seqSummary").textContent = seqImages.length >= 2
@@ -5755,7 +5907,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       $("studioTimeline").innerHTML = "";
       updateValidateButtonState();
       $("directorR2VLaunchBtn").disabled = true;
-      $("studioVideoR2VStatus").textContent = tr("Validez les planches personnage et décor pour activer le lancement.");
+      $("studioVideoR2VStatus").textContent = tr("Valide les planches personnage et décor pour activer le lancement.");
       updateStudioNavForPipeline();
       renderSheetMenu("char");
       renderSheetMenu("loc");
@@ -6094,7 +6246,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // Sujet ajouté à la main : la liste de variantes est vide et RIEN ne part tout seul —
       // le statut dit donc quoi faire, et le bouton s'appelle « Générer », pas « Régénérer ».
       section.querySelector(".sheet-status").textContent = !word
-        ? (director && isChar && !variants.length ? tr("Aucune planche : décrivez le sujet (ou ✎ Prompt) puis générez.") : "")
+        ? (director && isChar && !variants.length ? tr("Aucune planche : décris le sujet (ou ✎ Prompt) puis génère.") : "")
         : variants.length > 1 ? `${tr(word)} · ${dyn("activeSheet", active + 1, variants.length)}` : tr(word);
       const regen = section.querySelector(".sheet-regen");
       regen.textContent = tr(variants.length ? "🔄 Régénérer la planche" : "Générer la planche");
@@ -6216,7 +6368,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
                                 : compileLocsheetPrompt(locDescFromFields(director.locFields));
         openPromptEditor({
           title: isChar ? "Prompt de la planche personnage" : "Prompt de la planche décor",
-          hint: "Krea 2 n'encode aucun prompt négatif : formulez chaque contrainte positivement. Un ré-enrichissement ne réécrit que la description du sujet — la composition de la planche est toujours remise après.",
+          hint: "Krea 2 n'encode aucun prompt négatif : formule chaque contrainte positivement. Un ré-enrichissement ne réécrit que la description du sujet — la composition de la planche est toujours remise après.",
           text: (active?.source === "generated" && active.prompt) || compiled,
           enrich: text => enrichSheetText(text, kind),
           apply: text => regenerateSheet(kind, text)
@@ -6252,7 +6404,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         $("directorR2VLaunchBtn").disabled = !unlocked;
         $("studioVideoR2VStatus").textContent = tr(unlocked
           ? "Prêt à lancer la vidéo."
-          : "Validez les planches personnage et décor pour activer le lancement.");
+          : "Valide les planches personnage et décor pour activer le lancement.");
         const vid = document.querySelector('#studioNav [data-section="video"]');
         vid.disabled = !unlocked;
         vid.classList.toggle("locked", !unlocked);
@@ -6353,7 +6505,6 @@ Answer ONLY with JSON: {"prompt": "..."}`;
                 <label><span class="lbl-duration"></span><input type="number" min="1" max="8" data-field="duration" /></label>
               </div>
               <label><span class="lbl-extra"></span><input type="text" data-field="extra" /></label>
-              <p class="hint lbl-durhint"></p>
             </div>
             <div class="shot-kf" id="kfSlot_${i}"></div>
           </div>`;
@@ -6365,7 +6516,6 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         item.querySelector(".lbl-emotion").textContent = tr("Émotion");
         item.querySelector(".lbl-duration").textContent = tr("Durée (s)");
         item.querySelector(".lbl-extra").textContent = tr("Détails");
-        item.querySelector(".lbl-durhint").textContent = tr("arrondi 8n+1 au rendu");
         const camEl = item.querySelector('[data-field="camera"]');
         const lightEl = item.querySelector('[data-field="lighting"]');
         const actionEl = item.querySelector('[data-field="action"]');
@@ -6373,10 +6523,11 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         const durEl = item.querySelector('[data-field="duration"]');
         const extraEl = item.querySelector('[data-field="extra"]');
         const actionBtn = item.querySelector(".shot-action-btn");
-        actionBtn.textContent = tr("✎ Prompt de l'action");
+        actionBtn.textContent = tr("✎ Réécrire l'action");
         actionBtn.addEventListener("click", () => openShotActionPrompt(i));
         actionEl.value = shot.action; emotionEl.value = shot.emotion;
         durEl.value = shot.duration; extraEl.value = shot.extra;
+        durEl.title = tr("arrondi 8n+1 au rendu");   // note technique : infobulle du champ Durée, plus de paragraphe
         camEl.addEventListener("change", () => { shot.camera = camEl.value; saveProject(); });
         lightEl.addEventListener("change", () => { shot.lighting = lightEl.value; saveProject(); });
         actionEl.addEventListener("change", () => { shot.action = actionEl.value.trim() || shot.action; saveProject(); });
@@ -6402,7 +6553,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       openPromptEditor({
         title: "Prompt de l'action du plan",
         applyLabel: "Appliquer au plan",
-        hint: "Ce texte décrit ce qui se passe dans le plan. Il est repris tel quel dans la keyframe puis dans le cut ; le cadrage, la lumière et le style sont ajoutés par l'app.",
+        hint: "Ce texte décrit ce qui se passe dans le plan. Il est repris tel quel dans l'image du plan puis dans le cut ; le cadrage, la lumière et le style sont ajoutés par l'app.",
         text: shot.action,
         enrich: text => enrichShotAction(text, descs),
         apply: text => {
@@ -6500,7 +6651,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       regenBtn.textContent = tr("🔄 Régénérer");
       regenBtn.disabled = kf.locked || kf.status === "pending";
       const promptBtn = card.querySelector(".kf-prompt");
-      promptBtn.textContent = tr(kf.edited ? "✎ Prompt ✱" : "✎ Prompt");
+      promptBtn.textContent = tr(kf.edited ? "✎ Prompt image complet ✱" : "✎ Prompt image complet");
       promptBtn.disabled = kf.locked || kf.status === "pending";
       const lockBtn = card.querySelector(".kf-lock");
       lockBtn.textContent = tr(kf.locked ? "🔓 Déverrouiller" : "🔒 Verrouiller");
@@ -6551,8 +6702,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const dual = subs.length > 1;
       const compiled = compileKeyframePrompt(shot, subs.map(r => r.desc));
       openPromptEditor({
-        title: "Prompt de la keyframe",
-        hint: "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passez par « ✎ Prompt de l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.",
+        title: "Prompt de l'image du plan",
+        hint: "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passe par « ✎ Réécrire l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.",
         text: kf.prompt || compiled,
         enrich: text => enrichKeyframeText(text, dual),
         apply: text => regenerateKeyframe(i, ensureKeyframeAnchor(text, dual))
@@ -6593,7 +6744,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       const engine = currentCutEngine();
       const el = $("cutEngineHint");
       if (engine !== "minimax_h3") {
-        el.textContent = tr("Chemin qualifié en rendu réel. Le prompt est ancré sur le contenu de la keyframe.");
+        el.textContent = tr("Moteur par défaut, éprouvé en rendu. Le prompt part du contenu de l'image du plan.");
         return;
       }
       const dur = Math.min(8, Math.max(1, parseInt($("videoDuration").value, 10) || 2));
@@ -6739,7 +6890,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         title: "Prompt du cut",
         hint: isMM
           ? "Bloc à champs Minimax H3 : le ré-enrichissement ne réécrit que detailed_description, les définitions de sujets restent en place."
-          : "LTX 2.5 tourne à cfg 1 : son enhancer intégré fait loi, gardez l'identité du personnage et le décor dans le prompt.",
+          : "LTX 2.5 tourne à cfg 1 : son enhancer intégré fait loi, garde l'identité du personnage et le décor dans le prompt.",
         text: cut.prompt || compileCutPromptFor(p.shot, shotCharDesc(p.shot), director.locDesc, p.holdMotion, engine, cut.duration),
         enrich: async text => {
           if (!isMM) return enrichCutText(text, engine);
@@ -6781,7 +6932,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         const stale = cut.status === "stale";
         const realDur = cut.engine === "minimax_h3" ? ` · ${h3RealDuration(cut.duration).toFixed(2)} s rendus` : "";
         clip.querySelector(".clip-meta").innerHTML =
-          `seed ${cut.seed}${realDur} · ${stale ? `<span class="stale">${tr("à re-rendre")}</span>` :
+          `seed ${cut.seed}${realDur} · ${stale ? `<span class="stale">${tr("à régénérer")}</span>` :
             tr(cut.status === "pending" ? "Génération…" : cut.status === "error" ? "Erreur" : cut.status === "missing" ? "Manquant" : "Prêt")}`;
         const vid = clip.querySelector("video"), missEl = clip.querySelector(".thumb-missing");
         if (cut.status === "missing") { vid.hidden = true; missEl.hidden = false; missEl.textContent = tr("Manquant"); }
@@ -6804,7 +6955,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         upBtn.addEventListener("click", () => moveClip(pos, -1));
         downBtn.addEventListener("click", () => moveClip(pos, 1));
         const regenBtn = clip.querySelector(".clip-regen");
-        regenBtn.textContent = tr("🔄 Re-rendre ce plan");
+        regenBtn.textContent = tr("🔄 Régénérer ce plan");
         regenBtn.disabled = cut.status === "pending";
         regenBtn.addEventListener("click", () => regenerateCut(k));
         const promptBtn = clip.querySelector(".clip-prompt");
@@ -7119,7 +7270,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         el.querySelector("strong").textContent = dyn("relaySegment", i + 1, r.segments.length);
         el.querySelector(".seg-status").textContent = tr(
           seg.status === "pending" ? "Génération…" : seg.status === "error" ? "Erreur"
-          : seg.status === "stale" ? "À re-générer" : seg.status === "ready" ? "Prêt" : "À générer");
+          : seg.status === "stale" ? "À régénérer" : seg.status === "ready" ? "Prêt" : "À générer");
         const area = el.querySelector("textarea");
         area.value = seg.prompt;
         area.placeholder = tr("Ce qui se passe dans ce segment.");
@@ -7139,7 +7290,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
           link.textContent = tr("🎞 Premier segment");
           link.disabled = true;
         } else {
-          link.textContent = `${RELAY_MODES[seg.mode]} ${tr(seg.mode === "continue" ? "Continu (frame exacte)" : "Coupure (nouvelle keyframe)")}`;
+          link.textContent = `${RELAY_MODES[seg.mode]} ${tr(seg.mode === "continue" ? "Continu (frame exacte)" : "Coupure (nouvelle image du plan)")}`;
           link.classList.toggle("active", seg.mode === "continue");
           link.disabled = busy;
           link.addEventListener("click", () => {
@@ -7163,7 +7314,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
         // Re-rendre CE segment seul. Disponible dès qu'il a déjà été rendu une fois (ou a
         // échoué) : avant, c'est « Générer la chaîne » qui fait le travail.
         const regen = el.querySelector(".seg-regen");
-        regen.textContent = tr("🔄 Re-générer");
+        regen.textContent = tr("🔄 Régénérer");
         regen.disabled = busy || !["ready", "stale", "error"].includes(seg.status);
         regen.addEventListener("click", () => regenerateRelaySegment(i));
         renderSegmentEndImage(el, i, seg, busy);
@@ -7717,7 +7868,8 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
       for (const id of queued) {
         const job = jobs[id];
         if (!job) continue;
-        job.statusEl.textContent = "Cancelled";
+        job.statusEl.textContent = "Annulé";
+        translateTree(job.statusEl);
         job.statusEl.className = "status fallback";
         updateStudioJobs(-1);
         delete jobs[id];
@@ -7789,6 +7941,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
     // ── Boot ───────────────────────────────────────────────────────
     addEvent("SYS", "AI Content Studio chargé (mode 100% local, sans backend).", "sys");
     applyLang(LANG);
+    bumpGalleryCount(false, 0);   // compteurs des onglets de galerie, dans la langue du démarrage
     renderStyleOptions();
     renderSheetTemplateOptions();
     loadManifest();
