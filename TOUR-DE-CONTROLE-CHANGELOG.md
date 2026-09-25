@@ -69,8 +69,9 @@ Décision de l'utilisateur du 2026-09-24 : porter au Canvas les corrections de p
 
 ### Écarts assumés
 - **Duplication Studio/Canvas maintenue** : le code de compilation de prompts est porté dans `js/engine.js`, pas partagé ;
-  les deux copies doivent rester identiques jusqu'à I13-B (source unique, décision de l'utilisateur en attente). Aucun test
-  de parité n'existe dans le dépôt ; les bancs vivent hors dépôt (`~/.cache/ai-content-studio/`).
+  les deux copies doivent rester identiques jusqu'à I13-B (source unique, décision de l'utilisateur en attente). Le test
+  de parité `node tools/parity-prompts.js` (ajouté après ce lot, `docs/TESTING.md` § « Parité des prompts Studio / Canvas »)
+  compare les deux copies (une seule différence de flux voulue, `forceKind` : le Canvas lit le jeu imposé de gemma, le Studio reverse le texte décidé, à conserver lors de I13-B) ; les bancs de graphes et d'UI vivent hors dépôt (`~/.cache/ai-content-studio/`).
 - **Non traité** : Trailer illisible à 768 px (C7) ; texte dessiné du canvas litegraph à ≈ 2,6:1 en thème clair (C10) ;
   « Mégapixels » et « Style H3 (LoRA) » sans clé `I18N` au Canvas ; sélection d'entrée non rétablie après « Annuler » d'une
   suppression de galerie (S11) ; compteur de jobs par rafale (le relay repart à 1/1 à chaque segment, S12) ; gestes tactiles
