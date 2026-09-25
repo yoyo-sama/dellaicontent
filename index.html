@@ -840,6 +840,44 @@
     }
     .gallery-tab.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
 
+    /* Galerie 1.4.0 (lot A) : grille dense, filtres, favoris, sélection. Tout reste sous #galleryBlock :
+       .asset sert aussi aux images des plans du storyboard, qui ne doivent pas bouger. */
+    #galleryBlock .gallery { grid-template-columns: repeat(auto-fill, minmax(var(--thumb, 160px), 1fr)); gap: 12px; }
+    #galleryBlock .asset { position: relative; content-visibility: auto; contain-intrinsic-size: auto 160px auto 230px; }
+    #galleryBlock .asset .meta { padding: 8px 10px; }
+    #galleryBlock .asset .meta strong { font-size: 12.5px; }
+    #galleryBlock .asset .asset-actions { gap: 4px; padding: 6px 8px; align-content: flex-start; }
+    #galleryBlock .asset .asset-actions button { padding: 3px 7px; }
+    /* Souris, 768 px et plus : les actions prennent la place du titre au survol ou au clavier (:focus-within), sans
+       jamais couvrir la vignette (clic = agrandir, glisser = déposer). Au toucher et sous 768 px : toujours visibles. */
+    @media (hover: hover) and (min-width: 768px) {
+      #galleryBlock .asset > .meta, #galleryBlock .asset > .asset-actions { grid-area: 2 / 1; }
+      #galleryBlock .asset .asset-actions { background: var(--bg); opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+      #galleryBlock .asset:hover .asset-actions, #galleryBlock .asset:focus-within .asset-actions { opacity: 1; pointer-events: auto; }
+    }
+    #galleryBlock .asset.fav::after {
+      content: "★"; position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
+      display: grid; place-items: center; font-size: 13px; background: var(--grad); color: var(--on-grad); pointer-events: none;
+    }
+    #galleryBlock.selecting .asset { cursor: pointer; }
+    #galleryBlock.selecting .asset .asset-actions { display: none; }
+    #galleryBlock .asset:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+    #galleryBlock .asset.selected { outline: 3px solid var(--highlight); outline-offset: -3px; }
+    #galleryBlock .asset.selected::before {
+      content: "✓"; position: absolute; top: 6px; left: 6px; z-index: 1; width: 24px; height: 24px; border-radius: 50%;
+      display: grid; place-items: center; font-weight: 700; background: var(--grad); color: var(--on-grad);
+    }
+    .gallery-tools, .gallery-selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .gallery-selbar[hidden] { display: none; }
+    .gallery-tools input[type="search"] { flex: 1 1 180px; width: auto; min-width: 0; padding: 8px 12px; }
+    .gallery-tools select { flex: 0 1 220px; width: auto; min-width: 0; padding: 8px 12px; }
+    .gallery-tools .secondary-btn, .gallery-selbar .secondary-btn { padding: 8px 12px; font-size: 12px; }
+    .gallery-size { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+    .gallery-size input { width: 110px; padding: 0; accent-color: var(--highlight); }
+    .gallery-selbar { padding: 6px 10px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); background: var(--card-2); }
+    .gallery-selbar span { font-size: 13px; font-weight: 600; margin-right: auto; }
+    #gallerySentinel { height: 1px; }
+
     .hint { font-size: 12px; color: var(--text-2); }
 
     .check-row {
@@ -2103,12 +2141,26 @@
                   <button class="gallery-tab" id="tabVideos" data-tab="videos">Vidéos (0)</button>
                 </div>
               </div>
+              <div class="gallery-tools">
+                <input type="search" id="gallerySearch" placeholder="Rechercher (prompt, titre, fichier)" aria-label="Rechercher dans la galerie" />
+                <select id="galleryPipeline" aria-label="Filtrer par pipeline"><option value="">Tous les pipelines</option></select>
+                <button type="button" class="secondary-btn" id="galleryFavBtn" aria-pressed="false">★ Favoris</button>
+                <button type="button" class="secondary-btn" id="gallerySelectBtn" aria-pressed="false">Sélectionner</button>
+                <label class="gallery-size">Taille <input type="range" id="galleryThumb" min="96" max="320" step="8" value="160" /></label>
+              </div>
+              <div class="gallery-selbar" id="gallerySelBar" hidden>
+                <span id="gallerySelCount" role="status" aria-live="polite"></span>
+                <button type="button" class="secondary-btn" id="gallerySelFav">★ Favori</button>
+                <button type="button" class="secondary-btn" id="gallerySelDel">🗑 Supprimer</button>
+                <button type="button" class="secondary-btn" id="gallerySelNone">Tout désélectionner</button>
+              </div>
               <div class="gallery" id="galleryImages">
                 <div class="gallery-empty" id="galleryImagesEmpty">Aucune image générée pour l'instant. Lance une génération.</div>
               </div>
               <div class="gallery" id="galleryVideos" style="display:none">
                 <div class="gallery-empty" id="galleryVideosEmpty">Aucune vidéo générée pour l'instant.</div>
               </div>
+              <div id="gallerySentinel"></div>
             </div>
           </section>
         </div>
@@ -2855,6 +2907,19 @@
       "Retirer l'asset sélectionné": { en: "Clear the selected asset", es: "Quitar el asset seleccionado", de: "Ausgewähltes Asset entfernen" },
       "Supprimer de la galerie": { en: "Remove from the gallery", es: "Quitar de la galería", de: "Aus der Galerie entfernen" },
       "Ajouter à l'animatic multi-images": { en: "Add to the multi-image animatic", es: "Añadir al animatic multi-imagen", de: "Zum Multi-Bild-Animatic hinzufügen" },
+      "Rechercher (prompt, titre, fichier)": { en: "Search (prompt, title, file)", es: "Buscar (prompt, título, archivo)", de: "Suchen (Prompt, Titel, Datei)" },
+      "Rechercher dans la galerie": { en: "Search the gallery", es: "Buscar en la galería", de: "In der Galerie suchen" },
+      "Filtrer par pipeline": { en: "Filter by pipeline", es: "Filtrar por pipeline", de: "Nach Pipeline filtern" },
+      "Tous les pipelines": { en: "All pipelines", es: "Todos los pipelines", de: "Alle Pipelines" },
+      "Autre": { en: "Other", es: "Otro", de: "Andere" },
+      "★ Favoris": { en: "★ Favorites", es: "★ Favoritos", de: "★ Favoriten" },
+      "Sélectionner": { en: "Select", es: "Seleccionar", de: "Auswählen" },
+      "Taille": { en: "Size", es: "Tamaño", de: "Größe" },
+      "★ Favori": { en: "★ Favorite", es: "★ Favorito", de: "★ Favorit" },
+      "🗑 Supprimer": { en: "🗑 Remove", es: "🗑 Quitar", de: "🗑 Entfernen" },
+      "Tout désélectionner": { en: "Deselect all", es: "Deseleccionar todo", de: "Auswahl aufheben" },
+      "Favori": { en: "Favorite", es: "Favorito", de: "Favorit" },
+      "Aucun résultat pour ces filtres.": { en: "No results for these filters.", es: "Ningún resultado con estos filtros.", de: "Keine Treffer für diese Filter." },
       "Monter": { en: "Move up", es: "Subir", de: "Nach oben" },
       "Descendre": { en: "Move down", es: "Bajar", de: "Nach unten" },
       "Retirer": { en: "Remove", es: "Quitar", de: "Entfernen" },
@@ -2890,6 +2955,7 @@
     const DYN_I18N = {
       tabImages: { fr: n => `Images (${n})`, en: n => `Images (${n})`, es: n => `Imágenes (${n})`, de: n => `Bilder (${n})` },
       tabVideos: { fr: n => `Vidéos (${n})`, en: n => `Videos (${n})`, es: n => `Vídeos (${n})`, de: n => `Videos (${n})` },
+      gallerySel: { fr: n => `${n} sélectionné(s)`, en: n => `${n} selected`, es: n => `${n} seleccionado(s)`, de: n => `${n} ausgewählt` },
       openConsole: { fr: l => `Ouvrir ${l}`, en: l => `Open ${l}`, es: l => `Abrir ${l}`, de: l => `${l} öffnen` },
       seqGen: {
         fr: (s, t) => `${s} segment(s), ~${t} s — lance avec « Générer l'animatic »`,
@@ -3014,7 +3080,8 @@
     $("langSelect").value = LANG;
     $("langSelect").addEventListener("change", () => {
       applyLang($("langSelect").value);
-      bumpGalleryCount(false, 0);
+      renderGalleryTabs();
+      renderSelBar();
       renderSeqList();
       refreshCloudUI();
       updateStudioJobs(0);
@@ -3522,21 +3589,12 @@
     $("assetChipClear").addEventListener("click", clearSelectedAsset);
     imageInput.addEventListener("change", () => { if (imageInput.files[0]) clearSelectedAsset(); });
 
-    // ── Onglets de galerie ─────────────────────────────────────────
-    const galleryCounts = { images: 0, videos: 0 };
-    function switchGalleryTab(tab) {
-      $("tabImages").classList.toggle("active", tab === "images");
-      $("tabVideos").classList.toggle("active", tab === "videos");
-      galleryImages.style.display = tab === "images" ? "" : "none";
-      galleryVideos.style.display = tab === "videos" ? "" : "none";
-    }
-    $("tabImages").addEventListener("click", () => switchGalleryTab("images"));
-    $("tabVideos").addEventListener("click", () => switchGalleryTab("videos"));
-    function bumpGalleryCount(isVideo, delta = 1) {
-      galleryCounts[isVideo ? "videos" : "images"] += delta;
-      $("tabImages").textContent = dyn("tabImages", galleryCounts.images);
-      $("tabVideos").textContent = dyn("tabVideos", galleryCounts.videos);
-    }
+    // ── Galerie (1.4.0, lot A) ─────────────────────────────────────
+    // L'ÉTAT est une liste de données (galleryItems, objets « asset » C1 de docs/GALERIE.md § Contrat), plus les
+    // cartes : la grille de l'onglet courant n'en montre que des paquets de 60 (sentinelle + IntersectionObserver).
+    // Source courante : gallerySource (browserSource ; serviceSource au lot B3a), rechargée par galleryReload().
+    // Les clés historiques (galleryAssets, deletedAssets, assetPrompts) gardent « dossier/fichier » : l'objet en
+    // porte une copie dans `pkey` (hors contrat) ; `key` est la clé du contrat (favoris).
 
     // Assets supprimés : masqués définitivement côté studio (les fichiers restent dans l'output ComfyUI)
     const deletedAssets = new Set(JSON.parse(localStorage.getItem("deletedAssets") || "[]"));
@@ -3568,11 +3626,11 @@
 
     // Persistance galerie : la liste des assets ComfyUI + leurs prompts survit aux
     // fermetures d'onglet et aux restart ComfyUI (l'historique /history est volatil
-    // en RAM). Les images restent servies par /view qui lit le disque.
+    // en RAM). Les images restent servies par /view qui lit le disque. Une entrée d'avant 1.4.0 n'a pas de `ts`.
     const galleryAssets = JSON.parse(localStorage.getItem("galleryAssets") || "[]");
     function persistAsset(f, label) {
       const k = `${f.subfolder || ""}/${f.filename}`;
-      const entry = { filename: f.filename, subfolder: f.subfolder || "", type: f.type || "output", label };
+      const entry = { filename: f.filename, subfolder: f.subfolder || "", type: f.type || "output", label, ts: Date.now() };
       const out = [entry], seen = new Set([k]);
       for (const a of galleryAssets) {
         const ak = `${a.subfolder}/${a.filename}`;
@@ -3594,29 +3652,177 @@
       for (const [k, v] of assetPrompts) if (kept.has(k)) o[k] = v; // les cloud:* restent en mémoire, inutiles après rechargement
       saveLocal("assetPrompts", JSON.stringify(o));
     }
-    function restoreGallery() {
-      for (const a of galleryAssets) addAsset(a, a.label, false);
-      if (galleryAssets.length) addEvent("OK", `${galleryAssets.length} assets restaurés depuis le cache navigateur.`, "ok");
+
+    // Favoris : clés du contrat, localStorage « galleryFavs ».
+    let galleryFavs = new Set();
+    try { galleryFavs = new Set(JSON.parse(localStorage.getItem("galleryFavs") || "[]")); } catch {}
+    const galleryItems = [];      // session, sans plafond, plus récent d'abord (list() remonte les cloud:*)
+    const cardCache = new Map();  // pkey → carte : « Annuler » et le défilement réinsèrent le MÊME nœud
+    const galleryFilter = { type: "image", q: "", pipeline: "", fav: false, sort: "new" };
+    const galleryCounts = { image: 0, video: 0 };
+    const GALLERY_PAGE = 60;
+    const fold = s => String(s || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+    const isCloud = el => !!el.dataset?.key?.startsWith("cloud:");
+    function galleryAsset(url, filename, label, isVideo, pkey, subfolder, ts) {
+      const key = pkey.startsWith("cloud:") ? pkey : subfolder ? `${subfolder}/${filename}` : filename;
+      return { key, filename, subfolder, type: isVideo ? "video" : "image", url, thumb: isVideo ? null : url, ts,
+        prompt: null, pipeline: null, model: null, loras: null, seed: null, w: null, h: null, duration: null, size: null,
+        fav: galleryFavs.has(key), tags: [], label, trash: null, pkey };
+    }
+    // Filtres de la source navigateur (le type est choisi par l'onglet) : q = tous les mots, sans casse ni accents,
+    // dans le prompt connu, le libellé et le nom de fichier.
+    function galleryMatch(a, f) {
+      if (f.fav && !a.fav) return false;
+      if (f.pipeline && (assetPipeline(a.label) || "none") !== f.pipeline) return false;
+      const hay = fold(`${assetPrompts.get(a.pkey) || ""} ${a.label || ""} ${a.filename}`);
+      return fold(f.q).split(/\s+/).every(w => hay.includes(w));
+    }
+    const browserSource = {
+      id: "browser",
+      caps: { scope: false, models: false, tags: false, dates: false, rename: false, trash: false },
+      async list(f, cursor) {
+        const all = galleryItems.filter(a => !deletedAssets.has(a.pkey) && galleryMatch(a, f));
+        if (f.sort === "old") all.reverse();
+        const sorted = [...all.filter(a => a.key.startsWith("cloud:")), ...all.filter(a => !a.key.startsWith("cloud:"))];
+        const counts = { image: 0, video: 0 };
+        for (const a of sorted) counts[a.type]++;
+        const typed = sorted.filter(a => a.type === f.type), i = +cursor || 0;
+        return { items: typed.slice(i, i + GALLERY_PAGE), next: i + GALLERY_PAGE < typed.length ? String(i + GALLERY_PAGE) : null, counts };
+      },
+      async setFav(keys, on) {
+        for (const k of keys) on ? galleryFavs.add(k) : galleryFavs.delete(k);
+        for (const a of galleryItems) if (keys.includes(a.key)) a.fav = on;
+        saveLocal("galleryFavs", JSON.stringify([...galleryFavs]));
+      },
+      // Retire de la liste de session (et masque par markDeleted ce qui est persisté) ; l'annulation remet tout à sa place.
+      async remove(assets) {
+        const undos = assets.map(a => {
+          const i = galleryItems.indexOf(a);
+          galleryItems.splice(i, 1);
+          const unmark = a.key.startsWith("cloud:") ? null : markDeleted(a.pkey);
+          return () => { galleryItems.splice(i, 0, a); if (unmark) unmark(); };
+        });
+        return async () => { for (const u of undos.reverse()) u(); };
+      }
+    };
+    let gallerySource = browserSource;
+
+    // ── Onglets et compteurs (counts de la source, jamais le nombre de cartes du DOM) ──
+    // Chaque grille garde son état : _stale (à reconstruire), _pending (rechargement en cours), _gen, _next (curseur).
+    const gridOf = type => type === "video" ? galleryVideos : galleryImages;
+    let galleryRev = 0;
+    galleryImages._stale = galleryVideos._stale = true;
+    galleryImages._gen = galleryVideos._gen = 0;
+    function renderGalleryTabs() {
+      $("tabImages").textContent = dyn("tabImages", galleryCounts.image);
+      $("tabVideos").textContent = dyn("tabVideos", galleryCounts.video);
+    }
+    async function refreshGalleryCounts() {
+      Object.assign(galleryCounts, (await gallerySource.list({ ...galleryFilter }, null)).counts);
+      renderGalleryTabs();
+    }
+    function switchGalleryTab(tab) {
+      $("tabImages").classList.toggle("active", tab === "images");
+      $("tabVideos").classList.toggle("active", tab === "videos");
+      galleryImages.style.display = tab === "images" ? "" : "none";
+      galleryVideos.style.display = tab === "videos" ? "" : "none";
+      galleryFilter.type = tab === "videos" ? "video" : "image";
+      clearGallerySel();
+      if (gridOf(galleryFilter.type)._stale) galleryReload(); else galleryWatch();
+    }
+    $("tabImages").addEventListener("click", () => switchGalleryTab("images"));
+    $("tabVideos").addEventListener("click", () => switchGalleryTab("videos"));
+
+    // Recharge une grille (par défaut celle de l'onglet courant) avec la 1re page. Un asset arrivé pendant
+    // l'attente relance le rechargement.
+    async function galleryReload(type = galleryFilter.type) {
+      const grid = gridOf(type), gen = ++grid._gen, rev = galleryRev, cur = type === galleryFilter.type;
+      grid._pending = true;
+      if (cur) clearGallerySel();
+      const r = await gallerySource.list({ ...galleryFilter, type }, null);
+      if (gen !== grid._gen) return;
+      if (rev !== galleryRev) return galleryReload(type);
+      grid._pending = grid._stale = false;
+      Object.assign(galleryCounts, r.counts);
+      renderGalleryTabs();
+      grid.replaceChildren();
+      for (const a of r.items) placeCard(grid, a, false);
+      grid._next = r.next;
+      refreshFolders(grid);
+      refreshGalleryEmpty(grid);
+      renderPipelineFilter();
+      if (cur) galleryWatch();
+    }
+    // Paquet suivant quand la sentinelle approche (rootMargin 600 px). `_next` = curseur de la source.
+    async function galleryMore() {
+      const grid = gridOf(galleryFilter.type), gen = grid._gen, cursor = grid._next;
+      if (!cursor || grid._pending || grid._loading) return;
+      grid._loading = true;
+      const r = await gallerySource.list({ ...galleryFilter }, cursor);
+      grid._loading = false;
+      if (gen === grid._gen && grid._next === cursor) {
+        for (const a of r.items) placeCard(grid, a, false);
+        grid._next = r.next;
+        refreshFolders(grid);
+      }
+      galleryWatch();
+    }
+    const galleryIO = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) galleryMore(); }, { rootMargin: "600px" });
+    // Ré-observer rend un état initial : la page suivante vient aussi si la sentinelle est déjà proche.
+    function galleryWatch() { galleryIO.unobserve($("gallerySentinel")); galleryIO.observe($("gallerySentinel")); }
+
+    // Nouvel asset (WebSocket, historique, cloud) : en tête tout de suite s'il passe les filtres courants. Grille
+    // pas encore construite (l'autre onglet) : elle l'est maintenant, avec lui.
+    function galleryInsert(a) {
+      galleryItems.unshift(a);
+      galleryRev++;
+      refreshGalleryCounts();
+      renderPipelineFilter();
+      const grid = gridOf(a.type);
+      if (grid._stale && !grid._pending) return galleryReload(a.type);
+      if (grid._pending || !galleryMatch(a, galleryFilter)) return;
+      placeCard(grid, a, true);
+      if (grid._next) grid._next = String(+grid._next + 1);   // curseur de browserSource = indice
+      refreshFolders(grid);
+      refreshGalleryEmpty(grid);
     }
 
-    // Les sorties des tâches complètes (studio/story, studio/campaign) sont regroupées par dossier
-    function groupFor(target, folder) {
-      if (!folder || !/^studio\/(story|campaign)/.test(folder)) return { grid: target, group: null };
-      let grp = [...target.children].find(el => el.dataset?.folder === folder);
-      if (!grp) {
-        grp = document.createElement("div");
-        grp.className = "gallery-group fade-in";
-        grp.dataset.folder = folder;
-        grp.innerHTML = `<div class="folder-head"><span>📁 ${folder}</span><span class="folder-count"></span></div><div class="gallery"></div>`;
-        target.prepend(grp);
+    // Les sorties des tâches complètes (studio/story, studio/campaign) sont regroupées par dossier. Les encadrés
+    // (pleine largeur) restent en haut de la grille, après les cloud:* (toujours premiers) : placés au fil des cartes,
+    // ils laisseraient des trous dans la grille. En tête, un nouvel élément passe après les cloud:*.
+    function placeCard(grid, a, head) {
+      const card = galleryCard(a), top = g => [...g.children].find(el => !isCloud(el)) || null;
+      let g = grid;
+      if (/^studio\/(story|campaign)/.test(a.subfolder)) {
+        let grp = [...grid.children].find(el => el.dataset.folder === a.subfolder);
+        if (!grp) {
+          grp = document.createElement("div");
+          grp.className = "gallery-group fade-in";
+          grp.dataset.folder = a.subfolder;
+          grp.innerHTML = `<div class="folder-head"><span></span><span class="folder-count"></span></div><div class="gallery"></div>`;
+          grp.querySelector("span").textContent = `📁 ${a.subfolder}`;
+          grid.insertBefore(grp, head ? top(grid) : [...grid.children].find(el => el.matches(".asset") && !isCloud(el)) || null);
+        }
+        g = grp.querySelector(".gallery");
       }
-      return { grid: grp.querySelector(".gallery"), group: grp };
+      head ? g.insertBefore(card, isCloud(card) ? g.firstChild : top(g)) : g.appendChild(card);
     }
-    function refreshFolderCount(group) {
-      if (!group) return;
-      const n = group.querySelector(".gallery").children.length;
-      if (n === 0) group.remove();
-      else group.querySelector(".folder-count").textContent = String(n);
+    // Compteur d'un dossier = total filtré du dossier (pas les seules cartes chargées) ; dossier vide retiré.
+    function refreshFolders(grid) {
+      for (const grp of grid.querySelectorAll(".gallery-group")) {
+        if (!grp.querySelector(".asset")) { grp.remove(); continue; }
+        grp.querySelector(".folder-count").textContent = String(galleryItems.filter(a => a.subfolder === grp.dataset.folder
+          && gridOf(a.type) === grid && !deletedAssets.has(a.pkey) && galleryMatch(a, galleryFilter)).length);
+      }
+    }
+    // État vide traduit, recréé quand la grille n'a plus de carte.
+    function refreshGalleryEmpty(grid) {
+      const id = grid.id + "Empty";
+      if (grid.querySelector(".asset")) return $(id)?.remove();
+      if (!$(id)) grid.prepend(Object.assign(document.createElement("div"), { className: "gallery-empty", id }));
+      $(id).textContent = galleryFilter.q || galleryFilter.pipeline || galleryFilter.fav ? "Aucun résultat pour ces filtres."
+        : grid === galleryVideos ? "Aucune vidéo générée pour l'instant." : "Aucune image générée pour l'instant. Lance une génération.";
+      translateTree($(id));
     }
 
     // S18 : titre de carte = libellé du pipeline (traduit), sinon « Image » / « Vidéo » ; sous le titre, un
@@ -3624,9 +3830,13 @@
     // déduit du libellé de job (celui du manifest, ou un préfixe de tâche complète) : le format persisté ne change pas.
     const LABEL_PIPELINES = [["Storyboard", "storyboard_v2"], ["Campagne complète", "campaign_full"],
                              ["Animatic FLF2V", "sequence2video"], ["Personnage + décor", "reference2video"]];
+    function assetPipeline(label) {
+      label = String(label ?? "");   // entrée persistée ancienne sans libellé : pas de pipeline
+      return manifest.workflows.find(w => label.startsWith(w.label))?.pipeline
+        || LABEL_PIPELINES.find(([pre]) => label.startsWith(pre))?.[1] || null;
+    }
     function assetTitle(label, isVideo) {
-      const p = manifest.workflows.find(w => label.startsWith(w.label))?.pipeline
-        || LABEL_PIPELINES.find(([pre]) => label.startsWith(pre))?.[1];
+      const p = assetPipeline(label);
       return PIPELINE_LABELS[p] ? tr(PIPELINE_LABELS[p]) : tr(isVideo ? "Vidéo" : "Image");
     }
     function promptExcerpt(text, max = 90) {
@@ -3641,17 +3851,32 @@
     }
     function retitleGallery() {
       document.querySelectorAll("#galleryImages .asset[data-filename], #galleryVideos .asset[data-filename]").forEach(retitleCard);
+      renderPipelineFilter();
+    }
+    // Filtre pipeline : pipelines présents + « Autre » (libellé sans pipeline connu). Reconstruit seulement s'il change.
+    function renderPipelineFilter() {
+      const sel = $("galleryPipeline");
+      const ids = [...new Set([...galleryItems.map(a => assetPipeline(a.label) || "none"), galleryFilter.pipeline])].filter(Boolean).sort();
+      const sig = LANG + ids.join();
+      if (sel._sig === sig) return;
+      sel._sig = sig;
+      sel.innerHTML = `<option value="">Tous les pipelines</option>` + ids.filter(p => p !== "none").map(p => `<option value="${p}">${PIPELINE_LABELS[p] || p}</option>`).join("")
+        + (ids.includes("none") ? `<option value="none">Autre</option>` : "");
+      translateTree(sel);
+      sel.value = galleryFilter.pipeline;
     }
 
-    function addAssetCard(url, filename, label, isVideo, persistKey, folder) {
-      const target = isVideo ? galleryVideos : galleryImages;
-      $(isVideo ? "galleryVideosEmpty" : "galleryImagesEmpty")?.remove();
-      const assetKey = persistKey || `cloud:${filename}`;
-      const card = document.createElement("div");
+    // Carte d'un asset : construite une fois, gardée dans cardCache.
+    function galleryCard(a) {
+      let card = cardCache.get(a.pkey);
+      if (card) { retitleCard(card); translateTree(card); markCard(card); return card; }
+      const { url, filename, pkey: assetKey } = a, isVideo = a.type === "video", folder = a.subfolder;
+      card = document.createElement("div");
       card.className = "asset fade-in";
+      card._asset = a;
       card.innerHTML = isVideo
-        ? `<video src="${url}" muted loop playsinline></video>`
-        : `<img src="${url}" alt="" />`;
+        ? `<video src="${url}" preload="metadata" muted loop playsinline></video>`
+        : `<img src="${a.thumb}" alt="" loading="lazy" decoding="async" />`;
       card.firstChild.addEventListener("click", () => openLightbox(url, isVideo, assetKey));
       assetURLs.set(`${folder || ""}/${filename}`, url);
       // Glisser-déposer : même charge utile que la galerie du Canvas (js/canvas-gallery.js) + repli texte. Le clic (agrandir) reste inchangé.
@@ -3666,7 +3891,7 @@
       meta.className = "meta";
       // Hiérarchie : le pipeline (ce qu'on reconnaît) domine, l'extrait du prompt suit (retitleCard).
       meta.innerHTML = `<strong></strong><span class="asset-prompt"></span>`;
-      Object.assign(card.dataset, { label, filename, key: assetKey, video: isVideo ? "1" : "0" });
+      Object.assign(card.dataset, { label: a.label, filename, key: assetKey, video: isVideo ? "1" : "0" });
       card.appendChild(meta);
       retitleCard(card);
       const actions = document.createElement("div");
@@ -3695,32 +3920,161 @@
         });
         actions.appendChild(seqBtn);
       }
-      let { grid, group } = groupFor(target, folder);
+      if (!a.key.startsWith("cloud:")) {   // favori : pas pour une image cloud de session
+        const favBtn = document.createElement("button");
+        favBtn.className = "fav-btn";
+        favBtn.textContent = "★";
+        favBtn.title = "Favori";
+        favBtn.addEventListener("click", () => setGalleryFavs([a], !a.fav));
+        actions.appendChild(favBtn);
+      }
       const delBtn = document.createElement("button");
       delBtn.textContent = "🗑";
       delBtn.title = "Supprimer de la galerie";
-      delBtn.addEventListener("click", () => {
-        const unmark = persistKey ? markDeleted(persistKey) : null, next = card.nextElementSibling;
-        if (selectedAsset && selectedAsset.filename === filename) clearSelectedAsset();
-        card.remove();
-        refreshFolderCount(group);
-        bumpGalleryCount(isVideo, -1);
-        addEvent("SYS", `Asset "${filename}" retiré de la galerie.`, "sys");
-        // S11 : Annuler remet LA MÊME carte à sa place (le dossier a pu disparaître avec elle : groupFor le recrée).
-        undoToast(tr("Supprimé de la galerie"), () => {
-          if (unmark) unmark();
-          ({ grid, group } = groupFor(target, folder));
-          grid.insertBefore(card, next && next.parentNode === grid ? next : null);
-          refreshFolderCount(group);
-          bumpGalleryCount(isVideo);
-        });
-      });
+      delBtn.addEventListener("click", () => removeGalleryAssets([a]));
       actions.appendChild(delBtn);
       card.appendChild(actions);
+      // Mode sélection : un clic (ou Espace/Entrée au clavier) coche la carte au lieu d'ouvrir la lightbox.
+      card.addEventListener("click", e => {
+        if (!gallerySelecting) return;
+        e.preventDefault(); e.stopPropagation();
+        toggleGallerySel(card);
+      }, true);
+      card.addEventListener("keydown", e => {
+        if (gallerySelecting && e.target === card && (e.key === " " || e.key === "Enter")) { e.preventDefault(); toggleGallerySel(card); }
+      });
       translateTree(card);
-      grid.prepend(card);
-      refreshFolderCount(group);
-      bumpGalleryCount(isVideo);
+      cardCache.set(assetKey, card);
+      markCard(card);
+      return card;
+    }
+    // État visuel d'une carte : favori, et en mode sélection case à cocher (focusable, aria-checked).
+    function markCard(card) {
+      const a = card._asset, sel = gallerySel.has(a.pkey), star = card.querySelector(".fav-btn");
+      card.classList.toggle("fav", !!a.fav);
+      if (star) { star.classList.toggle("active", !!a.fav); star.setAttribute("aria-pressed", String(!!a.fav)); }
+      card.classList.toggle("selected", sel);
+      if (gallerySelecting) { card.tabIndex = 0; card.setAttribute("role", "checkbox"); card.setAttribute("aria-checked", String(sel)); }
+      else { card.removeAttribute("tabindex"); card.removeAttribute("role"); card.removeAttribute("aria-checked"); }
+    }
+
+    // Supprimer une ou plusieurs cartes : un seul bandeau « Annuler » les rétablit toutes, à leur place, mêmes nœuds.
+    async function removeGalleryAssets(list) {
+      const grid = gridOf(list[0].type), gen = grid._gen, dom = [];
+      if (selectedAsset && list.some(a => a.filename === selectedAsset.filename)) clearSelectedAsset();
+      galleryRev++;
+      const undo = await gallerySource.remove(list);
+      for (const a of list) {
+        addEvent("SYS", `Asset "${a.filename}" retiré de la galerie.`, "sys");
+        const card = cardCache.get(a.pkey);
+        if (!card?.isConnected) continue;
+        const r = { card, parent: card.parentNode, next: card.nextSibling }, grp = card.closest(".gallery-group");
+        card.remove();
+        if (grp && !grp.querySelector(".asset")) { Object.assign(r, { grp, gparent: grp.parentNode, gnext: grp.nextSibling }); grp.remove(); }
+        dom.push(r);
+      }
+      if (grid._next) grid._next = String(+grid._next - dom.length);   // curseur de browserSource = indice
+      refreshFolders(grid);
+      refreshGalleryEmpty(grid);
+      refreshGalleryCounts();
+      undoToast(tr("Supprimé de la galerie"), async () => {
+        await undo();
+        galleryRev++;
+        if (gen !== grid._gen) return galleryReload(list[0].type);
+        for (const r of dom.reverse()) {   // ordre inverse du retrait : chaque voisin noté est de nouveau là
+          if (r.grp) r.gparent.insertBefore(r.grp, r.gnext);
+          r.parent.insertBefore(r.card, r.next?.parentNode === r.parent ? r.next : null);
+        }
+        if (grid._next) grid._next = String(+grid._next + dom.length);
+        refreshFolders(grid);
+        refreshGalleryEmpty(grid);
+        refreshGalleryCounts();
+      });
+    }
+    async function setGalleryFavs(list, on) {
+      list = list.filter(a => !a.key.startsWith("cloud:"));
+      await gallerySource.setFav(list.map(a => a.key), on);
+      if (galleryFilter.fav) { galleryImages._stale = galleryVideos._stale = true; return galleryReload(); }
+      for (const a of list) { const c = cardCache.get(a.pkey); if (c) markCard(c); }
+      refreshGalleryCounts();
+    }
+
+    // ── Sélection multiple ──
+    let gallerySelecting = false;
+    const gallerySel = new Map();   // pkey → asset
+    function renderSelBar() {
+      $("gallerySelBar").hidden = !gallerySelecting;
+      $("gallerySelCount").textContent = dyn("gallerySel", gallerySel.size);
+      $("gallerySelFav").disabled = $("gallerySelDel").disabled = !gallerySel.size;
+      $("gallerySelectBtn").classList.toggle("active", gallerySelecting);
+      $("gallerySelectBtn").setAttribute("aria-pressed", String(gallerySelecting));
+      $("galleryBlock").classList.toggle("selecting", gallerySelecting);
+    }
+    function toggleGallerySel(card) {
+      const a = card._asset;
+      if (gallerySel.has(a.pkey)) gallerySel.delete(a.pkey); else gallerySel.set(a.pkey, a);
+      markCard(card);
+      renderSelBar();
+    }
+    function clearGallerySel() {
+      const was = [...gallerySel.keys()];
+      gallerySel.clear();
+      for (const k of was) markCard(cardCache.get(k));
+      renderSelBar();
+    }
+    function setGallerySelecting(on) {
+      gallerySelecting = on;
+      gallerySel.clear();
+      $("galleryBlock").querySelectorAll(".asset[data-key]").forEach(markCard);
+      renderSelBar();
+    }
+    $("gallerySelectBtn").addEventListener("click", () => setGallerySelecting(!gallerySelecting));
+    $("gallerySelNone").addEventListener("click", clearGallerySel);
+    $("gallerySelFav").addEventListener("click", () => {
+      const list = [...gallerySel.values()];
+      setGalleryFavs(list, !list.every(a => a.fav));
+    });
+    $("gallerySelDel").addEventListener("click", () => {
+      const list = [...gallerySel.values()];
+      clearGallerySel();
+      removeGalleryAssets(list);
+    });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && gallerySelecting) setGallerySelecting(false); });
+
+    // ── Filtres et taille des vignettes ──
+    function setGalleryFilter(patch) {
+      Object.assign(galleryFilter, patch);
+      $("galleryFavBtn").classList.toggle("active", galleryFilter.fav);
+      $("galleryFavBtn").setAttribute("aria-pressed", String(galleryFilter.fav));
+      galleryImages._stale = galleryVideos._stale = true;
+      galleryReload();
+    }
+    let gallerySearchTimer = 0;
+    $("gallerySearch").addEventListener("input", () => {
+      clearTimeout(gallerySearchTimer);
+      gallerySearchTimer = setTimeout(() => setGalleryFilter({ q: $("gallerySearch").value.trim() }), 200);
+    });
+    $("galleryPipeline").addEventListener("change", () => setGalleryFilter({ pipeline: $("galleryPipeline").value }));
+    $("galleryFavBtn").addEventListener("click", () => setGalleryFilter({ fav: !galleryFilter.fav }));
+    try { const t = localStorage.getItem("galleryThumb"); if (t) $("galleryThumb").value = t; } catch {}
+    const applyThumb = () => $("galleryBlock").style.setProperty("--thumb", `${$("galleryThumb").value}px`);
+    applyThumb();
+    $("galleryThumb").addEventListener("input", applyThumb);
+    $("galleryThumb").addEventListener("change", () => saveLocal("galleryThumb", $("galleryThumb").value));
+
+    function restoreGallery() {
+      for (const a of galleryAssets) {
+        const key = `${a.subfolder}/${a.filename}`;
+        seenAssets.add(key);
+        galleryItems.push(galleryAsset(viewURL(a), a.filename, a.label, /\.(mp4|webm|mov)$/i.test(a.filename), key, a.subfolder || "", a.ts ?? null));
+      }
+      if (galleryAssets.length) addEvent("OK", `${galleryAssets.length} assets restaurés depuis le cache navigateur.`, "ok");
+      galleryReload();
+    }
+
+    // Point d'entrée des cartes (cloud, et addAsset) : persistKey absent = image cloud de session (clé cloud:<nom>).
+    function addAssetCard(url, filename, label, isVideo, persistKey, folder) {
+      galleryInsert(galleryAsset(url, filename, label, isVideo, persistKey || `cloud:${filename}`, folder || "", Date.now()));
     }
 
     function addAsset(f, label, persist = true) {
@@ -3729,8 +4083,7 @@
       if (seenAssets.has(key) || deletedAssets.has(key)) return;
       seenAssets.add(key);
       if (persist) persistAsset(f, label);
-      const url = `${COMFY}/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${encodeURIComponent(f.type || "output")}`;
-      addAssetCard(url, f.filename, label, /\.(mp4|webm|mov)$/i.test(f.filename), key, f.subfolder || "");
+      addAssetCard(viewURL(f), f.filename, label, /\.(mp4|webm|mov)$/i.test(f.filename), key, f.subfolder || "");
     }
 
     // Prompt positif utilisé pour un nœud de sortie : remontée du graphe depuis ce nœud,
@@ -8444,7 +8797,6 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
     // ── Boot ───────────────────────────────────────────────────────
     addEvent("SYS", "AI Content Studio chargé (mode 100% local, sans backend).", "sys");
     applyLang(LANG);
-    bumpGalleryCount(false, 0);   // compteurs des onglets de galerie, dans la langue du démarrage
     renderStyleOptions();
     renderSheetTemplateOptions();
     loadManifest();
