@@ -725,12 +725,16 @@
       color: var(--text-2);
       font-size: 11px;
     }
-    .asset .meta .asset-file {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    /* S18 : sous le titre, un extrait du prompt (le nom de fichier passe en infobulle). */
+    .asset .meta .asset-prompt {
+      font-size: 12px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
+    .asset .meta .asset-prompt:empty { display: none; }
 
     .asset .asset-actions {
       display: flex;
@@ -1506,6 +1510,69 @@
     .shot-subjects .shot-subjects-lbl { margin: 0; }
     .subj-chip.on { border-color: var(--highlight); color: var(--highlight); }
 
+    /* ── S10 : bande de vignettes des plans (affichage seul) ── */
+    .shot-strip { display: flex; gap: 8px; overflow-x: auto; min-width: 0; padding: 2px 2px 8px; margin-bottom: 12px; scrollbar-width: thin; scrollbar-color: var(--border-dark) transparent; }
+    .shot-strip[hidden] { display: none; }
+    .shot-thumb {
+      flex: 0 0 auto;
+      width: 108px;
+      display: grid;
+      gap: 3px;
+      padding: 6px;
+      text-align: left;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      background: var(--card-2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .shot-thumb:hover { border-color: var(--highlight); }
+    .shot-thumb .st-img {
+      display: block;
+      aspect-ratio: 16 / 9;
+      border-radius: 8px;
+      background: repeating-linear-gradient(135deg, var(--bg-light), var(--bg-light) 8px, var(--bg-mid) 8px, var(--bg-mid) 16px);
+      background-size: cover;
+      background-position: center;
+    }
+    .shot-thumb .st-n { font-size: 12px; font-weight: 700; }
+    .shot-thumb .st-s { font-size: 11px; font-weight: 600; color: var(--text-2); }
+    .shot-thumb.ready .st-s { color: var(--ok-text); }
+    .shot-thumb.locked .st-s { color: var(--highlight); }
+    .shot-thumb.pending .st-s { color: var(--run-text); }
+    .shot-thumb.error .st-s { color: var(--hot-text); }
+    .shot-thumb.missing .st-s { color: var(--warn-text); }
+    .shot-edit-item:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+
+    /* ── S11 : bandeau « Supprimé — Annuler » (un seul à la fois, ~5 s) ── */
+    .undo-toast { position: fixed; left: 0; right: 0; bottom: max(20px, env(safe-area-inset-bottom)); display: flex; justify-content: center; padding: 0 16px; pointer-events: none; z-index: 120; }
+    .undo-toast-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: auto;
+      padding: 6px 8px 6px 18px;
+      border: 1px solid var(--border-dark);
+      border-radius: var(--pill);
+      background: var(--bg);
+      color: var(--text);
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .undo-toast-box[hidden] { display: none; }
+    .undo-toast button {
+      border: 0;
+      background: transparent;
+      color: var(--highlight);
+      font-weight: 700;
+      text-decoration: underline;
+      padding: 8px 12px;
+      border-radius: var(--pill);
+      cursor: pointer;
+    }
+    .undo-toast button:hover { background: var(--selected); }
+
     /* ── Montage (menu + timeline) ── */
     .montage-list { display: grid; gap: 12px; margin: 12px 0; }
     .montage-clip {
@@ -2093,6 +2160,7 @@
         <section id="studioStoryboard" class="studio-section" style="display:none">
           <h3 class="section-title">Storyboard</h3>
           <div class="form-stack">
+            <div class="shot-strip" id="shotStrip" role="group" aria-label="Aperçu des plans" hidden></div>
             <div class="shot-edit-list" id="shotEditList" style="display:none"></div>
             <button type="button" class="secondary-btn" id="directorKeyframesBtn" style="display:none">Générer les images des plans</button>
           </div>
@@ -2168,6 +2236,10 @@
         <button type="button" class="primary-btn" id="promptModalApply">Appliquer et régénérer</button>
       </div>
     </div>
+  </div>
+
+  <div class="undo-toast" id="undoToast" role="status" aria-live="polite">
+    <div class="undo-toast-box" id="undoToastBox" hidden><span id="undoToastMsg"></span><button type="button" id="undoToastBtn">Annuler</button></div>
   </div>
 
   <div id="lightbox" hidden>
@@ -2573,6 +2645,10 @@
       "✨ Ré-enrichir (gemma)": { en: "✨ Re-enrich (gemma)", es: "✨ Reenriquecer (gemma)", de: "✨ Neu anreichern (gemma)" },
       "↩ Prompt d'origine": { en: "↩ Original prompt", es: "↩ Prompt original", de: "↩ Ursprünglicher Prompt" },
       "Annuler": { en: "Cancel", es: "Cancelar", de: "Abbrechen" },
+      "Supprimé de la galerie": { en: "Removed from the gallery", es: "Eliminado de la galería", de: "Aus der Galerie entfernt" },
+      "Image": { en: "Image", es: "Imagen", de: "Bild" },
+      "À faire": { en: "To do", es: "Pendiente", de: "Offen" },
+      "Aperçu des plans": { en: "Shot overview", es: "Vista general de los planos", de: "Übersicht der Einstellungen" },
       "Appliquer et régénérer": { en: "Apply and regenerate", es: "Aplicar y regenerar", de: "Übernehmen und neu generieren" },
       "Appliquer au plan": { en: "Apply to the shot", es: "Aplicar al plano", de: "Auf die Einstellung anwenden" },
       "Enrichissement…": { en: "Enriching…", es: "Enriqueciendo…", de: "Anreicherung…" },
@@ -2783,6 +2859,11 @@
       shotLabel: {
         fr: (i, n) => `Plan ${i}/${n}`, en: (i, n) => `Shot ${i}/${n}`,
         es: (i, n) => `Plano ${i}/${n}`, de: (i, n) => `Einstellung ${i}/${n}` },
+      shotNo: {
+        fr: n => `Plan ${n}`, en: n => `Shot ${n}`, es: n => `Plano ${n}`, de: n => `Einstellung ${n}` },
+      subjectRemoved: {
+        fr: i => `Sujet ${i} retiré`, en: i => `Subject ${i} removed`,
+        es: i => `Sujeto ${i} eliminado`, de: i => `Motiv ${i} entfernt` },
       holdClipLabel: {
         fr: n => `Tenue du plan ${n}`, en: n => `Hold on shot ${n}`,
         es: n => `Sostenido del plano ${n}`, de: n => `Halten der Einstellung ${n}` },
@@ -2870,6 +2951,7 @@
       updateStudioJobs(0);
       for (const j of Object.values(jobs)) if (j.pct != null) j.statusEl.textContent = dyn("jobRunning", j.pct);
       if (selectedAsset) $("assetChipName").textContent = dyn("assetChip", selectedAsset.filename);
+      retitleGallery();
       renderStyleOptions();
       renderSheetTemplateOptions();
       renderLoraSelect();
@@ -2890,6 +2972,24 @@
       events.prepend(row);
       while (events.children.length > 60) events.lastChild.remove();
     }
+
+    // ── S11 : bandeau « Supprimé — Annuler » ────────────────────────
+    // Un seul bandeau à la fois : un 2e remplace le 1er (l'action du 1er devient définitive) et son
+    // minuteur est annulé. Passé UNDO_MS, l'action est définitive. Le minuteur s'arrête tant que le
+    // bouton a le focus clavier (WCAG 2.2.1), et repart à sa sortie.
+    const UNDO_MS = 5000;
+    let undoTimer = 0, undoFn = null;
+    function hideUndo() { clearTimeout(undoTimer); undoTimer = 0; undoFn = null; $("undoToastBox").hidden = true; }
+    function undoToast(label, fn) {
+      clearTimeout(undoTimer);
+      undoFn = fn;
+      $("undoToastMsg").textContent = label;
+      $("undoToastBox").hidden = false;
+      undoTimer = setTimeout(hideUndo, UNDO_MS);
+    }
+    $("undoToastBtn").addEventListener("click", () => { const f = undoFn; hideUndo(); if (f) f(); });
+    $("undoToast").addEventListener("focusin", () => clearTimeout(undoTimer));
+    $("undoToast").addEventListener("focusout", () => { if (undoFn) { clearTimeout(undoTimer); undoTimer = setTimeout(hideUndo, UNDO_MS); } });
 
     // ── Workflow manifest ──────────────────────────────────────────
     let manifest = { workflows: [] };
@@ -2930,6 +3030,7 @@
       try {
         manifest = await (await fetch("workflows/manifest.json", { cache: "no-store" })).json();
         addEvent("OK", `${manifest.workflows.length} workflow templates chargés.`, "ok");
+        retitleGallery();
       } catch {
         addEvent("WARN", "workflows/manifest.json introuvable — génération indisponible.", "warn");
       }
@@ -3341,10 +3442,25 @@
       try { localStorage.setItem(key, value); }
       catch (e) { addEvent("WARN", `Stockage navigateur plein : « ${key} » non sauvegardé.`, "warn"); }
     }
+    // Renvoie la fonction qui rétablit l'état persisté À L'IDENTIQUE (S11) : même entrée de
+    // galleryAssets, remise avant celle qui la suivait ; deletedAssets sans la clé.
     function markDeleted(key) {
+      const idx = galleryAssets.findIndex(a => `${a.subfolder}/${a.filename}` === key);
+      const entry = galleryAssets[idx], after = galleryAssets[idx + 1];
+      const afterKey = after && `${after.subfolder}/${after.filename}`;
       deletedAssets.add(key);
       saveLocal("deletedAssets", JSON.stringify([...deletedAssets]));
       purgeGalleryAsset(key);
+      return () => {
+        deletedAssets.delete(key);
+        saveLocal("deletedAssets", JSON.stringify([...deletedAssets]));
+        if (entry) {
+          const j = afterKey ? galleryAssets.findIndex(a => `${a.subfolder}/${a.filename}` === afterKey) : -1;
+          galleryAssets.splice(j < 0 ? galleryAssets.length : j, 0, entry);
+          saveLocal("galleryAssets", JSON.stringify(galleryAssets));
+        }
+        saveAssetPrompts();
+      };
     }
 
     // Persistance galerie : la liste des assets ComfyUI + leurs prompts survit aux
@@ -3400,6 +3516,30 @@
       else group.querySelector(".folder-count").textContent = String(n);
     }
 
+    // S18 : titre de carte = libellé du pipeline (traduit), sinon « Image » / « Vidéo » ; sous le titre, un
+    // extrait du prompt (textContent : jamais de HTML). Le nom de fichier reste en infobulle. Le pipeline se
+    // déduit du libellé de job (celui du manifest, ou un préfixe de tâche complète) : le format persisté ne change pas.
+    const LABEL_PIPELINES = [["Storyboard", "storyboard_v2"], ["Campagne complète", "campaign_full"],
+                             ["Animatic FLF2V", "sequence2video"], ["Personnage + décor", "reference2video"]];
+    function assetTitle(label, isVideo) {
+      const p = manifest.workflows.find(w => label.startsWith(w.label))?.pipeline
+        || LABEL_PIPELINES.find(([pre]) => label.startsWith(pre))?.[1];
+      return PIPELINE_LABELS[p] ? tr(PIPELINE_LABELS[p]) : tr(isVideo ? "Vidéo" : "Image");
+    }
+    function promptExcerpt(text, max = 90) {
+      const c = Array.from(String(text || "").replace(/\s+/g, " ").trim());
+      return c.length > max ? c.slice(0, max).join("").trimEnd() + "…" : c.join("");
+    }
+    function retitleCard(card) {
+      const d = card.dataset, meta = card.querySelector(".meta");
+      meta.querySelector("strong").textContent = assetTitle(d.label, d.video === "1");
+      meta.querySelector(".asset-prompt").textContent = promptExcerpt(assetPrompts.get(d.key));
+      meta.title = d.filename;
+    }
+    function retitleGallery() {
+      document.querySelectorAll("#galleryImages .asset[data-filename], #galleryVideos .asset[data-filename]").forEach(retitleCard);
+    }
+
     function addAssetCard(url, filename, label, isVideo, persistKey, folder) {
       const target = isVideo ? galleryVideos : galleryImages;
       $(isVideo ? "galleryVideosEmpty" : "galleryImagesEmpty")?.remove();
@@ -3412,12 +3552,11 @@
       card.firstChild.addEventListener("click", () => openLightbox(url, isVideo, assetKey));
       const meta = document.createElement("div");
       meta.className = "meta";
-      // Hiérarchie : le libellé du job (ce qu'on reconnaît) domine, le nom de fichier suit.
-      meta.innerHTML = `<strong></strong><span class="asset-file"></span>`;
-      meta.querySelector("strong").textContent = label;
-      meta.querySelector(".asset-file").textContent = filename;
-      meta.title = `${label} · ${filename}`;
+      // Hiérarchie : le pipeline (ce qu'on reconnaît) domine, l'extrait du prompt suit (retitleCard).
+      meta.innerHTML = `<strong></strong><span class="asset-prompt"></span>`;
+      Object.assign(card.dataset, { label, filename, key: assetKey, video: isVideo ? "1" : "0" });
       card.appendChild(meta);
+      retitleCard(card);
       const actions = document.createElement("div");
       actions.className = "asset-actions";
       const viewBtn = document.createElement("button");
@@ -3444,17 +3583,25 @@
         });
         actions.appendChild(seqBtn);
       }
-      const { grid, group } = groupFor(target, folder);
+      let { grid, group } = groupFor(target, folder);
       const delBtn = document.createElement("button");
       delBtn.textContent = "🗑";
       delBtn.title = "Supprimer de la galerie";
       delBtn.addEventListener("click", () => {
-        if (persistKey) markDeleted(persistKey);
+        const unmark = persistKey ? markDeleted(persistKey) : null, next = card.nextElementSibling;
         if (selectedAsset && selectedAsset.filename === filename) clearSelectedAsset();
         card.remove();
         refreshFolderCount(group);
         bumpGalleryCount(isVideo, -1);
         addEvent("SYS", `Asset "${filename}" retiré de la galerie.`, "sys");
+        // S11 : Annuler remet LA MÊME carte à sa place (le dossier a pu disparaître avec elle : groupFor le recrée).
+        undoToast(tr("Supprimé de la galerie"), () => {
+          if (unmark) unmark();
+          ({ grid, group } = groupFor(target, folder));
+          grid.insertBefore(card, next && next.parentNode === grid ? next : null);
+          refreshFolderCount(group);
+          bumpGalleryCount(isVideo);
+        });
       });
       actions.appendChild(delBtn);
       card.appendChild(actions);
@@ -3502,6 +3649,7 @@
         for (const f of extractFiles(nodeOut)) assetPrompts.set(`${f.subfolder}/${f.filename}`, p);
       }
       saveAssetPrompts();
+      retitleGallery();   // les prompts arrivent après les cartes
     }
 
     // Filet : certains nœuds vidéo ne remontent pas via "executed",
@@ -5898,6 +6046,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       exitStudio();
       $("shotEditList").innerHTML = "";
       $("shotEditList").style.display = "none";
+      renderShotStrip();   // director est null : la bande se masque
       $("directorKeyframesBtn").style.display = "none";
       $("directorKeyframesBtn").disabled = false;
       $("directorLaunchBtn").disabled = true;
@@ -6185,7 +6334,11 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     function removeSubject(i) {
       if (!director || director.chars.length < 2 || !director.chars[i]) return;
       if (director.chars.some(c => c.variants.some(v => v.status === "pending"))) return;
-      const shots = director.shots || [];
+      const d = director, shots = d.shots || [];
+      // S11 : instantané AVANT. Le sujet retiré (variantes, blobs et objectURL compris) n'est pas détruit,
+      // seulement détaché : on garde sa référence, et les `subjects` de chaque plan tels qu'ils étaient.
+      const snap = { slot: d.chars[i], charIdx: d.charIdx, validated: d.validated, left: d.chars.length - 1,
+                     subjects: shots.map(s => ({ had: "subjects" in s, v: s.subjects })) };
       const remap = shots.map(shot => shotSubjectIdx(shot).filter(x => x !== i).map(x => (x > i ? x - 1 : x)));
       director.chars.splice(i, 1);
       shots.forEach((shot, k) => { shot.subjects = remap[k].length ? remap[k] : [0]; });
@@ -6195,6 +6348,17 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       refreshSheetUI("char");
       renderShotDNAList();
       saveProject();
+      undoToast(dyn("subjectRemoved", i + 1), () => {
+        // Session remplacée, ou sujets ajoutés/retirés depuis : les indices ne sont plus ceux de l'instantané.
+        if (director !== d || d.chars.length !== snap.left) { addEvent("WARN", "Annulation impossible : le projet a changé depuis.", "warn"); return; }
+        d.chars.splice(i, 0, snap.slot);
+        shots.forEach((shot, k) => { if (snap.subjects[k].had) shot.subjects = snap.subjects[k].v; else delete shot.subjects; });
+        d.charIdx = snap.charIdx; d.validated = snap.validated;
+        renderSheetMenu("char");
+        refreshSheetUI("char");
+        renderShotDNAList();
+        saveProject();
+      });
     }
 
     function renderSheetMenu(kind) {
@@ -6491,6 +6655,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       director.shots.forEach((shot, i) => {
         const item = document.createElement("div");
         item.className = "shot-edit-item";
+        item.id = `shotItem_${i}`;
+        item.tabIndex = -1;   // cible du clic sur la vignette de la bande (focus programmatique)
         item.innerHTML = `<strong></strong>
           <div class="shot-edit-body">
             <div class="shot-edit-fields">
@@ -6539,6 +6705,36 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // Les emplacements keyframes viennent d'être recréés : on y redessine les cartes,
       // sans quoi tout rappel de cette fonction (taggage, langue, nouveau sujet) les perdrait.
       renderAllKeyframeCards();
+      renderShotStrip();
+    }
+
+    // S10 : bande de vignettes en tête de la section Storyboard. AFFICHAGE SEUL : un clic amène au plan
+    // (défilement + focus), il ne lance rien. Mise à jour en place, pour que le focus clavier survive à
+    // l'arrivée d'une image. Les états sont ceux des cartes keyframe (aucune keyframe = « À faire »).
+    const SHOT_WORD = { todo: "À faire", ready: "Prêt", locked: "Verrouillé", pending: "Génération…", error: "Erreur", missing: "Manquant" };
+    function renderShotStrip() {
+      const strip = $("shotStrip"), n = director?.shots?.length || 0;
+      strip.hidden = !n;
+      while (strip.children.length > n) strip.lastChild.remove();
+      for (let i = 0; i < n; i++) {
+        let b = strip.children[i];
+        if (!b) {
+          b = document.createElement("button");
+          b.type = "button";
+          b.className = "shot-thumb";
+          b.innerHTML = `<span class="st-img"></span><span class="st-n"></span><span class="st-s"></span>`;
+          b.addEventListener("click", () => { const it = $(`shotItem_${i}`); if (it) { it.scrollIntoView({ block: "start" }); it.focus({ preventScroll: true }); } });
+          strip.appendChild(b);
+        }
+        const kf = director.keyframes?.[i];
+        const st = !kf ? "todo" : kf.locked ? "locked" : SHOT_WORD[kf.status] ? kf.status : "todo";
+        const word = tr(SHOT_WORD[st]);
+        b.className = `shot-thumb ${st}`;
+        b.querySelector(".st-img").style.backgroundImage = kf?.url && st !== "missing" ? `url("${kf.url}")` : "";
+        b.querySelector(".st-n").textContent = dyn("shotNo", i + 1);
+        b.querySelector(".st-s").textContent = word;
+        b.setAttribute("aria-label", `${dyn("shotNo", i + 1)} — ${LANG === "de" ? word : word.toLocaleLowerCase(LANG)}`);
+      }
     }
 
     // Éditeur du champ « Action » d'un plan, disponible dès l'étape 1 — donc AVANT toute
@@ -6625,6 +6821,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Carte keyframe : miniature + 🔄 régénérer (seed+1, sauf verrouillée) + 🔒 verrouiller.
     function renderKeyframeCard(i) {
       const kf = director.keyframes[i];
+      renderShotStrip();
       const slot = $(`kfSlot_${i}`);
       if (!slot) return;   // liste de plans pas (encore) rendue
       let card = slot.querySelector(".asset");
