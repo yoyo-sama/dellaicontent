@@ -303,6 +303,15 @@ starts nothing (except per-market variants, whose prompt comes from the chosen m
   a click scrolls to the shot and launches nothing.
 - **Readable gallery**: each card shows the pipeline name and a prompt excerpt (file name in
   the tooltip).
+- **Drag an image from the gallery** straight onto an image input: the input image, the last
+  frame (FL2VA), the extra reference images (up to 9 for Image2Image with Qwen Image 2.1, 7 for
+  Reference2Video and the Qwen 2.1 storyboard) or the FLF2V animatic. Files dragged from your
+  computer work too. The field is loaded exactly as if you had picked the image with Browse, or
+  with "Use as input" / "Sequence"; nothing is rendered. Those two buttons stay the keyboard
+  route, and touch screens keep using them (HTML5 drag-and-drop does not work by touch).
+- **Collapsible job queue**, like "Advanced options": the title shows the number of jobs, the
+  open/closed state is remembered, and a red "Error" badge appears while it is collapsed if a
+  job fails.
 - **Languages**: FR, EN, ES, DE, for the whole interface including tooltips and job statuses;
   French, Spanish and German address you informally (tu / tú / du). The event log and error
   messages stay in French, untranslated.

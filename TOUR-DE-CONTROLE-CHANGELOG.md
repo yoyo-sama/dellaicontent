@@ -1,5 +1,28 @@
 # Tour de contrôle — changelog
 
+## 2026-09-25 — Lot UX-DND : glisser-déposer galerie → entrées d'image, file de jobs repliable (Studio)
+
+Deux demandes de l'utilisateur, `index.html` seul (`js/canvas-gallery.js` et `js/engine.js` intacts).
+- **File de jobs repliable** : `<details class="job-queue" id="jobQueue">` ouvert par défaut, même apparence que « Options avancées » (CSS du
+  `summary` partagé). Titre `dyn("jobQueue", n)` (n = enfants de `#jobList`, mis à jour dans `trackJob` après la purge à 8, `langSelect`, `toggle`),
+  état mémorisé sous `jobQueueOpen` (localStorage sous `try/catch`), un job qui arrive n'ouvre rien, un job en erreur pendant le repli allume
+  la pastille « Erreur » du `summary` jusqu'à la prochaine ouverture ; bloc masqué à vide (`.output-panel > .job-queue:has(> #jobList:empty)`).
+  La clé I18N « Job Queue » (plus lue) est remplacée par l'entrée DYN.
+- **Glisser-déposer** : vignettes de galerie `draggable` (`application/json` `{filename, subfolder, type}` = format du Canvas + `text/plain`), clic
+  « agrandir » inchangé. `dropZone()` sur 4 zones : image d'entrée (`#imageInputWrap`, `selectedAsset` comme « → Utiliser en entrée »),
+  dernière image FL2VA (`#lastImageWrap`), références (`#refDropZone` = libellé de `#refImagesInput` + `#refSubjects` ; ajout cumulatif, plafond 9
+  en i2i Qwen 2.1, 7 en r2v / storyboard Qwen 2.1) et animatic FLF2V (`#seqWrap`, `addSeqImage` comme « ➕ Séquence », plafond 6). Fichiers de
+  l'ordinateur (`image/*`) acceptés partout ; vidéo / non-image / dépassement refusés avec message. Hors zone : `dragover`/`drop` annulés (pas de
+  navigation vers le fichier, pas de `text/plain` collé dans le brief), sauf `<input type="file">` natif (LoRA). 1 clé I18N + 8 entrées DYN neuves
+  (4 langues, tutoiement), bandeau `#dropToast` aria-live, journal FR (`OK`/`WARN` neufs, messages existants inchangés).
+- Non couverts, volontairement : les 3 `<input type="file" hidden>` derrière un bouton (« 📥 Importer une image » des planches personnage/décor,
+  image de fin d'un segment Relay), `#refVideosInput`/`#refAudiosInput`, `#loraFile`, le Canvas ; le toucher (HTML5 DnD absent, les boutons restent).
+- Preuves : matrice 37 scénarios identique (112 corps `/prompt`, 407 243 o, 219 uploads, 17 corps ollama, 15 103 o) ; `bench-q21`, `bench-refs` verts ;
+  proofs 4a/4b/mem 159/92/44 PASS (4a : 3 libellés « File de jobs » → « File de jobs (1) », attente adaptée) ; parité 52 119 contrôles ; banc DnD 141
+  vérifications (vrais événements CDP `Input.dispatchDragEvent` + `DragEvent` synthétiques, graphes déposés = Browse/bouton octet pour octet) ;
+  banc file 42 vérifications ; audit i18n vide ×4 langues (48 états dont 6 neufs) ; scan de registre vide ; check-keys : 6 orphelines préexistantes
+  identiques à HEAD, 0 nouvelle ; 192 captures (390/768/1250/1440, clair/sombre, FR/EN), contraste ≥ 4,5, aucun débordement horizontal.
+
 ## 2026-09-25 — Lot Q21-CANVAS : Qwen Image 2.1 dans la carte Canvas « Création d'image »
 
 Suite de Q21-STUDIO (piste « carte Canvas Text2Image Qwen Image 2.1 »). La carte `simple/krea2` a un champ **« Moteur »**

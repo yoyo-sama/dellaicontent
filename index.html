@@ -548,7 +548,7 @@
     .generate-row .gb-wide { flex: 1 1 260px; }
 
     .generate-more { margin-top: 12px; }
-    .generate-more > summary {
+    .generate-more > summary, .job-queue > summary {
       cursor: pointer;
       font-size: 11px;
       font-weight: 600;
@@ -557,7 +557,10 @@
       color: var(--text-2);
       padding: 8px 0;
     }
-    .generate-more[open] > summary { margin-bottom: 6px; }
+    .generate-more[open] > summary, .job-queue[open] > summary { margin-bottom: 6px; }
+    /* File de jobs repliable : même apparence que « Options avancées » ; pastille d'erreur discrète dans le summary. */
+    .job-queue > summary .status { margin-left: 8px; padding: 2px 8px; font-size: 10px; }
+    .job-queue > summary .status[hidden] { display: none; }
 
     .actions {
       display: grid;
@@ -790,6 +793,17 @@
     .asset .asset-actions button.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
     .asset.locked img, .asset.locked video { outline: 3px solid var(--highlight); outline-offset: -3px; }
 
+    /* Glisser-déposer galerie / ordinateur → entrées d'image : la zone survolée se couvre d'un cadre et d'un texte. */
+    .drop-zone { position: relative; }
+    .drop-hint {
+      display: none; position: absolute; inset: 0; z-index: 5; align-items: center; justify-content: center;
+      padding: 8px; text-align: center; pointer-events: none;
+      border: 2px dashed var(--highlight); border-radius: var(--radius-sm);
+      background: var(--card);
+      background: color-mix(in srgb, var(--highlight) 12%, var(--bg));
+      color: var(--text); font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none;
+    }
+    .drop-zone.drop-over > .drop-hint { display: flex; }
     .input-chip {
       display: inline-flex;
       align-items: center;
@@ -1405,7 +1419,7 @@
     }
     /* S16 : pas de cadre vide (pas de montage, pas de job). */
     #studioTimeline:empty { display: none; }
-    .output-panel > div:has(> #jobList:empty) { display: none; }
+    .output-panel > .job-queue:has(> #jobList:empty) { display: none; }
     .sheet-layout {
       display: grid;
       grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
@@ -1583,6 +1597,9 @@
       cursor: pointer;
     }
     .undo-toast button:hover { background: var(--selected); }
+    /* Message de dépôt (succès / refus) : au-dessus du bandeau d'annulation, plusieurs lignes possibles sur mobile. */
+    .drop-toast { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 56px); }
+    .drop-toast .undo-toast-box { padding: 10px 18px; border-radius: 16px; max-width: 100%; }
 
     /* ── Montage (menu + timeline) ── */
     .montage-list { display: grid; gap: 12px; margin: 12px 0; }
@@ -2051,13 +2068,15 @@
               <p class="hint r2v-only">En plus des fiches personnage/décor générées automatiquement (ref_image_0/1). Aucune obligatoire.</p>
               <p class="hint q21-only" style="display:none">Ajoutées à chaque image de plan Qwen Image 2.1, après les planches : &lt;image3&gt;, &lt;image4&gt;… (un rang plus loin sur un plan à deux sujets). Nomme-les dans l'action du plan.</p>
               <p class="hint i2i-only" style="display:none">Qwen Image 2.1 accepte jusqu'à 10 images en tout. L'image d'entrée est &lt;image1&gt; ; tes références sont &lt;image2&gt;, &lt;image3&gt;… dans l'ordre de la liste ci-dessous. Cite-les dans ta consigne, par exemple : « mets le personnage de &lt;image1&gt; dans le décor de &lt;image2&gt; ». Le résultat garde la taille de l'image d'entrée ; chaque référence allonge le rendu.</p>
-              <label>
-                <span class="ref-max7">Images de référence supplémentaires (max 7)</span>
-                <span class="ref-max9" style="display:none">Images de référence supplémentaires (max 9)</span>
-                <input type="file" id="refImagesInput" accept="image/*" multiple />
-              </label>
-              <p class="hint r2v-only">Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.</p>
-              <div class="ref-subjects" id="refSubjects"></div>
+              <div class="form-stack" id="refDropZone">
+                <label>
+                  <span class="ref-max7">Images de référence supplémentaires (max 7)</span>
+                  <span class="ref-max9" style="display:none">Images de référence supplémentaires (max 9)</span>
+                  <input type="file" id="refImagesInput" accept="image/*" multiple />
+                </label>
+                <p class="hint r2v-only">Chaque image reçoit un numéro de sujet, repris automatiquement dans le prompt.</p>
+                <div class="ref-subjects" id="refSubjects"></div>
+              </div>
               <label class="r2v-only">
                 Vidéos de référence (max 3)
                 <input type="file" id="refVideosInput" accept="video/*" multiple />
@@ -2071,10 +2090,10 @@
           </section>
 
           <section class="output-panel">
-            <div>
-              <h3 class="section-title">Job Queue</h3>
+            <details class="job-queue" id="jobQueue" open>
+              <summary><span id="jobQueueTitle">File de jobs (0)</span><span class="status error" id="jobQueueErr" hidden>Erreur</span></summary>
               <div class="job-list" id="jobList"></div>
-            </div>
+            </details>
 
             <div id="galleryBlock">
               <div class="gallery-header">
@@ -2253,6 +2272,10 @@
 
   <div class="undo-toast" id="undoToast" role="status" aria-live="polite">
     <div class="undo-toast-box" id="undoToastBox" hidden><span id="undoToastMsg"></span><button type="button" id="undoToastBtn">Annuler</button></div>
+  </div>
+
+  <div class="undo-toast drop-toast" id="dropToast" role="status" aria-live="polite">
+    <div class="undo-toast-box" id="dropToastBox" hidden><span id="dropToastMsg"></span></div>
   </div>
 
   <div id="lightbox" hidden>
@@ -2466,7 +2489,7 @@
       "GB10 Inference": { fr: "Inférence GB10", es: "Inferencia GB10", de: "GB10-Inferenz" },
       "Gallery": { fr: "Galerie", es: "Galería", de: "Galerie" },
       "Assets + export": { es: "Assets + exportación", de: "Assets + Export" },
-      "Job Queue": { fr: "File de jobs", es: "Cola de trabajos", de: "Job-Warteschlange" },
+      "Dépose l'image ici": { en: "Drop the image here", es: "Suelta la imagen aquí", de: "Leg das Bild hier ab" },
       "Generated Gallery": { fr: "Galerie générée", es: "Galería generada", de: "Generierte Galerie" },
       "Aucune image générée pour l'instant. Lance une génération.":
         { en: "No image generated yet. Start a generation.", es: "Aún no hay imágenes generadas. Inicia una generación.", de: "Noch kein Bild generiert. Starte eine Generierung." },
@@ -2908,6 +2931,30 @@
       jobRunning: {
         fr: p => `En cours ${p} %`, en: p => `Running ${p}%`,
         es: p => `En curso ${p} %`, de: p => `Läuft ${p} %` },
+      jobQueue: {
+        fr: n => `File de jobs (${n})`, en: n => `Job Queue (${n})`,
+        es: n => `Cola de trabajos (${n})`, de: n => `Job-Warteschlange (${n})` },
+      dropOk: {
+        fr: f => `Image déposée : ${f}`, en: f => `Image dropped: ${f}`,
+        es: f => `Imagen soltada: ${f}`, de: f => `Bild abgelegt: ${f}` },
+      dropOkN: {
+        fr: (f, k, m) => `Image ajoutée : ${f} (${k}/${m})`, en: (f, k, m) => `Image added: ${f} (${k}/${m})`,
+        es: (f, k, m) => `Imagen añadida: ${f} (${k}/${m})`, de: (f, k, m) => `Bild hinzugefügt: ${f} (${k}/${m})` },
+      dropVideo: {
+        fr: () => "Ce champ attend une image, pas une vidéo.", en: () => "This field expects an image, not a video.",
+        es: () => "Este campo espera una imagen, no un vídeo.", de: () => "Dieses Feld erwartet ein Bild, kein Video." },
+      dropNotImage: {
+        fr: () => "Ce champ attend une image.", en: () => "This field expects an image.",
+        es: () => "Este campo espera una imagen.", de: () => "Dieses Feld erwartet ein Bild." },
+      dropOne: {
+        fr: () => "Ce champ n'accepte qu'une image : la première est gardée.", en: () => "This field takes a single image: the first one is kept.",
+        es: () => "Este campo acepta una sola imagen: se conserva la primera.", de: () => "Dieses Feld nimmt nur ein Bild an: das erste wird übernommen." },
+      dropMax: {
+        fr: n => `Plafond atteint : ${n} images au maximum ici.`, en: n => `Limit reached: ${n} images at most here.`,
+        es: n => `Límite alcanzado: máximo ${n} imágenes aquí.`, de: n => `Limit erreicht: hier höchstens ${n} Bilder.` },
+      dropFail: {
+        fr: f => `Impossible de récupérer l'image : ${f}`, en: f => `Couldn't fetch the image: ${f}`,
+        es: f => `No se pudo obtener la imagen: ${f}`, de: f => `Das Bild konnte nicht geladen werden: ${f}` },
       jobsN: {
         fr: n => `${n} job${n > 1 ? "s" : ""}`, en: n => `${n} job${n > 1 ? "s" : ""}`,
         es: n => `${n} trabajo${n > 1 ? "s" : ""}`, de: n => `${n} Job${n > 1 ? "s" : ""}` },
@@ -2972,6 +3019,7 @@
       refreshCloudUI();
       updateStudioJobs(0);
       for (const j of Object.values(jobs)) if (j.pct != null) j.statusEl.textContent = dyn("jobRunning", j.pct);
+      refreshJobQueue();
       if (selectedAsset) $("assetChipName").textContent = dyn("assetChip", selectedAsset.filename);
       retitleGallery();
       renderStyleOptions();
@@ -3271,6 +3319,24 @@
     const activeJobIds = new Set(); // prompt_ids soumis et pas encore terminés (pilote l'annulation)
     let ws = null;
 
+    // ── File de jobs repliable ─────────────────────────────────────
+    // <details> ouvert par défaut ; l'état est mémorisé (localStorage, tout accès sous try/catch : stockage absent ou plein = on continue).
+    // Le titre porte le nombre de jobs listés ; un job qui arrive ne rouvre rien. Un job passé en erreur pendant que la liste est
+    // repliée allume une pastille dans le summary, éteinte à la prochaine ouverture.
+    const jobQueue = $("jobQueue"), JOBQUEUE_KEY = "jobQueueOpen";
+    let jobQueueErr = false;
+    function refreshJobQueue() {
+      $("jobQueueTitle").textContent = dyn("jobQueue", jobList.children.length);
+      $("jobQueueErr").hidden = !(jobQueueErr && !jobQueue.open);
+    }
+    try { if (localStorage.getItem(JOBQUEUE_KEY) === "0") jobQueue.open = false; } catch { /* stockage indisponible : ouvert */ }
+    jobQueue.addEventListener("toggle", () => {
+      if (jobQueue.open) jobQueueErr = false;
+      refreshJobQueue();
+      try { localStorage.setItem(JOBQUEUE_KEY, jobQueue.open ? "1" : "0"); } catch { /* idem : l'état reste celui de la page */ }
+    });
+    refreshJobQueue();
+
     function connectWS() {
       ws = new WebSocket(`${COMFY_WS}?clientId=${clientId}`);
       ws.onopen = async () => {
@@ -3331,6 +3397,7 @@
         job.statusEl.textContent = "Erreur";
         translateTree(job.statusEl);
         job.statusEl.className = "status error";
+        if (!jobQueue.open) { jobQueueErr = true; refreshJobQueue(); }
         addEvent("WARN", msg.type === "execution_interrupted" ? `${job.label} interrompu.`
           : `Erreur d'exécution : ${d.exception_message || "voir logs ComfyUI"}`, "warn");
         $("stepInference").classList.remove("active");
@@ -3431,6 +3498,9 @@
 
     // ── Asset sélectionné comme entrée de pipeline ─────────────────
     let selectedAsset = null; // {filename, url}
+    // url de lecture de chaque carte de la galerie, par « dossier/fichier » : le dépôt d'une vignette la retrouve (les cartes cloud
+    // n'existent que dans la page : blob:, pas de /comfy/view).
+    const assetURLs = new Map();
     function setSelectedAsset(f, url) {
       selectedAsset = { filename: f.filename, url };
       $("assetChipName").textContent = dyn("assetChip", f.filename);
@@ -3583,6 +3653,15 @@
         ? `<video src="${url}" muted loop playsinline></video>`
         : `<img src="${url}" alt="" />`;
       card.firstChild.addEventListener("click", () => openLightbox(url, isVideo, assetKey));
+      assetURLs.set(`${folder || ""}/${filename}`, url);
+      // Glisser-déposer : même charge utile que la galerie du Canvas (js/canvas-gallery.js) + repli texte. Le clic (agrandir) reste inchangé.
+      card.firstChild.draggable = true;
+      card.firstChild.addEventListener("dragstart", e => {
+        let type = "output"; try { type = new URL(url, location.href).searchParams.get("type") || "output"; } catch {}
+        e.dataTransfer.setData("application/json", JSON.stringify({ filename, subfolder: folder || "", type }));
+        e.dataTransfer.setData("text/plain", filename);
+        e.dataTransfer.effectAllowed = "copy";
+      });
       const meta = document.createElement("div");
       meta.className = "meta";
       // Hiérarchie : le pipeline (ce qu'on reconnaît) domine, l'extrait du prompt suit (retitleCard).
@@ -3710,6 +3789,7 @@
       translateTree(jobs[promptId].statusEl);
       activeJobIds.add(promptId);
       while (jobList.children.length > 8) jobList.lastChild.remove();
+      refreshJobQueue();
       updateStudioJobs(1);
     }
 
@@ -6027,6 +6107,108 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       return { images, videos, audios, imageFiles: capped.refImagesInput,
                count: images.length + videos.length + audios.length };
     }
+
+    // ── Glisser-déposer : galerie / ordinateur → entrées d'image ───────────────────
+    // Sources : une vignette de la galerie (JSON {filename, subfolder, type}, le format de la galerie du Canvas, + text/plain de repli)
+    // ou des fichiers de l'ordinateur. Chaque zone RÉUTILISE le mécanisme de son champ, aucun chemin de soumission neuf :
+    // image d'entrée = selectedAsset comme « → Utiliser en entrée » ; dernière image / références = File posé dans l'<input> comme
+    // un « Browse… » (change émis) ; séquence FLF2V = addSeqImage comme « ➕ Séquence ». Un dépôt ne lance ni job ni gemma et
+    // n'écrit pas dans le brief. Le bouton « → Utiliser en entrée » reste l'équivalent clavier ; le toucher ne fait pas de glisser-déposer HTML5.
+    const dragHas = e => { const t = e.dataTransfer?.types; return !!t && (t.includes("Files") || t.includes("application/json")); };
+    function dragAsset(e) {
+      try { const p = JSON.parse(e.dataTransfer.getData("application/json")); return p && typeof p.filename === "string" && p.filename ? p : null; }
+      catch { return null; }
+    }
+    const assetURL = p => assetURLs.get(`${p.subfolder || ""}/${p.filename}`)
+      || `${COMFY}/view?filename=${encodeURIComponent(p.filename)}&subfolder=${encodeURIComponent(p.subfolder || "")}&type=${encodeURIComponent(p.type || "output")}`;
+    let dropToastTimer = 0;
+    // Journal en français (non traduit, comme tout addEvent) ; bandeau aria-live traduit.
+    function dropSay(ok, name, ...args) {
+      addEvent(ok ? "OK" : "WARN", DYN_I18N[name].fr(...args), ok ? "ok" : "warn");
+      $("dropToastMsg").textContent = dyn(name, ...args);
+      $("dropToastBox").hidden = false;
+      clearTimeout(dropToastTimer);
+      dropToastTimer = setTimeout(() => { $("dropToastBox").hidden = true; }, 5000);
+    }
+    async function assetFile(p) {   // vignette de galerie → File (même octets que /comfy/view)
+      const res = await fetch(assetURL(p));
+      if (!res.ok) throw new Error("http " + res.status);
+      const blob = await res.blob();
+      if (!/^image\//.test(blob.type)) throw new Error("type");
+      return new File([blob], p.filename, { type: blob.type });
+    }
+    function setInputFile(input, file) {   // comme un choix par Browse… : fichier dans l'<input>, puis change
+      const dt = new DataTransfer(); dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    // max() = 1 : champ mono-image (remplace) ; sinon plafond, count() = déjà présentes (les dépôts s'ajoutent).
+    // put(file) pose un fichier ; putAsset(p, url) (facultatif) : chemin propre aux vignettes de galerie.
+    function dropZone(el, { max = () => 1, count = () => 0, put, putAsset }) {
+      el.classList.add("drop-zone");
+      const hint = document.createElement("span");
+      hint.className = "drop-hint"; hint.setAttribute("aria-hidden", "true"); hint.textContent = "Dépose l'image ici";
+      el.appendChild(hint); translateTree(hint);
+      let depth = 0, chain = Promise.resolve();
+      const off = () => { depth = 0; el.classList.remove("drop-over"); };
+      async function handle(files, p) {
+        const items = files.length ? files.map(file => ({ file })) : p ? [{ p }] : [];
+        let good = []; const refusals = [];   // les refus se disent APRÈS les succès : c'est le dernier message que le bandeau garde
+        for (const it of items) {
+          const name = it.file ? it.file.name : it.p.filename, type = it.file?.type || "";
+          if (/^video\//.test(type) || (!type && /\.(mp4|webm|mov)$/i.test(name))) refusals.push(["dropVideo"]);
+          else if (it.file && !/^image\//.test(type)) refusals.push(["dropNotImage"]);
+          else good.push(it);
+        }
+        const mono = max() === 1;
+        if (mono && good.length > 1) { refusals.push(["dropOne"]); good = good.slice(0, 1); }
+        const over = mono ? 0 : Math.max(0, good.length - Math.max(0, max() - count()));
+        good = good.slice(0, good.length - over);
+        if (over) refusals.push(["dropMax", max()]);
+        for (const it of good) {
+          const name = it.file ? it.file.name : it.p.filename;
+          try {
+            if (it.file) put(it.file);
+            else if (putAsset) putAsset(it.p, assetURL(it.p));
+            else put(await assetFile(it.p));
+          } catch (err) { refusals.push([err.message === "type" ? "dropNotImage" : "dropFail", name]); continue; }
+          if (mono) dropSay(true, "dropOk", name); else dropSay(true, "dropOkN", name, count(), max());
+        }
+        for (const [k, ...a] of refusals) dropSay(false, k, ...a);
+      }
+      el.addEventListener("dragenter", e => { if (!dragHas(e)) return; e.preventDefault(); depth++; el.classList.add("drop-over"); });
+      el.addEventListener("dragover", e => { if (!dragHas(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+      el.addEventListener("dragleave", () => { if (--depth <= 0) off(); });
+      el.addEventListener("drop", e => {
+        if (!dragHas(e)) return;
+        e.preventDefault(); off();
+        const files = [...e.dataTransfer.files], p = dragAsset(e);   // lus tout de suite : le DataTransfer se vide après l'événement
+        chain = chain.then(() => handle(files, p)).catch(err => addEvent("WARN", `Dépôt d'image : ${err.message}`, "warn"));   // file d'attente : les dépôts successifs comptent le plafond dans l'ordre
+      });
+      return el;
+    }
+    dropZone($("imageInputWrap"), {
+      put: f => setInputFile(imageInput, f),
+      putAsset: (p, url) => setSelectedAsset({ filename: p.filename }, url)
+    });
+    dropZone($("lastImageWrap"), { put: f => setInputFile($("lastImageInput"), f) });
+    dropZone($("seqWrap"), {
+      max: () => 6, count: () => seqImages.length,
+      put: f => addSeqImage({ name: f.name, blob: f }),
+      putAsset: (p, url) => addSeqImage({ name: p.filename, url })
+    });
+    dropZone($("refDropZone"), {
+      max: () => refCtx() === "i2i" ? Q21_I2I_REFS_MAX : REF_EXTRA_CAPS.refImagesInput[0],
+      count: () => $("refImagesInput").files.length,
+      put: f => { setRefFiles([...$("refImagesInput").files, f]); $("refImagesInput").dispatchEvent(new Event("change", { bubbles: true })); }
+    });
+    // Un dépôt raté ne doit rien faire : ni navigation vers le fichier/l'image, ni texte collé dans le brief. Hors zone, le glisser
+    // (fichier ou vignette) est refusé ; un <input type="file"> natif (LoRA) garde son propre dépôt.
+    for (const type of ["dragover", "drop"]) document.addEventListener(type, e => {
+      if (e.defaultPrevented || !dragHas(e) || e.target.closest?.('input[type="file"]')) return;
+      e.preventDefault();
+      if (type === "dragover") e.dataTransfer.dropEffect = "none";
+    });
 
     // Tail commun aux 3 chemins (Auto, Auto-bypass, lancement Réalisateur) : références
     // supplémentaires + graphe Minimax H3 r2v + soumission. Seules différences entre chemins :

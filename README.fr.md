@@ -307,6 +307,16 @@ vide il ne lance rien (sauf les déclinaisons par marché, dont le prompt vient 
   son statut ; un clic défile jusqu'au plan et ne lance rien.
 - **Galerie lisible** : chaque carte affiche le nom du pipeline et un extrait du prompt (nom de
   fichier en infobulle).
+- **Glisser une image de la galerie** directement sur un champ d'image : image d'entrée, dernière
+  image (FL2VA), images de référence supplémentaires (jusqu'à 9 en Image2Image avec Qwen Image
+  2.1, 7 en Reference2Video et dans le storyboard Qwen 2.1) ou animatic FLF2V. Les fichiers
+  glissés depuis l'ordinateur marchent aussi. Le champ se remplit exactement comme si vous aviez
+  choisi l'image par Browse, ou par « Utiliser en entrée » / « Séquence » ; rien n'est rendu.
+  Ces deux boutons restent la voie au clavier, et le toucher continue de les utiliser (le
+  glisser-déposer HTML5 ne fonctionne pas au toucher).
+- **File de jobs repliable**, comme « Options avancées » : le titre indique le nombre de jobs,
+  l'état ouvert/replié est mémorisé, et une pastille « Erreur » apparaît pendant le repli si un
+  job échoue.
 - **Langues** : FR, EN, ES, DE, pour toute l'interface y compris infobulles et statuts de job ;
   le français, l'espagnol et l'allemand s'adressent à vous au tutoiement (tu / tú / du). Le
   journal d'événements et les messages d'erreur restent en français, non traduits.
