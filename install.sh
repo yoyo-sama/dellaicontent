@@ -368,12 +368,14 @@ fi
 # --- App web (port 8090) ---
 WEB_CONTAINER=""
 WEB_STATUS=""
+WEB_REUSED=0
 echo "--- App web (:8090) ---"
 if curl -sf http://localhost:8090/ >/dev/null 2>&1; then
   WEB_CONTAINER="$(find_container_by_port 8090 || true)"
   [ -z "$WEB_CONTAINER" ] && WEB_CONTAINER="(inconnu)"
-  echo "Web app already running in '$WEB_CONTAINER' — reusing it, no recreation."
+  echo "Web app already running in '$WEB_CONTAINER' — reusing it (recreated below only if it is ours, to load nginx.conf)."
   WEB_STATUS="reused ($WEB_CONTAINER)"
+  WEB_REUSED=1
 else
   echo "No web app answering on :8090 — creating it via docker compose."
   $COMPOSE up -d ai-content-studio
@@ -386,7 +388,16 @@ fi
 # and uploading a LoRA from the UI fails.
 mkdir -p "$COMFY_MODELS_DIR/loras" 2>/dev/null || warn "cannot create $COMFY_MODELS_DIR/loras (permissions?)."
 # APP_UID/APP_GID: the updater runs as the repo owner (docker-compose.yml), not as root.
-printf 'COMFY_LORAS_DIR=%s\nAPP_UID=%s\nAPP_GID=%s\n' "$COMFY_MODELS_DIR/loras" "$(id -u)" "$(id -g)" > "$REPO_ROOT/.env"
+# COMFY_OUTPUT_DIR: ComfyUI's output folder (sibling of models/), indexed by the gallery service and mounted rw.
+COMFY_OUTPUT_DIR="${COMFY_MODELS_DIR%/models}/output"
+# Created as the user before compose: otherwise dockerd creates the bind-mount source as root.
+mkdir -p "$COMFY_OUTPUT_DIR" 2>/dev/null || true
+if [ ! -w "$COMFY_OUTPUT_DIR" ]; then
+  warn "output folder not writable by $(id -un) — the gallery cannot trash or rename files: $COMFY_OUTPUT_DIR"
+  echo "  Give it to your user (run this yourself; this script never runs sudo):"
+  echo "    sudo chown -R \"$(id -u):$(id -g)\" \"$COMFY_OUTPUT_DIR\""
+fi
+printf 'COMFY_LORAS_DIR=%s\nCOMFY_OUTPUT_DIR=%s\nAPP_UID=%s\nAPP_GID=%s\n' "$COMFY_MODELS_DIR/loras" "$COMFY_OUTPUT_DIR" "$(id -u)" "$(id -g)" > "$REPO_ROOT/.env"
 if [ -d "$REPO_ROOT/.git" ] && [ -n "$(find "$REPO_ROOT/.git" ! -user "$(id -un)" -print -quit 2>/dev/null)" ]; then
   warn ".git contains files owned by someone else (an old root updater) — the updater and 'git add' will fail."
   echo "  Take ownership, then recreate the updater:"
@@ -394,11 +405,31 @@ if [ -d "$REPO_ROOT/.git" ] && [ -n "$(find "$REPO_ROOT/.git" ! -user "$(id -un)
   echo "    docker compose up -d --build --force-recreate updater"
 fi
 echo "LoRA path persisted in .env: COMFY_LORAS_DIR=$COMFY_MODELS_DIR/loras"
+echo "Output path persisted in .env: COMFY_OUTPUT_DIR=$COMFY_OUTPUT_DIR"
 
 UPDATER_STATUS=""
 echo "--- Updater service ---"
 $COMPOSE up -d --build --force-recreate updater >/dev/null 2>&1 && UPDATER_STATUS="started" || UPDATER_STATUS="failed to start (see 'docker compose logs updater')"
 echo "Updater service: $UPDATER_STATUS"
+
+# --- Gallery service ---
+GALLERY_STATUS=""
+echo "--- Gallery service ---"
+$COMPOSE up -d --build --force-recreate gallery >/dev/null 2>&1 && GALLERY_STATUS="started" || GALLERY_STATUS="failed to start (see 'docker compose logs gallery')"
+echo "Gallery service: $GALLERY_STATUS"
+# nginx.conf is bind-mounted as a single file: an nginx that is already running never sees its new
+# /gallery/ location. Our own container is recreated; a foreign one is left alone. "-t 0": nginx's
+# graceful stop waits for open WebSockets (/comfy/ws), which measured a 10 s outage; without the
+# wait the outage is about 0.2 s.
+if [ "$WEB_REUSED" = 1 ]; then
+  if [ "$WEB_CONTAINER" = "ai-content-studio-web" ]; then
+    $COMPOSE up -d --force-recreate -t 0 ai-content-studio >/dev/null 2>&1 \
+      && WEB_STATUS="reused ($WEB_CONTAINER), recreated to load nginx.conf" \
+      || WEB_STATUS="reused ($WEB_CONTAINER), recreation FAILED (run: docker compose up -d --force-recreate -t 0 ai-content-studio)"
+  else
+    warn "web container '$WEB_CONTAINER' is not ours: make its nginx proxy /gallery/ to 127.0.0.1:8094 (see nginx.conf)."
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 section "3/7 (merged into step 2 above: detection + ComfyUI update)"
@@ -532,10 +563,12 @@ echo "  - ComfyUI : ${COMFY_STATUS:-unknown}"
 echo "  - Ollama  : ${OLLAMA_STATUS:-unknown}"
 echo "  - Web     : ${WEB_STATUS:-unknown}"
 echo "  - Updater : ${UPDATER_STATUS:-unknown}"
+echo "  - Gallery : ${GALLERY_STATUS:-unknown}"
 echo
 echo "Locations:"
 echo "  - app     : $REPO_ROOT"
 echo "  - ComfyUI : $COMFY_MODELS_DIR (models)"
+echo "  - output  : $COMFY_OUTPUT_DIR (gallery index)"
 OLLAMA_DATA="$(docker inspect --format '{{ range .Mounts }}{{ if eq .Destination "/root/.ollama" }}{{ .Source }}{{ end }}{{ end }}' "$OLLAMA_CONTAINER" 2>/dev/null || true)"
 echo "  - Ollama  : ${OLLAMA_DATA:-$OLLAMA_DIR}"
 echo
@@ -568,3 +601,10 @@ for _ in 1 2 3 4 5; do
   sleep 2
 done
 echo "  - /update/status -> HTTP $code_update"
+code_gallery="000"
+for _ in 1 2 3 4 5; do
+  code_gallery="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8090/gallery/health" 2>/dev/null || echo "000")"
+  [ "$code_gallery" = "200" ] && break
+  sleep 2
+done
+echo "  - /gallery/health -> HTTP $code_gallery"

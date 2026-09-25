@@ -1,4 +1,4 @@
-# Application stack only (web + updater). ComfyUI and Ollama live in their own stacks at
+# Application stack only (web + updater + gallery). ComfyUI and Ollama live in their own stacks at
 # the root of the home directory: ~/comfyui-spark and ~/ollama (deployed by install.sh from
 # docker/stacks/). A service is never deployed twice: nginx reaches both on 127.0.0.1 since
 # it runs in host network mode.
@@ -30,3 +30,29 @@ services:
       # (~/comfyui-spark) sits next to the repo (~/ai-content-studio).
       - ${COMFY_LORAS_DIR:-../comfyui-spark/basedir/models/loras}:/loras:rw
     restart: unless-stopped
+
+  gallery:
+    build:
+      context: ./docker/gallery
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
+    container_name: ai-content-studio-gallery
+    # Indexes ComfyUI's output folder (SQLite/FTS5 + thumbnails) for the gallery, on 127.0.0.1:8094,
+    # reached through nginx /gallery/. It never contacts ComfyUI. The output folder is mounted rw
+    # (trash and rename move files) and must belong to the user it runs as (APP_UID/APP_GID, like updater).
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    network_mode: host
+    environment:
+      - OUTPUT_DIR=/output
+      - DATA_DIR=/data
+      - PORT=8094
+    volumes:
+      # Real path written into .env by install.sh; the default assumes the ComfyUI stack
+      # (~/comfyui-spark) sits next to the repo (~/ai-content-studio).
+      - ${COMFY_OUTPUT_DIR:-../comfyui-spark/basedir/output}:/output:rw
+      - gallery-data:/data
+    restart: unless-stopped
+
+volumes:
+  gallery-data: {}

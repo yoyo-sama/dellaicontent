@@ -101,7 +101,7 @@ const source = {
 |---|---|---|
 | 400 | `bad_request` | paramètre, clé, nom ou curseur invalide |
 | 403 | `cross_origin` | contrôle de même origine échoué |
-| 404 | `not_found` | clé ou fichier inconnu, route inconnue |
+| 404 | `not_found` | clé ou fichier inconnu, route inconnue, miniature impossible (PNG abîmé, vidéo de 0 octet) |
 | 405 | `method` | méthode non autorisée sur la route |
 | 409 | `exists` ou `locked` | destination déjà prise, ou dossier verrouillé |
 | 413 | `too_large` | plus de 100 clés, ou corps de plus de 64 Ko |
@@ -202,7 +202,7 @@ Tags et favoris sont rattachés à `assets.id`. Renommer ou envoyer à la corbei
   - graphe = chunk PNG `tEXt` `prompt`, lu avant IDAT ; pour une vidéo, `ffprobe -v error -print_format json -show_format -show_streams` puis `format.tags.prompt`.
   - Nœuds de départ = nœuds dont `inputs.filename_prefix` == `prefix` du fichier. S'il n'y en a aucun, tous les nœuds qui ont un `filename_prefix`.
   - On remonte les liens vers l'amont, comme `promptForNode` d'index.html.
-  - **prompt** = la plus longue chaîne parmi `CLIPTextEncode.text`, `PrimitiveStringMultiline.value`, `PrimitiveString.value`, `TextGenerateLTX2Prompt.prompt`, `TextEncodeQwenImage21.prompt`, `TextEncodeQwenImageEditPlus.prompt`, en suivant un saut de lien vers `value`/`text`/`prompt`. **Jamais** `negative_prompt`.
+  - **prompt** = la plus longue chaîne parmi `CLIPTextEncode.text`, `PrimitiveStringMultiline.value`, `PrimitiveString.value`, `TextGenerateLTX2Prompt.prompt`, `TextEncodeQwenImage21.prompt`, `TextEncodeQwenImageEditPlus.prompt`, en suivant un saut de lien vers `value`/`text`/`prompt`. **Jamais** `negative_prompt`. **Écart acté (lot B1, 2026-09-25)** : la remontée d'un `TextGenerate*` (LLM d'enrichissement) s'arrête à ce nœud, sinon la consigne système de l'enhancer (plus longue que le prompt) serait retenue ; la remontée ne suit jamais l'entrée nommée `negative` (le négatif par défaut de Qwen 2.1 est plus long que le positif). Consigne système et négatif restent dans `texts` : la recherche les trouve.
   - **model** = premier `UNETLoader.unet_name`, sinon `CheckpointLoaderSimple.ckpt_name`, trouvé en amont.
   - **loras** = `lora_name` de `LoraLoader*` en amont. Limite connue : une LoRA court-circuitée par un switch est quand même listée.
   - **seed** = premier `seed` ou `noise_seed` entier littéral, ou atteint par un saut vers un `Primitive*`.
