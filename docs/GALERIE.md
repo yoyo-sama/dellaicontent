@@ -133,6 +133,8 @@ const source = {
 | `/trash` | `{"keys":[≤100]}` | `{"ok":true,"trashed":[{"key":"<origine>","trashKey":".trash/<ms>-<hex6>/<origine>"}]}`. Toutes les clés sont validées avant tout déplacement. Si un déplacement échoue, réponse 500 avec la liste de ce qui est déjà déplacé. |
 | `/restore` | `{"keys":[trashKeys ≤100]}` | `{"ok":true,"restored":[{"trashKey","key"}]}`. Si l'origine est prise, le fichier revient sous `<stem>_restored<ext>`, puis `_restored2`… |
 
+**Écarts actés (lot B2, 2026-09-25)** : le contrôle C6 s'exécute avant le routage (un POST sans `Content-Type` JSON sur une route de lecture répond 415, pas 405) ; PUT, DELETE, PATCH et HEAD répondent 405 sur toute route ; des clés en double dans une requête → 400 `bad_request` ; les 500 de `/trash` **et** `/restore` portent la liste de ce qui est déjà fait (`trashed` / `restored`) ; un renommage ne change que la clé (pipeline et périmètre « app » gardent leur valeur d'origine) ; le rescan relit la ligne par sa clé sous le verrou avant toute suppression (correction d'une perte de tags/favoris lors d'un renommage pendant un scan).
+
 Il n'existe **aucune** route de suppression définitive. La purge de la corbeille est manuelle : `rm -r output/.trash`.
 
 ### C4. Schéma SQLite (`/data/gallery.db`, créé en entier par B1)

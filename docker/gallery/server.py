@@ -1,16 +1,19 @@
-"""Gallery service (docs/GALERIE.md, Contrat C3-C6, read routes only).
+"""Gallery service (docs/GALERIE.md, Contrat C3-C6).
 
-Indexes the ComfyUI output folder into SQLite/FTS5 and serves it read-only. It never contacts
-ComfyUI: there is no network client in this file (only http.server + urllib.parse for URLs).
-`python3 server.py --check` runs the self-tests (no DB, no port).
+Indexes the ComfyUI output folder into SQLite/FTS5, serves it, and writes only tags/favourites (SQLite) and
+file moves (rename, trash, restore: link then unlink, never an overwrite, never a definitive delete).
+It never contacts ComfyUI: there is no network client in this file (only http.server + urllib.parse for URLs).
+`python3 server.py --check` runs the self-tests (temporary folder and DB, no port).
 """
 import base64
+import contextlib
 import datetime
 import hashlib
 import io
 import json
 import os
 import re
+import secrets
 import signal
 import sqlite3
 import stat
@@ -21,6 +24,7 @@ import tempfile
 import threading
 import time
 import traceback
+import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlsplit
 
@@ -88,8 +92,8 @@ PRAGMA user_version = 1;
 
 
 class Err(Exception):
-    def __init__(self, status, code, detail):
-        self.status, self.code, self.detail = status, code, detail
+    def __init__(self, status, code, detail, extra=None):
+        self.status, self.code, self.detail, self.extra = status, code, detail, extra or {}
 
 
 def bad(detail):
@@ -349,11 +353,13 @@ def scan():
                 len(known) + len(trash))
         else:
             STATE["warning"] = None
+            # Trash rows are only looked at here: deleted once their .trash/… file is gone (manual purge).
             gone = [k for k in known if k not in found] + list(trash)
             for k in gone:
-                with LOCK:  # re-check just before deleting
-                    if not os.path.lexists(os.path.join(ROOT, k)):
-                        delete_rows([known[k][0] if k in known else trash[k]])
+                with LOCK:  # re-read the row BY KEY under the lock: renamed, trashed or restored since the snapshot, its id is not ours
+                    r = db.execute("SELECT id FROM assets WHERE key = ?", (k,)).fetchone()
+                    if r and not os.path.lexists(os.path.join(ROOT, k)):
+                        delete_rows([r["id"]])
     finally:
         STATE["last"] = int(time.time() * 1000)
         STATE["secs"] = round(time.time() - t0, 2)
@@ -605,7 +611,240 @@ ROUTES = {"/health": r_health, "/assets": r_assets, "/asset": r_asset, "/thumb":
           "/facets": r_facets}
 
 
+# ── Writing (C3, C6) ─────────────────────────────────────────────────────────
+
+MAX_KEYS = 100
+MAX_BODY = 64 * 1024
+LOCKED = re.compile(r"^studio/(story|relay)/")  # files the storyboard sessions refer to by name
+
+
+@contextlib.contextmanager
+def tx():
+    with LOCK:
+        db.execute("BEGIN")
+        try:
+            yield
+        except BaseException:
+            db.execute("ROLLBACK")
+            raise
+        db.execute("COMMIT")
+
+
+def now_ms():
+    return int(time.time() * 1000)
+
+
+def trash_key(key, ms, hx):
+    return ".trash/%d-%s/%s" % (ms, hx, key)
+
+
+def control(s):
+    return any(unicodedata.category(c) in ("Cc", "Cs") for c in s)
+
+
+def renamed(key, name):
+    """Key of `name` in the folder of `key` (C3: same folder, same extension, <= 150 chars...), else Err 400."""
+    if (not isinstance(name, str) or not 1 <= len(name) <= 150 or name[0] == "." or "/" in name or "\\" in name
+            or control(name) or os.path.splitext(name)[1].lower() != os.path.splitext(key)[1].lower()):
+        raise bad("Nom invalide.")
+    sub = key.rpartition("/")[0]
+    new = sub + "/" + name if sub else name
+    if not safe_path(new):
+        raise bad("Nom invalide.")
+    return new
+
+
+def key_list(b, trash=False):
+    """The `keys` of a body, all valid (C6), before anything is read or moved."""
+    keys = b.get("keys")
+    if not isinstance(keys, list):
+        raise bad("Paramètre keys invalide.")
+    if len(keys) > MAX_KEYS:
+        raise Err(413, "too_large", "Plus de %d clés." % MAX_KEYS)
+    for k in keys:
+        if not safe_path(k, allow_trash=trash) or k.startswith(".trash/") != trash:
+            raise bad("Clé invalide.")
+    if len(set(keys)) != len(keys):
+        raise bad("Clé en double.")
+    return keys
+
+
+def rows_for(keys, trash=False, on_disk=False):
+    """Rows of `keys` (in or out of the trash as asked), file present if `on_disk`; Err 404 otherwise. Under LOCK."""
+    rows = []
+    for k in keys:
+        r = db.execute("SELECT * FROM assets WHERE key = ?", (k,)).fetchone()
+        if r is None or (r["trashed_at"] is not None) != trash or (on_disk and not os.path.lexists(os.path.join(ROOT, k))):
+            raise Err(404, "not_found", "Fichier inconnu : %s" % k)
+        rows.append(r)
+    return rows
+
+
+def tag_name(s):
+    t = s.strip() if isinstance(s, str) else ""
+    if not 1 <= len(t) <= 40 or control(t):
+        raise bad("Nom de tag invalide.")
+    return t
+
+
+def tag_names(b, field):
+    v = b.get(field, [])
+    if not isinstance(v, list):
+        raise bad("Paramètre %s invalide." % field)
+    return [tag_name(x) for x in v]
+
+
+def tag_id(name, create):
+    """Tag id, case-insensitive (full Unicode, unlike SQLite's NOCASE). Under LOCK."""
+    # ponytail: scans every tag per name, an index on a casefolded column if there are ever thousands of tags
+    for i, n in db.execute("SELECT id, name FROM tags"):
+        if n.casefold() == name.casefold():
+            return i
+    return db.execute("INSERT INTO tags (name, created) VALUES (?, ?)", (name, now_ms())).lastrowid if create else None
+
+
+def move(r, dst, sets="", args=()):
+    """Move the file of row `r` to key `dst` and its row, in ONE transaction (C6).
+    os.link never overwrites (FileExistsError); the source is unlinked only after that link succeeded."""
+    src_p, dst_p = os.path.join(ROOT, r["key"]), os.path.join(ROOT, dst)
+    with tx():
+        db.execute("UPDATE assets SET key = ?" + sets + " WHERE id = ?", (dst,) + tuple(args) + (r["id"],))
+        db.execute("UPDATE assets_fts SET key = ? WHERE rowid = ?", (dst, r["id"]))
+        os.makedirs(os.path.dirname(dst_p), exist_ok=True)
+        os.link(src_p, dst_p, follow_symlinks=False)
+        try:
+            os.unlink(src_p)
+        except FileNotFoundError:
+            pass  # removed by someone else meanwhile: the file now lives at dst only, which is the move we wanted
+        except OSError:
+            os.unlink(dst_p)  # source still there (no right to remove it): take back the name we just added, roll back
+            raise
+
+
+def w_fav(b):
+    keys = key_list(b)
+    if type(b.get("fav")) is not bool:
+        raise bad("Paramètre fav invalide.")
+    f = int(b["fav"])
+    with tx():
+        n = sum(db.execute("UPDATE assets SET fav = ? WHERE id = ? AND fav != ?", (f, r["id"], f)).rowcount
+                for r in rows_for(keys))
+    return {"ok": True, "changed": n}
+
+
+def w_tags(b):
+    name = tag_name(b.get("name"))
+    with tx():
+        i = tag_id(name, True)
+        r = db.execute("SELECT name, (SELECT count(*) FROM asset_tags JOIN assets ON assets.id = asset_id "
+                       "WHERE tag_id = tags.id AND trashed_at IS NULL) FROM tags WHERE id = ?", (i,)).fetchone()
+    return {"ok": True, "tag": {"name": r[0], "count": r[1]}}
+
+
+def w_tag(b):
+    keys, add, rem = key_list(b), tag_names(b, "add"), tag_names(b, "remove")
+    with tx():
+        rows = rows_for(keys)
+        for n in add:
+            t = tag_id(n, True)
+            db.executemany("INSERT OR IGNORE INTO asset_tags (asset_id, tag_id) VALUES (?, ?)", [(r["id"], t) for r in rows])
+        for n in rem:
+            t = tag_id(n, False)
+            if t:
+                db.executemany("DELETE FROM asset_tags WHERE asset_id = ? AND tag_id = ?", [(r["id"], t) for r in rows])
+    tg = tags_of([r["id"] for r in rows])
+    return {"ok": True, "assets": [{"key": r["key"], "tags": tg.get(r["id"], [])} for r in rows]}
+
+
+def w_rename(b):
+    key = b.get("key")
+    if not safe_path(key):
+        raise bad("Clé invalide.")
+    if LOCKED.search(key):
+        raise Err(409, "locked", "Dossier verrouillé : les sessions storyboard désignent ces fichiers par leur nom.")
+    dst = renamed(key, b.get("name"))
+    with LOCK:
+        r = rows_for([key], on_disk=True)[0]
+        try:
+            move(r, dst)
+        except (FileExistsError, sqlite3.IntegrityError):
+            raise Err(409, "exists", "Un fichier porte déjà ce nom.")
+        r = by_key(dst)
+        return {"ok": True, "asset": asset_json(r, tags_of([r["id"]]), full=True)}
+
+
+def w_trash(b):
+    keys = key_list(b)
+    done = []
+    with LOCK:
+        rows = rows_for(keys, on_disk=True)
+        for r in rows:  # a .trash that became a symlink is refused here, before anything moves
+            if not safe_path(trash_key(r["key"], now_ms(), "000000"), allow_trash=True):
+                raise bad("Clé invalide.")
+        try:
+            for r in rows:
+                ms = now_ms()
+                tk = trash_key(r["key"], ms, secrets.token_hex(3))
+                move(r, tk, ", orig_key = ?, trashed_at = ?", (r["key"], ms))
+                done.append({"key": r["key"], "trashKey": tk})
+        except Exception:
+            traceback.print_exc()
+            raise Err(500, "internal", "Corbeille interrompue : %d fichier(s) déjà déplacé(s)." % len(done), {"trashed": done})
+    return {"ok": True, "trashed": done}
+
+
+def prune(tk):
+    """Remove the folders of .trash/<id>/… left empty by a restore, never above .trash/<id> (os.removedirs, bounded)."""
+    top = os.path.join(ROOT, *tk.split("/")[:2])
+    d = os.path.dirname(os.path.join(ROOT, tk))
+    while True:
+        try:
+            os.rmdir(d)
+        except OSError:
+            return
+        if d == top:
+            return
+        d = os.path.dirname(d)
+
+
+def w_restore(b):
+    keys = key_list(b, trash=True)
+    done = []
+    with LOCK:
+        rows = rows_for(keys, trash=True, on_disk=True)
+        for r in rows:
+            if not safe_path(r["orig_key"] or ""):
+                raise bad("Clé d'origine invalide : %s" % r["key"])
+        try:
+            for r in rows:
+                stem, ext = os.path.splitext(r["orig_key"])
+                # Never over an existing file: ComfyUI REUSES the number of a deleted file if it was the last one.
+                for n in range(1000):
+                    dst = r["orig_key"] if n == 0 else "%s_restored%s%s" % (stem, n if n > 1 else "", ext)
+                    if not safe_path(dst):
+                        raise ValueError("no free name for " + r["orig_key"])
+                    try:
+                        move(r, dst, ", orig_key = NULL, trashed_at = NULL")
+                        break
+                    except (FileExistsError, sqlite3.IntegrityError):
+                        continue
+                else:
+                    raise ValueError("no free name for " + r["orig_key"])
+                prune(r["key"])
+                done.append({"trashKey": r["key"], "key": dst})
+        except Exception:
+            traceback.print_exc()
+            raise Err(500, "internal", "Restauration interrompue : %d fichier(s) déjà restauré(s)." % len(done), {"restored": done})
+    return {"ok": True, "restored": done}
+
+
+WRITES = {"/fav": w_fav, "/tags": w_tags, "/tag": w_tag, "/rename": w_rename, "/trash": w_trash, "/restore": w_restore}
+
+
 class Handler(BaseHTTPRequestHandler):
+    timeout = 30  # a client that announces a body and never sends it does not hold a thread forever
+    body_left = False
+
     def log_message(self, *a):
         pass
 
@@ -620,21 +859,59 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def same_origin_json(self):
+        """C6, before any write route runs: JSON content type, same origin, body of 64 KB at most -> the JSON object."""
+        h = self.headers
+        if not (h.get("Content-Type") or "").lower().startswith("application/json"):
+            raise Err(415, "json_required", "Corps JSON attendu (Content-Type: application/json).")
+        if h.get("Sec-Fetch-Site", "same-origin") != "same-origin":
+            raise Err(403, "cross_origin", "Requête d'une autre origine refusée.")
+        src = h.get("Origin") if h.get("Origin") is not None else h.get("Referer")
+        host = (h.get("Host") or "").lower()
+        try:
+            same = bool(src and host) and urlsplit(src).netloc.lower() == host
+        except ValueError:
+            same = False
+        if not same:
+            raise Err(403, "cross_origin", "Requête d'une autre origine refusée.")
+        n = h.get("Content-Length") or ""
+        if not re.fullmatch(r"\d{1,12}", n):
+            raise bad("Content-Length absent ou invalide.")
+        if int(n) > MAX_BODY:
+            raise Err(413, "too_large", "Corps de plus de 64 Ko.")
+        raw, self.body_left = self.rfile.read(int(n)), False
+        if len(raw) != int(n):
+            raise bad("Corps tronqué.")
+        try:
+            body = json.loads(raw)
+        except (ValueError, RecursionError):
+            raise bad("JSON invalide.")
+        if not isinstance(body, dict):
+            raise bad("Objet JSON attendu.")
+        return body
+
     def dispatch(self, method):
         u = urlsplit(self.path)
         try:
-            fn = ROUTES.get(u.path)
-            if fn is None:
-                raise Err(404, "not_found", "Route inconnue.")
-            if method != "GET":
-                raise Err(405, "method", "Méthode non autorisée.")
-            r = fn({k: v[0] for k, v in parse_qs(u.query).items()})
+            if method == "POST":
+                body = self.same_origin_json()
+                fn = WRITES.get(u.path)
+                if fn is None:
+                    raise Err(405, "method", "Méthode non autorisée.") if u.path in ROUTES else Err(404, "not_found", "Route inconnue.")
+                r = fn(body)
+            else:
+                fn = ROUTES.get(u.path)
+                if method != "GET" or (fn is None and u.path in WRITES):
+                    raise Err(405, "method", "Méthode non autorisée.")
+                if fn is None:
+                    raise Err(404, "not_found", "Route inconnue.")
+                r = fn({k: v[0] for k, v in parse_qs(u.query).items()})
             if isinstance(r, bytes):
                 self.send(200, r, "image/webp", "public, max-age=31536000, immutable")
             else:
                 self.send(200, json.dumps(r, ensure_ascii=False).encode(), "application/json; charset=utf-8", "no-store")
         except Err as e:
-            self.send(e.status, json.dumps({"error": e.code, "detail": e.detail}, ensure_ascii=False).encode(),
+            self.send(e.status, json.dumps({"error": e.code, "detail": e.detail, **e.extra}, ensure_ascii=False).encode(),
                       "application/json; charset=utf-8", "no-store")
         except (BrokenPipeError, ConnectionResetError):
             pass
@@ -646,15 +923,25 @@ class Handler(BaseHTTPRequestHandler):
         self.dispatch("GET")
 
     def do_POST(self):
+        self.body_left = True
         self.dispatch("POST")
+        n = self.headers.get("Content-Length") or ""
+        if self.body_left and re.fullmatch(r"\d{1,12}", n):
+            try:  # read what we refused: closing on unread data resets the connection before the client reads our answer
+                self.rfile.read(min(int(n), 1 << 20))
+            except OSError:
+                pass
 
-    do_PUT = do_DELETE = do_PATCH = do_HEAD = do_POST
+    def do_PUT(self):
+        self.dispatch(self.command)
+
+    do_DELETE = do_PATCH = do_HEAD = do_PUT
 
 
 # ── Self-test ────────────────────────────────────────────────────────────────
 
 def check():
-    global ROOT
+    global ROOT, walk
     from PIL import PngImagePlugin
     with tempfile.TemporaryDirectory() as tmp:
         outside = os.path.join(tmp, "outside")
@@ -737,20 +1024,90 @@ def check():
         m = extract(p1, "out/a_00001_.png", "image")
         assert (m["meta_ok"], m["w"], m["h"], m["seed"]) == (1, 5, 3, 111), m
         assert extract(p3, "x_00001_.png", "image")["meta_ok"] == 0
+
+        # Names (C3 /rename) and trash keys (C1/C4)
+        assert renamed("studio/a_00001_.png", "b é (1).PNG") == "studio/b é (1).PNG" and renamed("x.mp4", "y.MP4") == "y.MP4"
+        assert renamed("a.png", "x" * 146 + ".png")  # 150 characters
+        for n in ("../x.png", "a/b.png", "a\\b.png", ".cache.png", ".png", "x.exe", "x.jpg", "x.png.exe", "x" * 147 + ".png",
+                  "x\0.png", "x\n.png", "x\x7f.png", "x\x85.png", "\ud800.png", "", None, 5, ["x.png"]):
+            try:
+                renamed("studio/a.png", n)
+                raise AssertionError(n)
+            except Err as e:
+                assert e.status == 400, n
+        tk = trash_key("studio/a b.png", 1758791234567, "0a1b2c")
+        assert tk == ".trash/1758791234567-0a1b2c/studio/a b.png" and safe_path(tk, allow_trash=True) and safe_path(tk) is None
+        assert key_list({"keys": [tk]}, trash=True) and key_list({"keys": ["x.png"] * 0}) == []
+        for b, t, st in (({"keys": ["x.png", "x.png"]}, False, 400), ({"keys": [tk]}, False, 400), ({"keys": ["x.png"]}, True, 400),
+                         ({"keys": "x.png"}, False, 400), ({"keys": ["k%d.png" % i for i in range(101)]}, False, 413)):
+            try:
+                key_list(b, trash=t)
+                raise AssertionError(b)
+            except Err as e:
+                assert e.status == st, (b, e.status)
+        for s in ("", "   ", "x" * 41, "a\tb", None, 3):
+            try:
+                tag_name(s)
+                raise AssertionError(s)
+            except Err:
+                pass
+        assert tag_name("  Été  ") == "Été" and tag_name("x" * 40)
+
+        # Race: a rename during a forced scan never deletes the renamed row, its tags and fav survive.
+        ROOT = os.path.join(tmp, "race")
+        os.makedirs(ROOT)
+        open_db(os.path.join(tmp, "race.db"))
+        for n in ("a.png", "b.png"):
+            Image.new("RGB", (4, 4)).save(os.path.join(ROOT, n))
+            os.utime(os.path.join(ROOT, n), (1e9, 1e9))
+        scan()
+        w_tag({"keys": ["a.png"], "add": ["garde"]})
+        w_fav({"keys": ["a.png"], "fav": True})
+        real = walk
+
+        def before():  # renamed between the snapshot and the walk (B1 deleted the row by its stale id)
+            w_rename({"key": "a.png", "name": "a2.png"})
+            return real()
+
+        def away_and_back():  # renamed away and back while the walk runs: the walk misses it, yet the file is there
+            w_rename({"key": "a2.png", "name": "a3.png"})
+            f = real()
+            w_rename({"key": "a3.png", "name": "a2.png"})
+            return f
+        try:
+            for fn in (before, away_and_back):
+                walk = fn
+                scan()
+                r = by_key("a2.png")
+                assert r and r["fav"] == 1 and tags_of([r["id"]]).get(r["id"]) == ["garde"], fn.__name__
+        finally:
+            walk = real
+        tk = w_trash({"keys": ["a2.png"]})["trashed"][0]["trashKey"]
+        Image.new("RGB", (4, 4)).save(os.path.join(ROOT, "a2.png"))  # same name taken again meanwhile
+        assert w_restore({"keys": [tk]})["restored"][0]["key"] == "a2_restored.png"
+        assert not os.path.exists(os.path.join(ROOT, tk.rsplit("/", 1)[0])) and os.path.isdir(os.path.join(ROOT, ".trash"))
+        assert tags_of([by_key("a2_restored.png")["id"]]) and len(os.listdir(ROOT)) == 4, os.listdir(ROOT)
+        db.close()
     src = open(__file__).read()
     assert not re.search(r"^\s*(import|from)\s+(urllib\.request|http\.client|socket|requests)\b", src, re.M)
+    # no definitive delete of an asset; unlink only in move() (right after a link) — the two lines there
+    assert not re.search(r"\bos\.remove\(|\bshutil\b|rm" r"tree", src) and len(re.findall(r"os\.unlink\(", src)) == 2
     print("check: OK")
 
 
-def main():
+def open_db(path):
     global db
-    os.makedirs(os.path.join(DATA, "thumbs"), exist_ok=True)
-    db = sqlite3.connect(os.path.join(DATA, "gallery.db"), check_same_thread=False, isolation_level=None)
+    db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode = WAL")
     db.execute("PRAGMA synchronous = NORMAL")
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA)
+
+
+def main():
+    os.makedirs(os.path.join(DATA, "thumbs"), exist_ok=True)
+    open_db(os.path.join(DATA, "gallery.db"))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # PID 1 ignores SIGTERM otherwise
     threading.Thread(target=scan_loop, daemon=True).start()
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
