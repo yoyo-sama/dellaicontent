@@ -33,6 +33,7 @@ Modèles installés : `ls ~/comfyui-spark/basedir/models/<dossier>/` (chemin de 
 - Clés API cloud : **sessionStorage uniquement** (jamais localStorage, jamais loguées).
 - Restriction pipeline↔scénario : via `pipelines[].scenario` dans `manifest.json` (manifest v2), pas en JS.
 - **i18n FR/EN/ES/DE, texte d'interface au tutoiement** (FR tu, ES tú, DE du ; Canvas identique). Le journal d'événements (`addEvent`) et les `throw new Error` restent en français, **non traduits** : les benches de graphes et d'UI en lisent le texte, ne pas les traduire ni les réécrire sans les rejouer. Toute nouvelle chaîne visible = une clé `I18N` (texte français d'origine) ; une chaîne à paramètres = une entrée `DYN_I18N`, lue par `dyn()` et rafraîchie dans le handler `langSelect`.
+- **Galerie (chantier 1.4.0, `docs/GALERIE.md`)** : le contrat d'API, du schéma SQLite et de l'interface JS de source est dans `docs/GALERIE.md § Contrat` ; toute déviation passe par l'orchestrateur, jamais par un lot. Le service `gallery` ne soumet jamais de job ComfyUI et ne contacte pas ComfyUI. Tags et favoris vivent en SQLite, jamais dans les fichiers ; les PNG ne sont jamais réécrits. Aucune suppression définitive : corbeille `output/.trash/`, purge manuelle. « Réutiliser le prompt » n'écrit dans le brief que sur un clic explicite de l'utilisateur, avec « Annuler », et ne lance rien. Tests d'écriture et de suppression sur un dossier output FACTICE uniquement, jamais sur le vrai `output/`.
 
 ## Où est quoi dans index.html
 
