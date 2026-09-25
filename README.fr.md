@@ -227,6 +227,8 @@ la vue sur les cartes. La carte Fiche personnage a un sélecteur « Type de suje
 humain / autre) qui corrige le choix du LLM à la génération suivante, et les cartes Storyboard,
 Vidéo, Génération vidéo et Reference2Video composent leurs prompts avec les règles corrigées du Studio (planches
 selon le sujet, grammaire de prompt Minimax H3).
+La carte Création d'image a un sélecteur Moteur — Krea 2 Turbo par défaut, ou Qwen Image 2.1 (mêmes tailles et même
+graphe que le Studio ; pas de LoRA de style dans ce cas).
 
 ### Accélération `comfy_kitchen` (DGX Spark / ARM64)
 

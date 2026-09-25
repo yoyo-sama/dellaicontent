@@ -521,6 +521,52 @@ soumis à `:8188/prompt`, 33 s chacun) :
   barques bleues, la brume et la lumière froide sont conservés ; seul le cadrage est très légèrement élargi par le
   passage de 1280×720 à 1376×768. Net, sans bruit.
 
+## Canvas : carte Text2Image Qwen Image 2.1
+
+**Lot Q21-CANVAS (2026-09-25).** La carte Canvas « Création d'image » (`simple/krea2`) gagne un champ **« Moteur »** :
+Krea 2 Turbo (défaut) ou Qwen Image 2.1 (`qwen21_t2i`, ajouté au Studio par Q21-STUDIO). Krea 2 reste le chemin par
+défaut et **n'a pas bougé** : un canvas sauvegardé avant le lot se recharge sur Krea 2 (`engine` absent → défaut du
+constructeur) et se soumet octet pour octet comme avant.
+
+| Élément | Valeur |
+|---|---|
+| Propriété / widget | `engine` ∈ `krea2` (défaut) \| `qwen21`, sérialisée ; widget « moteur » ajouté **après** le bouton Générer (comme « type de sujet » de la fiche personnage : un canvas déjà sauvegardé relit ses widgets par position) ; `syncWidgets` le restaure au rechargement et après Dupliquer |
+| Graphe Qwen | `api/qwen21_t2i.json` rempli par `Engine.buildGraph` (comme le Studio) : `negative: ""`, `batch: 1`, seed aléatoire, `SaveImage` `canvas/qwen21_t2i` (le Krea du Canvas écrit `canvas/krea2`) |
+| Taille | table `RATIOS` de `js/nodes-simple.js` (celle du Studio) : 16:9 → 1280×720, 9:16 → 720×1280, 1:1 → 1024×1024, 4:5 → 832×1040. **Pas** `computeMPResolution` : le champ « Mégapixels » ne joue qu'en Krea 2 |
+| LoRA | aucune : `lora` et `mp` ne sont lus que par la branche Krea 2. Ils restent en propriété après une bascule (revenir sur Krea 2 retrouve la LoRA choisie) mais le graphe Qwen n'en contient jamais trace |
+| Panneau Propriétés | Krea 2 : Moteur, Prompt, Ratio, Mégapixels, Style (LoRA). Qwen : Moteur, Prompt, Ratio (Mégapixels et Style (LoRA) masqués par `when`) ; aide sous « Moteur » |
+| Pied de carte | `Krea 2 Turbo · W×H[ · LoRA: …]` / `Qwen Image 2.1 · W×H` ; statut « Génération Qwen Image 2.1 en cours… » (4 langues) |
+| Largeur | inchangée, 320 : le texte dessiné le plus long (statut ES « Generación Qwen Image 2.1 en curso… ») fait 185 px pour 296 disponibles |
+| Enrichissement | `ENHANCE.qwenImagePrompt` : le texte de `ENRICH_SYSTEM` du Studio (consigne générique) avec la clé de sortie `{"prompt"}` que lit la carte et **sans** négatif (la carte passe `""`, inutilisé à cfg 1). Jamais `KREA2_ENRICH_SYSTEM`, ni `stripPromptPadding` (réservé à Krea 2, comme au Studio) |
+
+**Décisions et écarts par rapport au Studio.**
+
+- **`ENRICH_SYSTEM` n'est pas exporté par `Engine`** (il vit dans `index.html`) : `js/engine.js` n'a pas été touché
+  (`Object.keys(Engine).length` reste 76). Le texte est repris localement dans `canvas.html`, comme le sont déjà
+  `ENHANCE.qwenInstruction` et `ENHANCE.videoPrompt`. Si `ENRICH_SYSTEM` change au Studio, la copie de `canvas.html` est
+  à aligner (I13-B, source unique, ne l'a pas encore traité).
+- **Pas de « Variantes » ni de seed sur la carte** (elle n'en avait pas en Krea 2 : une carte = une image, seed aléatoire) :
+  `batch` reste à 1. Le graphe du Studio à 4 variantes ne diffère de celui de la carte que par `batch_size` (vérifié).
+- **Pas de style Krea** sur la carte : le Studio ajoute `currentStyleText()` (style « Cinématique » par défaut) au prompt ;
+  la carte, comme en Krea 2, envoie le prompt tel quel. Les graphes sont identiques à style « Aucun » au Studio.
+- Le libellé « Mégapixels » (cartes Création d'image, Vidéo, Reference2Video) n'avait pas de clé `I18N` : il restait en
+  français en EN/ES/DE ; la clé est ajoutée (« Megapixels » / « Megapíxeles » / « Megapixel »).
+
+**Preuves** (bancs hors dépôt, `~/.cache/ai-content-studio/q21canvas/`, profil Chrome vierge, tout bouchonné) : 5 cartes
+Krea 2 (ratios, mégapixels, LoRA) neuves **et** un graphe sauvegardé par HEAD rechargé avec le lot → 5 corps `/prompt`
+identiques à HEAD (5 492 o) ; graphes Qwen 16:9 / 9:16 / 1:1 / 4:5 = graphes du Studio octet pour octet (préfixe repatché) ;
+bascule Krea → Qwen → Krea par le panneau sans fuite de LoRA ; rechargement de page en Qwen (moteur, widget, pied, panneau,
+Dupliquer) ; enrichissement (consigne générique en Qwen, Krea 2 inchangée) ; zéro job sur chaque valeur de chaque liste ;
+un clic volontaire sur Générer (Qwen) = exactement 1 soumission.
+
+**Rendu réel** (1 job GPU, file vide avant, graphe construit par la carte Canvas headless en moteur Qwen Image 2.1, 16:9,
+seed 500000000000000, soumis à `:8188/prompt`, 30 s) : `output/canvas/qwen21_t2i_00001_.png` (1280×720) — « a lighthouse
+keeper on a rocky coast at dusk, storm clouds, warm lantern light, photorealistic » — regardé : ciel d'orage dense, mer
+agitée aux embruns nets, côte rocheuse, phare trapu dont la lanterne rayonne d'une lumière chaude, rendu photographique net
+et sans bruit. Réserves : le gardien est une petite silhouette sur la coursive, peu lisible, avec un objet indistinct à ses
+pieds, et la lueur de la lanterne se superpose à sa tête au lieu de se trouver dans la lanterne ; l'architecture du phare
+est un peu fantaisiste. Pas d'artefact de bruit ni de tuile.
+
 ## Problèmes relevés lors de l'inspection
 
 1. **`pe_t2i` / `pe_i2i` chargés comme encodeur = bruit pur, job `success`** (§2). Piège n°14

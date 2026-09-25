@@ -226,6 +226,8 @@ character-sheet card has a "Subject type" selector (auto / human / other) that o
 LLM's guess on the next generation, and the Storyboard, Video, Video generation and Reference2Video
 cards compile their prompts with the Studio's corrected rules (subject-aware sheets, Minimax H3
 prompt grammar).
+The Image creation card has an Engine selector — Krea 2 Turbo by default, or Qwen Image 2.1 (same
+sizes and same graph as Studio; no style LoRA in that case).
 
 ### `comfy_kitchen` acceleration (DGX Spark / ARM64)
 

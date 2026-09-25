@@ -84,16 +84,20 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // 1) Krea 2 — texte → image
+  // 1) Krea 2 / Qwen Image 2.1 — texte → image
   // ═══════════════════════════════════════════════════════════════════════
+  // LOT Q21-CANVAS : moteur Qwen Image 2.1 (`qwen21_t2i`) en COEXISTENCE avec Krea 2 Turbo (défaut,
+  // chemin figé — voir generate()). Champ `engine`, comme la carte Édition d'image.
   function Krea2Node() {
     this.addOutput("image", 0);
-    // `ratio` + `mp` (mégapixels) pilotent désormais la résolution via
-    // Engine.computeMPResolution — unité TOUJOURS 32, cette carte n'a pas de champ "engine"
-    // (même raisonnement que Ref2VideoNode, nodes-advanced.js) ; `mp` défaut "1.0", cohérent
-    // avec le défaut déjà utilisé sur les cartes vidéo. `lora` défaut "" = aucune LoRA, graphe
-    // strictement inchangé (cf. addKrea2Shared).
-    this.properties = { prompt: "a cinematic photo of a lighthouse at sunset", ratio: "1:1", mp: "1", lora: "", src: "", outFile: null };
+    // `ratio` + `mp` (mégapixels) pilotent la résolution de Krea 2 via Engine.computeMPResolution
+    // — unité TOUJOURS 32 ; `mp` défaut "1.0", cohérent avec le défaut déjà utilisé sur les cartes
+    // vidéo. `lora` défaut "" = aucune LoRA, graphe strictement inchangé (cf. addKrea2Shared).
+    // LOT Q21-CANVAS : `engine` ("krea2" défaut | "qwen21") choisit le moteur, comme la carte
+    // Édition d'image. Qwen Image 2.1 ignore `mp` et `lora` (sa taille vient de RATIOS, comme au
+    // Studio, et il n'a pas de LoRA) : ces deux propriétés RESTENT dans `properties` après une
+    // bascule (revenir sur Krea 2 les retrouve) mais ne sont lues que par la branche Krea 2.
+    this.properties = { engine: "krea2", prompt: "a cinematic photo of a lighthouse at sunset", ratio: "1:1", mp: "1", lora: "", src: "", outFile: null };
     this.addWidget("text", "prompt", this.properties.prompt, v => { this.properties.prompt = v; });
     this.addWidget("combo", "ratio", this.properties.ratio, v => { this.properties.ratio = v; },
       { values: Object.keys(RATIOS) });
@@ -105,6 +109,10 @@
       // réseau de js/engine.js (fetchLoraOptions).
       { values: () => E.KREA2_LORAS.map(l => l[0]) });
     this.genWidget = this.addWidget("button", "Générer", null, () => this.generate());
+    // Ajouté APRÈS le bouton (comme « type de sujet » de CharsheetNode) : un canvas déjà sauvegardé
+    // relit ses widgets par position, un widget inséré avant décalerait les anciens.
+    this.addWidget("combo", "moteur", this.properties.engine, v => { this.properties.engine = v; },
+      { values: ["krea2", "qwen21"] });
     this.size = [320, 240];
     setStatus(this, "idle", "");
   }
@@ -117,16 +125,35 @@
   Krea2Node.prototype.generate = async function () {
     const prompt = (this.properties.prompt || "").trim();
     if (!prompt) { setStatus(this, "error", T("Erreur : prompt vide.")); return; }
-    setStatus(this, "running", T("Génération Krea 2 en cours…"));
+    // Tout ce qui n'est pas « qwen21 » (valeur absente d'un ancien canvas, valeur inconnue) reste
+    // sur Krea 2 : chemin INCHANGÉ au caractère près.
+    const qwen21 = this.properties.engine === "qwen21";
+    setStatus(this, "running", qwen21 ? T("Génération Qwen Image 2.1 en cours…") : T("Génération Krea 2 en cours…"));
     try {
-      const { g, add } = E.makeGraphBuilder();
-      // Unité TOUJOURS 32 : cette carte n'a pas de champ "engine", jamais LTX 2.5 ici (même
-      // raisonnement que Ref2VideoNode.generate, nodes-advanced.js).
-      const [width, height] = E.computeMPResolution(parseFloat(this.properties.mp), this.properties.ratio, 32);
-      const kx = E.addKrea2Shared(add, this.properties.lora);
-      const dec = E.addKrea2Shot(add, kx, prompt, Math.floor(Math.random() * 1e15), width, height, 1);
-      add("SaveImage", { images: [dec, 0], filename_prefix: "canvas/krea2" });
-      const promptId = await E.submitGraph(g, "Canvas · Krea 2", `Krea 2 · seed`, clientId);
+      let g, label, sub;
+      if (!qwen21) {
+        const b = E.makeGraphBuilder(), add = b.add;
+        g = b.g;
+        // Unité TOUJOURS 32 : jamais LTX 2.5 ici (même raisonnement que Ref2VideoNode.generate,
+        // nodes-advanced.js).
+        const [width, height] = E.computeMPResolution(parseFloat(this.properties.mp), this.properties.ratio, 32);
+        const kx = E.addKrea2Shared(add, this.properties.lora);
+        const dec = E.addKrea2Shot(add, kx, prompt, Math.floor(Math.random() * 1e15), width, height, 1);
+        add("SaveImage", { images: [dec, 0], filename_prefix: "canvas/krea2" });
+        label = "Canvas · Krea 2"; sub = `Krea 2 · seed`;
+      } else {
+        // Qwen Image 2.1 : MÊME chemin que le Studio (index.html, workflow `qwen21_t2i`) — gabarit
+        // api/qwen21_t2i.json rempli par Engine.buildGraph, taille lue dans la table RATIOS (1280×720,
+        // 720×1280, 1024², 832×1040 : celle du Studio, ~1 MP, pas computeMPResolution), négatif "" (cfg 1,
+        // jamais utilisé), batch 1 (une carte = une image, outputFiles()[0]). AUCUNE LoRA : ni `lora`
+        // ni `mp` ne sont lus ici, quelle que soit leur valeur restée en propriété.
+        const [width, height] = RATIOS[this.properties.ratio] || RATIOS["1:1"];
+        const raw = await E.getTemplate("api/qwen21_t2i.json");
+        g = E.buildGraph(raw, { prompt, negative: "", seed: Math.floor(Math.random() * 1e15), width, height, batch: 1 });
+        for (const n of Object.values(g)) if (n.class_type === "SaveImage") n.inputs.filename_prefix = "canvas/qwen21_t2i";
+        label = "Canvas · Qwen Image 2.1"; sub = `Qwen Image 2.1 · ${width}×${height}`;
+      }
+      const promptId = await E.submitGraph(g, label, sub, clientId);
       E.registerJob(promptId, this);
       const entries = await E.waitForJobs([promptId]);
       const file = E.outputFiles(entries[promptId], ".png")[0];

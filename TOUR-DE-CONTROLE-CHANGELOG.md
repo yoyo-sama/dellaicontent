@@ -1,5 +1,24 @@
 # Tour de contrôle — changelog
 
+## 2026-09-25 — Lot Q21-CANVAS : Qwen Image 2.1 dans la carte Canvas « Création d'image »
+
+Suite de Q21-STUDIO (piste « carte Canvas Text2Image Qwen Image 2.1 »). La carte `simple/krea2` a un champ **« Moteur »**
+(Krea 2 Turbo par défaut / Qwen Image 2.1), sur le modèle de « Édition d'image ».
+- `js/nodes-simple.js` : `engine` (défaut `krea2`, sérialisé), widget « moteur » posé après le bouton ; `generate()` en Qwen =
+  `api/qwen21_t2i.json` + `Engine.buildGraph` comme le Studio (taille `RATIOS`, négatif `""`, `batch` 1, `SaveImage`
+  `canvas/qwen21_t2i`), jamais de LoRA (`lora`/`mp` non lus). Branche Krea 2 inchangée.
+- `canvas.html` : champ `engine` + `modelValues` de `CARDS["simple/krea2"]`, `mp`/`lora` masqués en Qwen (`when`), pied
+  « Qwen Image 2.1 · W×H », aide sous « Moteur », statut « Génération Qwen Image 2.1 en cours… » et « Mégapixels » traduits
+  (4 langues, tutoiement). Enrichissement : `ENHANCE.qwenImagePrompt` (texte de `ENRICH_SYSTEM`, clé `{"prompt"}`, sans
+  négatif) — `ENRICH_SYSTEM` n'étant pas exporté par `Engine`, copie locale ; **`js/engine.js` et `index.html` intacts**
+  (`Object.keys(Engine)` = 76). Largeur de carte inchangée (185 px mesurés pour 296).
+- Écarts assumés : la carte n'a ni « Variantes » ni seed (`batch` 1) ni style Krea (le Studio ajoute `currentStyleText()`).
+- Preuves : 5 cartes Krea 2 neuves + graphe sauvegardé par HEAD rechargé = 5 corps identiques à HEAD (5 492 o) ; graphes Qwen
+  ×4 ratios = Studio octet pour octet ; bascule Krea→Qwen→Krea sans fuite ; rechargement en Qwen ; zéro job ; `bench-a3`
+  0 groupe en écart ; parité des prompts 52 119 contrôles ; 1 rendu réel (30 s, regardé) :
+  `output/canvas/qwen21_t2i_00001_.png`. Détail : `docs/NOUVEAUX-MODELES-QWEN21.md` § « Canvas : carte Text2Image Qwen
+  Image 2.1 ».
+
 ## 2026-09-25 — Lot Q21-STUDIO : Qwen Image 2.1 sélectionnable dans Text2Image et Image2Image du Studio
 
 Demande : l'utilisateur ne trouvait pas Qwen Image 2.1 dans les pipelines Text2Image et Image2Image (il n'était câblé que

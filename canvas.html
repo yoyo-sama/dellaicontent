@@ -480,6 +480,7 @@
     "Durée / plan (s)": { en: "Duration / shot (s)", es: "Duración / plano (s)", de: "Dauer / Einstellung (s)" },
     "Moteur vidéo": { en: "Video engine", es: "Motor de vídeo", de: "Video-Engine" },
     "Moteur": { en: "Engine", es: "Motor", de: "Engine" },
+    "Mégapixels": { en: "Megapixels", es: "Megapíxeles", de: "Megapixel" },   // libellé des cartes Création d'image, Vidéo et Reference2Video (restait en français)
     "Prompt négatif (LTX 2.5)": { en: "Negative prompt (LTX 2.5)", es: "Prompt negativo (LTX 2.5)", de: "Negativ-Prompt (LTX 2.5)" },
     "Turbo LoRA (Minimax H3)": { en: "Turbo LoRA (Minimax H3)", es: "LoRA turbo (Minimax H3)", de: "Turbo-LoRA (Minimax H3)" },
     "Steps (Minimax H3 turbo)": { en: "Steps (Minimax H3 turbo)", es: "Pasos (Minimax H3 turbo)", de: "Schritte (Minimax H3 turbo)" },
@@ -532,6 +533,7 @@
     "Qwen Image 2.1 · jusqu'à 10 réf. · taille de la source": { en: "Qwen Image 2.1 · up to 10 refs · source size", es: "Qwen Image 2.1 · hasta 10 ref. · tamaño de la fuente", de: "Qwen Image 2.1 · bis zu 10 Ref. · Größe der Quelle" },
     "Qwen-Edit 2509 · références ignorées (Qwen Image 2.1 seulement)": { en: "Qwen-Edit 2509 · references ignored (Qwen Image 2.1 only)", es: "Qwen-Edit 2509 · referencias ignoradas (solo Qwen Image 2.1)", de: "Qwen-Edit 2509 · Referenzen ignoriert (nur Qwen Image 2.1)" },
     "Entrée du haut : l'image à éditer. Entrée du bas : références supplémentaires, Qwen Image 2.1 seulement.": { en: "Top input: the image to edit. Bottom input: extra references, Qwen Image 2.1 only.", es: "Entrada superior: la imagen que se edita. Entrada inferior: referencias adicionales, solo Qwen Image 2.1.", de: "Oberer Eingang: das zu bearbeitende Bild. Unterer Eingang: zusätzliche Referenzen, nur Qwen Image 2.1." },
+    "Krea 2 Turbo : style (LoRA) et mégapixels au choix. Qwen Image 2.1 : ni l'un ni l'autre, la taille suit le ratio.": { en: "Krea 2 Turbo: style (LoRA) and megapixels are up to you. Qwen Image 2.1: neither, the size follows the ratio.", es: "Krea 2 Turbo: estilo (LoRA) y megapíxeles a tu elección. Qwen Image 2.1: ninguno de los dos, el tamaño sigue la proporción.", de: "Krea 2 Turbo: Stil (LoRA) und Megapixel nach Wahl. Qwen Image 2.1: keines von beiden, die Größe folgt dem Seitenverhältnis." },
     // Tiroir de galerie (js/canvas-gallery.js) : libellés en nœuds texte, traduits par translateTree.
     "Images": { en: "Images", es: "Imágenes", de: "Bilder" },
     "Vidéos": { en: "Videos", es: "Vídeos", de: "Videos" },
@@ -552,6 +554,7 @@
     "Erreur : storyboard amont non résolu (aucune keyframe).": { en: "Error: upstream storyboard not resolved (no keyframe).", es: "Error: storyboard previo no resuelto (ninguna keyframe).", de: "Fehler: vorgelagertes Storyboard nicht aufgelöst (keine Keyframe)." },
     "Erreur : storyboard amont non résolu (aucun cut).": { en: "Error: upstream storyboard not resolved (no cut).", es: "Error: storyboard previo no resuelto (ningún corte).", de: "Fehler: vorgelagertes Storyboard nicht aufgelöst (kein Schnitt)." },
     "Génération Krea 2 en cours…": { en: "Krea 2 generation running…", es: "Generación Krea 2 en curso…", de: "Krea-2-Generierung läuft…" },
+    "Génération Qwen Image 2.1 en cours…": { en: "Qwen Image 2.1 generation running…", es: "Generación Qwen Image 2.1 en curso…", de: "Qwen-Image-2.1-Generierung läuft…" },
     "Génération vidéo": { en: "Video generation", es: "Generación de vídeo", de: "Videogenerierung" },
     "Édition Qwen-Edit en cours…": { en: "Qwen-Edit editing running…", es: "Edición Qwen-Edit en curso…", de: "Qwen-Edit-Bearbeitung läuft…" },
     "Fiche personnage : gemma…": { en: "Character sheet: gemma…", es: "Ficha de personaje: gemma…", de: "Charakterblatt: gemma…" },
@@ -781,6 +784,13 @@
     // n'est jamais encodé (piège n°16) → tout est formulé positivement ; le remplissage que gemma
     // glisse malgré l'interdiction est retiré de la sortie (stripPromptPadding, cf. addEnhanceButton).
     krea2Prompt: window.Engine.KREA2_ENRICH_SYSTEM,
+    // Qwen Image 2.1 (carte Création d'image, moteur « Qwen Image 2.1 ») : consigne GÉNÉRIQUE du Studio (`ENRICH_SYSTEM`,
+    // index.html — chemin de tous les moteurs autres que Krea 2), jamais KREA2_ENRICH_SYSTEM (ordre et longueur propres à
+    // Krea 2, « positif seul »). `ENRICH_SYSTEM` n'est PAS exporté par Engine (il vit dans index.html) : le texte est repris ici
+    // à l'identique, avec deux écarts voulus — la clé de sortie est {"prompt"} (celle du champ, cf. addEnhanceButton) et le
+    // négatif est omis (la carte passe negative "" : à cfg 1 Qwen Image 2.1 ne l'utilise pas). Pas de stripPromptPadding :
+    // comme au Studio, réservé à Krea 2.
+    qwenImagePrompt: "You are a prompt engineer for diffusion image models.\nRewrite the user's creative brief into a single rich English diffusion prompt (subject, style, lighting, composition, mood).\nAnswer ONLY with JSON: {\"prompt\": \"...\"}",
     // Minimax H3 i2v uniquement. LTX 2.5 est volontairement EXCLU (cf. le `enhance` de
     // simple/video) : son graphe embarque déjà `TextGenerateLTX2Prompt` à cfg 1, un second
     // enrichissement côté client ferait double emploi — même arbitrage que le cockpit
@@ -887,11 +897,20 @@
       ]
     },
     "simple/krea2": {
-      label: "Création d'image", tech: "krea2", grad: ["#fdf1dd", "#e8cf9f"], model: "Krea 2 Turbo",
+      label: "Création d'image", tech: "krea2", grad: ["#fdf1dd", "#e8cf9f"],
+      // LOT Q21-CANVAS : moteur Qwen Image 2.1 ajouté EN COEXISTENCE avec Krea 2 Turbo (défaut) — même schéma que
+      // « Édition d'image » (modelProp/modelWidget/modelValues, widget « moteur » de nodes-simple.js). Un canvas sauvegardé
+      // sans `engine` se recharge sur Krea 2 (valeur par défaut du constructeur).
+      modelProp: "engine", modelWidget: "moteur", model: "Krea 2 Turbo / Qwen Image 2.1",
+      modelValues: [["krea2", "Krea 2 Turbo"], ["qwen21", "Qwen Image 2.1"]],
       subject: "prompt", preview: "prompt",
       meta: n => {
-        // Unité TOUJOURS 32 : pas de champ "engine" sur cette carte (même raisonnement que
-        // adv/r2v) — résolution live via computeMPResolution, plus figée par ratio seul.
+        // Qwen Image 2.1 : taille = table RATIOS de nodes-simple.js (celle du Studio, ~1 MP), ni mégapixels ni LoRA.
+        if (n.properties.engine === "qwen21") {
+          const [w, h] = window.__simpleNodes.RATIOS[n.properties.ratio] || window.__simpleNodes.RATIOS["1:1"];
+          return `Qwen Image 2.1 · ${w}×${h}`;
+        }
+        // Krea 2 — unité TOUJOURS 32 : résolution live via computeMPResolution, plus figée par ratio seul.
         // `|| 1` : même repli que l'ancien code de résolution par ratio fixe avant ce lot, pour un
         // nœud sans `properties.mp` (mp="1" est sinon toujours posé par le constructeur).
         const [w, h] = window.Engine.computeMPResolution(parseFloat(n.properties.mp) || 1, n.properties.ratio, 32);
@@ -899,10 +918,14 @@
         return lora ? `Krea 2 Turbo · ${w}×${h} · LoRA: ${lora[1]}` : `Krea 2 Turbo · ${w}×${h}`;
       },
       fields: [
-        { k: "prompt", w: "prompt", label: "Prompt", type: "textarea", enhance: ENHANCE.krea2Prompt },
+        { k: "engine", w: "moteur", label: "Moteur", type: "select", values: () => [["krea2", "Krea 2 Turbo"], ["qwen21", "Qwen Image 2.1"]],
+          hint: "Krea 2 Turbo : style (LoRA) et mégapixels au choix. Qwen Image 2.1 : ni l'un ni l'autre, la taille suit le ratio." },
+        { k: "prompt", w: "prompt", label: "Prompt", type: "textarea", enhance: n => n.properties.engine === "qwen21" ? ENHANCE.qwenImagePrompt : ENHANCE.krea2Prompt },
         { k: "ratio", w: "ratio", label: "Ratio", type: "select", values: () => RATIOS },
-        { k: "mp", w: "mégapixels", label: "Mégapixels", type: "select", values: MP_OPTIONS },
-        { k: "lora", w: "style (LoRA)", label: "Style (LoRA)", type: "select", values: KREA2_LORAS }
+        // mp et lora : Krea 2 seulement (Qwen Image 2.1 n'a ni mégapixels réglables ni LoRA) — masqués par `when`, et jamais lus
+        // par generate() en Qwen.
+        { k: "mp", w: "mégapixels", label: "Mégapixels", type: "select", values: MP_OPTIONS, when: n => n.properties.engine !== "qwen21" },
+        { k: "lora", w: "style (LoRA)", label: "Style (LoRA)", type: "select", values: KREA2_LORAS, when: n => n.properties.engine !== "qwen21" }
       ]
     },
     "simple/qwen_edit": {
