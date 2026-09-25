@@ -877,6 +877,30 @@
     .gallery-selbar { padding: 6px 10px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); background: var(--card-2); }
     .gallery-selbar span { font-size: 13px; font-weight: 600; margin-right: auto; }
     #gallerySentinel { height: 1px; }
+    /* Lot B3a : source service (filtres, dates, note d'état). Masqué tant que la source ne sait pas le faire (caps). */
+    .gallery-tools[hidden], .gallery-tools [hidden], .gallery-note[hidden] { display: none !important; }
+    .gallery-note { margin: -4px 0 10px; font-size: 12px; color: var(--text-2); }
+    .gallery-tools input[type="date"] { width: auto; min-width: 0; padding: 6px 8px; font-size: 12px; }
+    .gallery-tools label.gallery-size { flex: 0 0 auto; }
+    .gallery-tools select#galleryDateUnit, .gallery-tools select#galleryGoto { flex: 0 1 150px; }
+    .gallery-tools select#galleryModel, .gallery-tools select#galleryTag { flex: 0 1 200px; }
+    .gallery-tools .secondary-btn.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
+    #galleryBlock .asset .vbadge {
+      grid-area: 1 / 1; align-self: end; justify-self: start; margin: 6px; width: 22px; height: 22px; border-radius: 50%;
+      display: grid; place-items: center; font-size: 10px; background: rgba(0, 0, 0, 0.6); color: #fff; pointer-events: none;
+    }
+    #galleryBlock .date-group > summary.folder-head { cursor: pointer; list-style: none; margin-bottom: 0; align-items: center; min-height: 28px; }
+    #galleryBlock .date-group > summary.folder-head::-webkit-details-marker { display: none; }
+    #galleryBlock .date-group > summary.folder-head::before { content: "▸"; width: 1.3em; flex: none; }
+    #galleryBlock .date-group[open] > summary.folder-head { margin-bottom: 8px; }
+    #galleryBlock .date-group[open] > summary.folder-head::before { content: "▾"; }
+    @media (max-width: 767px) {
+      #galleryBlock .date-group > summary.folder-head { min-height: 44px; }
+      .gallery-tools.svc select, .gallery-tools.svc label.gallery-size { flex: 1 1 140px; }
+      .gallery-tools.svc input[type="date"] { width: 100%; }
+    }
+    #galleryBlock .date-group > summary.folder-head:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
+    #galleryBlock .date-group > summary.folder-head span { margin-right: auto; }
 
     .hint { font-size: 12px; color: var(--text-2); }
 
@@ -2141,12 +2165,25 @@
                   <button class="gallery-tab" id="tabVideos" data-tab="videos">Vidéos (0)</button>
                 </div>
               </div>
+              <div class="gallery-note" id="galleryNote" role="status" hidden></div>
               <div class="gallery-tools">
                 <input type="search" id="gallerySearch" placeholder="Rechercher (prompt, titre, fichier)" aria-label="Rechercher dans la galerie" />
                 <select id="galleryPipeline" aria-label="Filtrer par pipeline"><option value="">Tous les pipelines</option></select>
                 <button type="button" class="secondary-btn" id="galleryFavBtn" aria-pressed="false">★ Favoris</button>
                 <button type="button" class="secondary-btn" id="gallerySelectBtn" aria-pressed="false">Sélectionner</button>
                 <label class="gallery-size">Taille <input type="range" id="galleryThumb" min="96" max="320" step="8" value="160" /></label>
+              </div>
+              <div class="gallery-tools svc" id="galleryDateTools" hidden>
+                <button type="button" class="secondary-btn" id="galleryScopeBtn" data-cap="scope" aria-pressed="false" hidden>Tout afficher</button>
+                <select id="galleryModel" data-cap="models" aria-label="Filtrer par modèle" hidden><option value="">Tous les modèles</option></select>
+                <select id="galleryTag" data-cap="tags" aria-label="Filtrer par tag" hidden><option value="">Tous les tags</option></select>
+                <label class="gallery-size" data-cap="dates" hidden>Du <input type="date" id="galleryFrom" /></label>
+                <label class="gallery-size" data-cap="dates" hidden>Au <input type="date" id="galleryTo" /></label>
+                <select id="galleryDateUnit" data-cap="dates" aria-label="Regrouper par" hidden>
+                  <option value="day">Jour</option><option value="week">Semaine</option><option value="month">Mois</option>
+                </select>
+                <select id="galleryGoto" data-cap="dates" aria-label="Aller à…" hidden><option value="">Aller à…</option></select>
+                <button type="button" class="secondary-btn" id="galleryGotoChip" hidden></button>
               </div>
               <div class="gallery-selbar" id="gallerySelBar" hidden>
                 <span id="gallerySelCount" role="status" aria-live="polite"></span>
@@ -2911,6 +2948,18 @@
       "Rechercher dans la galerie": { en: "Search the gallery", es: "Buscar en la galería", de: "In der Galerie suchen" },
       "Filtrer par pipeline": { en: "Filter by pipeline", es: "Filtrar por pipeline", de: "Nach Pipeline filtern" },
       "Tous les pipelines": { en: "All pipelines", es: "Todos los pipelines", de: "Alle Pipelines" },
+      "Filtrer par modèle": { en: "Filter by model", es: "Filtrar por modelo", de: "Nach Modell filtern" },
+      "Tous les modèles": { en: "All models", es: "Todos los modelos", de: "Alle Modelle" },
+      "Filtrer par tag": { en: "Filter by tag", es: "Filtrar por etiqueta", de: "Nach Tag filtern" },
+      "Tous les tags": { en: "All tags", es: "Todas las etiquetas", de: "Alle Tags" },
+      "Tout afficher": { en: "Show everything", es: "Mostrar todo", de: "Alles anzeigen" },
+      "Du": { en: "From", es: "Desde", de: "Von" },
+      "Au": { en: "To", es: "Hasta", de: "Bis" },
+      "Regrouper par": { en: "Group by", es: "Agrupar por", de: "Gruppieren nach" },
+      "Jour": { en: "Day", es: "Día", de: "Tag" },
+      "Semaine": { en: "Week", es: "Semana", de: "Woche" },
+      "Mois": { en: "Month", es: "Mes", de: "Monat" },
+      "Aller à…": { en: "Go to…", es: "Ir a…", de: "Gehe zu…" },
       "Autre": { en: "Other", es: "Otro", de: "Andere" },
       "★ Favoris": { en: "★ Favorites", es: "★ Favoritos", de: "★ Favoriten" },
       "Sélectionner": { en: "Select", es: "Seleccionar", de: "Auswählen" },
@@ -2956,6 +3005,23 @@
       tabImages: { fr: n => `Images (${n})`, en: n => `Images (${n})`, es: n => `Imágenes (${n})`, de: n => `Bilder (${n})` },
       tabVideos: { fr: n => `Vidéos (${n})`, en: n => `Videos (${n})`, es: n => `Vídeos (${n})`, de: n => `Videos (${n})` },
       gallerySel: { fr: n => `${n} sélectionné(s)`, en: n => `${n} selected`, es: n => `${n} seleccionado(s)`, de: n => `${n} ausgewählt` },
+      galleryDown: {
+        fr: () => "Galerie complète indisponible — images de ce navigateur seulement", en: () => "Full gallery unavailable — images from this browser only",
+        es: () => "Galería completa no disponible — solo imágenes de este navegador", de: () => "Vollständige Galerie nicht verfügbar — nur Bilder dieses Browsers" },
+      galleryIndexing: {
+        fr: () => "Indexation en cours…", en: () => "Indexing in progress…", es: () => "Indexación en curso…", de: () => "Indizierung läuft…" },
+      galleryWarn: {
+        fr: t => `Galerie : ${t}`, en: t => `Gallery: ${t}`, es: t => `Galería: ${t}`, de: t => `Galerie: ${t}` },
+      gallerySince: {
+        fr: d => `depuis le ${d} ✕`, en: d => `since ${d} ✕`, es: d => `desde el ${d} ✕`, de: d => `seit ${d} ✕` },
+      galleryWeek: {
+        fr: d => `Semaine du ${d}`, en: d => `Week of ${d}`, es: d => `Semana del ${d}`, de: d => `Woche vom ${d}` },
+      galleryTrashMax: {
+        fr: n => `Suppression limitée à ${n} éléments à la fois : sélectionnes-en moins.`, en: n => `Removal is limited to ${n} items at a time: select fewer.`,
+        es: n => `La eliminación se limita a ${n} elementos a la vez: selecciona menos.`, de: n => `Entfernen ist auf ${n} Elemente gleichzeitig begrenzt: wähle weniger aus.` },
+      galleryFail: {
+        fr: () => "Le service de galerie n'a pas abouti : rien n'a été modifié.", en: () => "The gallery service did not complete: nothing was changed.",
+        es: () => "El servicio de la galería no ha respondido: no se ha modificado nada.", de: () => "Der Galerie-Dienst hat nicht geantwortet: nichts wurde geändert." },
       openConsole: { fr: l => `Ouvrir ${l}`, en: l => `Open ${l}`, es: l => `Abrir ${l}`, de: l => `${l} öffnen` },
       seqGen: {
         fr: (s, t) => `${s} segment(s), ~${t} s — lance avec « Générer l'animatic »`,
@@ -3081,6 +3147,8 @@
     $("langSelect").addEventListener("change", () => {
       applyLang($("langSelect").value);
       renderGalleryTabs();
+      renderGalleryNote();
+      syncGalleryControls();
       renderSelBar();
       renderSeqList();
       refreshCloudUI();
@@ -3592,7 +3660,7 @@
     // ── Galerie (1.4.0, lot A) ─────────────────────────────────────
     // L'ÉTAT est une liste de données (galleryItems, objets « asset » C1 de docs/GALERIE.md § Contrat), plus les
     // cartes : la grille de l'onglet courant n'en montre que des paquets de 60 (sentinelle + IntersectionObserver).
-    // Source courante : gallerySource (browserSource ; serviceSource au lot B3a), rechargée par galleryReload().
+    // Source courante : gallerySource (browserSource, ou serviceSource si /gallery/health répond : lot B3a), rechargée par galleryReload().
     // Les clés historiques (galleryAssets, deletedAssets, assetPrompts) gardent « dossier/fichier » : l'objet en
     // porte une copie dans `pkey` (hors contrat) ; `key` est la clé du contrat (favoris).
 
@@ -3658,7 +3726,13 @@
     try { galleryFavs = new Set(JSON.parse(localStorage.getItem("galleryFavs") || "[]")); } catch {}
     const galleryItems = [];      // session, sans plafond, plus récent d'abord (list() remonte les cloud:*)
     const cardCache = new Map();  // pkey → carte : « Annuler » et le défilement réinsèrent le MÊME nœud
-    const galleryFilter = { type: "image", q: "", pipeline: "", fav: false, sort: "new" };
+    // model, tag, from, to, scope : service seulement (caps) ; la source navigateur les ignore.
+    const galleryFilter = { type: "image", q: "", pipeline: "", fav: false, sort: "new", model: "", tag: "", from: null, to: null, scope: "app" };
+    let galleryDateUnit = "day";
+    try {
+      if (localStorage.getItem("galleryScope") === "all") galleryFilter.scope = "all";
+      const u = localStorage.getItem("galleryDateUnit"); if (["day", "week", "month"].includes(u)) galleryDateUnit = u;
+    } catch {}
     const galleryCounts = { image: 0, video: 0 };
     const GALLERY_PAGE = 60;
     const fold = s => String(s || "").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -3707,6 +3781,71 @@
     };
     let gallerySource = browserSource;
 
+    // ── Source service (lot B3a) : /gallery/… (docs/GALERIE.md § Contrat C3). Toutes les clés voyagent dans le corps JSON
+    // des POST, jamais dans l'URL (nginx refuse tout segment « /. »). `pkey` (hors contrat) = clé historique
+    // `${subfolder}/${filename}` (« /x.png » à la racine) : assetURLs, deletedAssets, assetPrompts, cardCache, data-key.
+    async function svcFetch(path, body) {
+      let r;
+      try {
+        r = await fetch("/gallery" + path, body === undefined ? { cache: "no-store", signal: AbortSignal.timeout(15000) }
+          : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      } catch (e) { throw Object.assign(new Error(`Service galerie injoignable : ${e.message}`), { net: true }); }
+      if (!r.ok) {
+        let d = ""; try { d = (await r.json()).detail; } catch {}
+        throw Object.assign(new Error(`Service galerie : HTTP ${r.status} ${d}`), { status: r.status });
+      }
+      return r.json();
+    }
+    const svcDown = e => !!(e.net || e.status >= 500);
+    const svcQuery = f => new URLSearchParams(Object.entries({ type: f.type, q: f.q, pipeline: f.pipeline, model: f.model, tag: f.tag,
+      fav: f.fav ? 1 : "", from: f.from, to: f.to, scope: f.scope, sort: f.sort }).filter(([, v]) => v !== "" && v != null)).toString();
+    const svcAsset = a => Object.assign(a, { pkey: `${a.subfolder}/${a.filename}` });
+    const serviceSource = {
+      id: "service",
+      caps: { scope: true, models: true, tags: true, dates: true, rename: true, trash: true },
+      // Les éléments de session (cloud:*) restent en tête de la 1re page, quelle que soit la source (C2).
+      async list(f, cursor) {
+        const r = await svcFetch(`/assets?${svcQuery(f)}&limit=${GALLERY_PAGE}` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""));
+        r.items.forEach(svcAsset);
+        const cloud = f.model || f.tag || f.from != null || f.to != null ? [] : galleryItems.filter(a => a.key.startsWith("cloud:") && galleryMatch(a, f));
+        for (const a of cloud) r.counts[a.type]++;
+        if (!cursor) r.items.unshift(...cloud.filter(a => a.type === f.type));
+        return r;
+      },
+      // Le miroir local (browserSource.setFav) garde le repli cohérent : mêmes favoris si le service tombe.
+      async setFav(keys, on) {
+        for (let i = 0; i < keys.length; i += 100) await svcFetch("/fav", { keys: keys.slice(i, i + 100), fav: on });
+        await browserSource.setFav(keys, on);
+      },
+      // Corbeille du service (récupérable) + clés historiques dans deletedAssets (markDeleted) : l'historique ComfyUI ne les
+      // ressuscite pas. Annuler = /restore des trashKey ; résout `true` si une clé a changé (origine reprise : `_restored`).
+      async remove(assets) {
+        if (assets.length > 100) throw Object.assign(new Error("Plus de 100 éléments à la fois."), { max: 100 });
+        const real = assets.filter(a => !a.key.startsWith("cloud:"));
+        const trashed = real.length ? (await svcFetch("/trash", { keys: real.map(a => a.key) })).trashed : [];
+        const mine = assets.map(a => galleryItems.find(x => x.pkey === a.pkey)).filter(Boolean);
+        const undoLocal = await browserSource.remove(mine);
+        const unmarks = real.filter(a => !mine.some(x => x.pkey === a.pkey)).map(a => markDeleted(a.pkey));
+        return async () => {
+          let moved = false;
+          if (trashed.length) {
+            const r = await svcFetch("/restore", { keys: trashed.map(t => t.trashKey) });
+            moved = r.restored.some(x => trashed.find(t => t.trashKey === x.trashKey)?.key !== x.key);
+          }
+          await undoLocal();
+          for (const u of unmarks) u();
+          return moved;
+        };
+      },
+      detail: async key => svcAsset(await svcFetch(`/asset?key=${encodeURIComponent(key)}`)),
+      async dates(unit, f) { return (await svcFetch(`/dates?${svcQuery(f)}&unit=${unit}&tzOffset=${new Date().getTimezoneOffset()}`)).periods; },
+      facets: f => svcFetch(`/facets?scope=${f.scope}`),
+      // Réservés au lot B3b (interface) : simples appels du contrat.
+      async tag(keys, add, remove) { await svcFetch("/tag", { keys, add, remove }); },
+      async rename(key, name) { return svcAsset((await svcFetch("/rename", { key, name })).asset); },
+      async restore(trashKeys) { await svcFetch("/restore", { keys: trashKeys }); }
+    };
+
     // ── Onglets et compteurs (counts de la source, jamais le nombre de cartes du DOM) ──
     // Chaque grille garde son état : _stale (à reconstruire), _pending (rechargement en cours), _gen, _next (curseur).
     const gridOf = type => type === "video" ? galleryVideos : galleryImages;
@@ -3717,8 +3856,39 @@
       $("tabImages").textContent = dyn("tabImages", galleryCounts.image);
       $("tabVideos").textContent = dyn("tabVideos", galleryCounts.video);
     }
+    // Tous les appels `list` passent par ici : une erreur réseau ou HTTP 5xx du service en cours de session bascule sur
+    // la source navigateur (message, puis galleryReload). Le résultat rendu alors vient du navigateur ; les générations des
+    // grilles ont été invalidées, l'appelant l'écarte (les compteurs, eux, sont valables).
+    async function galleryList(f, cursor) {
+      const src = gallerySource;
+      try { return await src.list(f, cursor); }
+      catch (e) {
+        if (src.id !== "service") throw e;
+        if (svcDown(e)) {
+          if (gallerySource === src) { addEvent("WARN", `Galerie : service injoignable (${e.message}), bascule sur les images de ce navigateur.`, "warn"); galleryFallback(); }
+          return gallerySource.list({ ...galleryFilter, type: f.type }, null);
+        }
+        addEvent("WARN", e.message, "warn");   // 4xx : un défaut du client, le service reste utilisable
+        return { items: [], next: null, counts: { ...galleryCounts } };
+      }
+    }
+    let galleryBooted = false, galleryGoto = null, galleryIndexTimer = 0;   // galleryGoto = fin (ms) de la période « Aller à… »
+    function galleryFallback() {
+      clearTimeout(galleryIndexTimer);
+      gallerySel.clear();
+      gallerySource = browserSource;
+      Object.assign(galleryFilter, { pipeline: "", model: "", tag: "", from: null, to: null, scope: "app" });
+      galleryGoto = null;
+      $("galleryFrom").value = $("galleryTo").value = "";
+      cardCache.clear();   // les cartes du service montrent /gallery/thumb : la source navigateur reconstruit les siennes
+      galleryImages._stale = galleryVideos._stale = true;
+      galleryImages._gen++; galleryVideos._gen++;
+      showGalleryNote("galleryDown");
+      syncGalleryControls();
+      galleryReload();
+    }
     async function refreshGalleryCounts() {
-      Object.assign(galleryCounts, (await gallerySource.list({ ...galleryFilter }, null)).counts);
+      Object.assign(galleryCounts, (await galleryList({ ...galleryFilter }, null)).counts);
       renderGalleryTabs();
     }
     function switchGalleryTab(tab) {
@@ -3736,10 +3906,11 @@
     // Recharge une grille (par défaut celle de l'onglet courant) avec la 1re page. Un asset arrivé pendant
     // l'attente relance le rechargement.
     async function galleryReload(type = galleryFilter.type) {
+      if (!galleryBooted) return;   // la source n'est pas encore choisie (galleryBoot)
       const grid = gridOf(type), gen = ++grid._gen, rev = galleryRev, cur = type === galleryFilter.type;
       grid._pending = true;
       if (cur) clearGallerySel();
-      const r = await gallerySource.list({ ...galleryFilter, type }, null);
+      const r = await galleryList({ ...galleryFilter, type }, null);
       if (gen !== grid._gen) return;
       if (rev !== galleryRev) return galleryReload(type);
       grid._pending = grid._stale = false;
@@ -3751,14 +3922,14 @@
       refreshFolders(grid);
       refreshGalleryEmpty(grid);
       renderPipelineFilter();
-      if (cur) galleryWatch();
+      if (cur) { galleryWatch(); refreshGalleryDates(); }
     }
     // Paquet suivant quand la sentinelle approche (rootMargin 600 px). `_next` = curseur de la source.
     async function galleryMore() {
       const grid = gridOf(galleryFilter.type), gen = grid._gen, cursor = grid._next;
       if (!cursor || grid._pending || grid._loading) return;
       grid._loading = true;
-      const r = await gallerySource.list({ ...galleryFilter }, cursor);
+      const r = await galleryList({ ...galleryFilter }, cursor);
       grid._loading = false;
       if (gen === grid._gen && grid._next === cursor) {
         for (const a of r.items) placeCard(grid, a, false);
@@ -3774,15 +3945,35 @@
     // Nouvel asset (WebSocket, historique, cloud) : en tête tout de suite s'il passe les filtres courants. Grille
     // pas encore construite (l'autre onglet) : elle l'est maintenant, avec lui.
     function galleryInsert(a) {
-      galleryItems.unshift(a);
+      galleryItems.unshift(a);   // toujours dans la liste navigateur (persistAsset l'a déjà écrit) : le repli reste utile
       galleryRev++;
+      if (!galleryBooted) return;
+      if (gallerySource.id === "service" && !a.key.startsWith("cloud:")) return serviceLive(a);
       refreshGalleryCounts();
       renderPipelineFilter();
       const grid = gridOf(a.type);
       if (grid._stale && !grid._pending) return galleryReload(a.type);
       if (grid._pending || !galleryMatch(a, galleryFilter)) return;
       placeCard(grid, a, true);
-      if (grid._next) grid._next = String(+grid._next + 1);   // curseur de browserSource = indice
+      if (grid._next && gallerySource.id === "browser") grid._next = String(+grid._next + 1);   // curseur de browserSource = indice (celui du service est opaque)
+      refreshFolders(grid);
+      refreshGalleryEmpty(grid);
+    }
+    // Asset reçu en direct, source service : la fiche vient du service (GET /asset l'indexe à la demande). La carte n'est
+    // insérée en tête que si aucun filtre autre que le type n'est actif ; sinon elle apparaîtra au prochain rechargement.
+    // Un asset de l'historique ComfyUI n'est pas « nouveau » : jamais en tête, il est déjà dans la liste du service.
+    async function serviceLive(a) {
+      const src = gallerySource;
+      let s = null;
+      try { s = await src.detail(a.key); }
+      catch (e) { if (svcDown(e) && gallerySource === src) { addEvent("WARN", `Galerie : service injoignable (${e.message}), bascule sur les images de ce navigateur.`, "warn"); return galleryFallback(); } }
+      if (gallerySource !== src) return;
+      refreshGalleryCounts();
+      refreshFacets();
+      const grid = gridOf(a.type), f = galleryFilter;
+      if (grid._pending || grid._stale) return galleryReload(a.type);
+      if (!s || a.label === "Historique" || f.q || f.pipeline || f.fav || f.model || f.tag || f.from != null || f.to != null) return;
+      placeCard(grid, s, true);
       refreshFolders(grid);
       refreshGalleryEmpty(grid);
     }
@@ -3793,7 +3984,8 @@
     function placeCard(grid, a, head) {
       const card = galleryCard(a), top = g => [...g.children].find(el => !isCloud(el)) || null;
       let g = grid;
-      if (/^studio\/(story|campaign)/.test(a.subfolder)) {
+      if (gallerySource.caps.dates && !isCloud(card)) g = dateGroup(grid, a.ts, head, top);   // source service : groupes de dates
+      else if (/^studio\/(story|campaign)/.test(a.subfolder)) {
         let grp = [...grid.children].find(el => el.dataset.folder === a.subfolder);
         if (!grp) {
           grp = document.createElement("div");
@@ -3807,11 +3999,43 @@
       }
       head ? g.insertBefore(card, isCloud(card) ? g.firstChild : top(g)) : g.appendChild(card);
     }
+    // Source service : groupes de dates (Jour / Semaine lundi→dimanche / Mois, heure LOCALE) à la place des dossiers. <details> ouvert ;
+    // l'état replié est gardé en mémoire (galleryClosed) et survit au rechargement de la grille.
+    const galleryClosed = new Set();
+    function periodStart(ts, unit) {
+      const d = new Date(ts);
+      d.setHours(0, 0, 0, 0);
+      if (unit === "week") d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+      else if (unit === "month") d.setDate(1);
+      return d.getTime();
+    }
+    // `start` d'une période du service = minuit local à l'heure d'aujourd'hui : midi de ce jour-là évite un jour de moins en heure d'hiver.
+    function periodLabel(start, unit = galleryDateUnit) {
+      const d = new Date(+start + 43200000), f = o => new Intl.DateTimeFormat(LANG, o).format(d);
+      if (unit === "month") return f({ month: "long", year: "numeric" });
+      const day = f(unit === "day" ? { weekday: "long", day: "numeric", month: "long", year: "numeric" } : { day: "numeric", month: "long", year: "numeric" });
+      return unit === "week" ? dyn("galleryWeek", day) : day;
+    }
+    function dateGroup(grid, ts, head, top) {
+      const start = periodStart(ts, galleryDateUnit), id = `${galleryDateUnit}:${start}`;
+      let grp = [...grid.children].find(el => el.dataset.period === String(start));
+      if (!grp) {
+        grp = document.createElement("details");
+        grp.className = "gallery-group date-group fade-in";
+        grp.dataset.period = start;
+        grp.open = !galleryClosed.has(id);
+        grp.innerHTML = `<summary class="folder-head"><span></span></summary><div class="gallery"></div>`;
+        grp.querySelector("span").textContent = periodLabel(start);
+        grp.addEventListener("toggle", () => { if (grp.open) galleryClosed.delete(id); else galleryClosed.add(id); });
+        grid.insertBefore(grp, head ? top(grid) : null);
+      }
+      return grp.querySelector(".gallery");
+    }
     // Compteur d'un dossier = total filtré du dossier (pas les seules cartes chargées) ; dossier vide retiré.
     function refreshFolders(grid) {
       for (const grp of grid.querySelectorAll(".gallery-group")) {
         if (!grp.querySelector(".asset")) { grp.remove(); continue; }
-        grp.querySelector(".folder-count").textContent = String(galleryItems.filter(a => a.subfolder === grp.dataset.folder
+        if (grp.dataset.folder) grp.querySelector(".folder-count").textContent = String(galleryItems.filter(a => a.subfolder === grp.dataset.folder
           && gridOf(a.type) === grid && !deletedAssets.has(a.pkey) && galleryMatch(a, galleryFilter)).length);
       }
     }
@@ -3820,7 +4044,8 @@
       const id = grid.id + "Empty";
       if (grid.querySelector(".asset")) return $(id)?.remove();
       if (!$(id)) grid.prepend(Object.assign(document.createElement("div"), { className: "gallery-empty", id }));
-      $(id).textContent = galleryFilter.q || galleryFilter.pipeline || galleryFilter.fav ? "Aucun résultat pour ces filtres."
+      const f = galleryFilter;
+      $(id).textContent = f.q || f.pipeline || f.fav || f.model || f.tag || f.from != null || f.to != null ? "Aucun résultat pour ces filtres."
         : grid === galleryVideos ? "Aucune vidéo générée pour l'instant." : "Aucune image générée pour l'instant. Lance une génération.";
       translateTree($(id));
     }
@@ -3835,18 +4060,19 @@
       return manifest.workflows.find(w => label.startsWith(w.label))?.pipeline
         || LABEL_PIPELINES.find(([pre]) => label.startsWith(pre))?.[1] || null;
     }
-    function assetTitle(label, isVideo) {
-      const p = assetPipeline(label);
-      return PIPELINE_LABELS[p] ? tr(PIPELINE_LABELS[p]) : tr(isVideo ? "Vidéo" : "Image");
+    // `pipeline` : celui du service (id du contrat) ; source navigateur : null, il se déduit du libellé.
+    function assetTitle(label, isVideo, pipeline) {
+      const p = pipeline || assetPipeline(label);
+      return PIPELINE_LABELS[p] ? tr(PIPELINE_LABELS[p]) : p === "canvas" ? tr("Canvas") : tr(isVideo ? "Vidéo" : "Image");
     }
     function promptExcerpt(text, max = 90) {
       const c = Array.from(String(text || "").replace(/\s+/g, " ").trim());
       return c.length > max ? c.slice(0, max).join("").trimEnd() + "…" : c.join("");
     }
     function retitleCard(card) {
-      const d = card.dataset, meta = card.querySelector(".meta");
-      meta.querySelector("strong").textContent = assetTitle(d.label, d.video === "1");
-      meta.querySelector(".asset-prompt").textContent = promptExcerpt(assetPrompts.get(d.key));
+      const d = card.dataset, a = card._asset, meta = card.querySelector(".meta");
+      meta.querySelector("strong").textContent = assetTitle(d.label, d.video === "1", a.pipeline);
+      meta.querySelector(".asset-prompt").textContent = promptExcerpt(a.prompt ?? assetPrompts.get(d.key));
       meta.title = d.filename;
     }
     function retitleGallery() {
@@ -3854,29 +4080,47 @@
       renderPipelineFilter();
     }
     // Filtre pipeline : pipelines présents + « Autre » (libellé sans pipeline connu). Reconstruit seulement s'il change.
+    // Source service : les pipelines viennent de /gallery/facets (ids du contrat, dont « canvas »).
     function renderPipelineFilter() {
-      const sel = $("galleryPipeline");
-      const ids = [...new Set([...galleryItems.map(a => assetPipeline(a.label) || "none"), galleryFilter.pipeline])].filter(Boolean).sort();
+      const sel = $("galleryPipeline"), svc = gallerySource.id === "service";
+      const ids = [...new Set([...(svc ? galleryFacets.pipelines.map(p => p.id || "none") : galleryItems.map(a => assetPipeline(a.label) || "none")), galleryFilter.pipeline])].filter(Boolean).sort();
       const sig = LANG + ids.join();
       if (sel._sig === sig) return;
       sel._sig = sig;
-      sel.innerHTML = `<option value="">Tous les pipelines</option>` + ids.filter(p => p !== "none").map(p => `<option value="${p}">${PIPELINE_LABELS[p] || p}</option>`).join("")
-        + (ids.includes("none") ? `<option value="none">Autre</option>` : "");
+      sel.replaceChildren(new Option("Tous les pipelines", ""), ...ids.filter(p => p !== "none").map(p => new Option(PIPELINE_LABELS[p] || (p === "canvas" ? "Canvas" : p), p)),
+        ...(ids.includes("none") ? [new Option("Autre", "none")] : []));
       translateTree(sel);
       sel.value = galleryFilter.pipeline;
+    }
+    // Modèle et tag (service) : listes de /gallery/facets ; les noms sont des données du serveur (Option, jamais innerHTML).
+    let galleryFacets = { pipelines: [], models: [], tags: [] };
+    function renderFacetSelects() {
+      for (const [id, all, names, cur] of [["galleryModel", "Tous les modèles", galleryFacets.models.map(m => m.name), galleryFilter.model],
+                                           ["galleryTag", "Tous les tags", galleryFacets.tags.map(t => t.name), galleryFilter.tag]]) {
+        const sel = $(id), list = [...new Set([...names, cur].filter(Boolean))], sig = LANG + "\u0001" + list.join("\u0001");
+        if (sel._sig !== sig) { sel._sig = sig; sel.replaceChildren(new Option(tr(all), ""), ...list.map(n => new Option(n, n))); }
+        sel.value = cur;
+      }
+    }
+    async function refreshFacets() {
+      const src = gallerySource;
+      if (!src.caps.models) return;
+      try { const r = await src.facets(galleryFilter); if (gallerySource === src) { galleryFacets = r; renderFacetSelects(); renderPipelineFilter(); } } catch {}
     }
 
     // Carte d'un asset : construite une fois, gardée dans cardCache.
     function galleryCard(a) {
       let card = cardCache.get(a.pkey);
-      if (card) { retitleCard(card); translateTree(card); markCard(card); return card; }
+      if (card) { card._asset = a; retitleCard(card); translateTree(card); markCard(card); return card; }
       const { url, filename, pkey: assetKey } = a, isVideo = a.type === "video", folder = a.subfolder;
       card = document.createElement("div");
       card.className = "asset fade-in";
       card._asset = a;
-      card.innerHTML = isVideo
-        ? `<video src="${url}" preload="metadata" muted loop playsinline></video>`
-        : `<img src="${a.thumb}" alt="" loading="lazy" decoding="async" />`;
+      // Source service : `thumb` (image fixe) aussi pour une vidéo, qui ne se lit que dans la lightbox (`url`). Navigateur : la vidéo elle-même.
+      card.innerHTML = isVideo && !a.thumb
+        ? `<video preload="metadata" muted loop playsinline></video>`
+        : `<img alt="" loading="lazy" decoding="async" />` + (isVideo ? `<span class="vbadge" aria-hidden="true">▶</span>` : "");
+      card.firstChild.src = isVideo && !a.thumb ? url : a.thumb;   // jamais dans l'innerHTML : ces URL viennent du service
       card.firstChild.addEventListener("click", () => openLightbox(url, isVideo, assetKey));
       assetURLs.set(`${folder || ""}/${filename}`, url);
       // Glisser-déposer : même charge utile que la galerie du Canvas (js/canvas-gallery.js) + repli texte. Le clic (agrandir) reste inchangé.
@@ -3891,7 +4135,7 @@
       meta.className = "meta";
       // Hiérarchie : le pipeline (ce qu'on reconnaît) domine, l'extrait du prompt suit (retitleCard).
       meta.innerHTML = `<strong></strong><span class="asset-prompt"></span>`;
-      Object.assign(card.dataset, { label: a.label, filename, key: assetKey, video: isVideo ? "1" : "0" });
+      Object.assign(card.dataset, { label: a.label ?? "", filename, key: assetKey, video: isVideo ? "1" : "0" });
       card.appendChild(meta);
       retitleCard(card);
       const actions = document.createElement("div");
@@ -3925,13 +4169,13 @@
         favBtn.className = "fav-btn";
         favBtn.textContent = "★";
         favBtn.title = "Favori";
-        favBtn.addEventListener("click", () => setGalleryFavs([a], !a.fav));
+        favBtn.addEventListener("click", () => setGalleryFavs([card._asset], !card._asset.fav));   // card._asset : la carte gardée en cache suit l'objet de la liste courante
         actions.appendChild(favBtn);
       }
       const delBtn = document.createElement("button");
       delBtn.textContent = "🗑";
       delBtn.title = "Supprimer de la galerie";
-      delBtn.addEventListener("click", () => removeGalleryAssets([a]));
+      delBtn.addEventListener("click", () => removeGalleryAssets([card._asset]));
       actions.appendChild(delBtn);
       card.appendChild(actions);
       // Mode sélection : un clic (ou Espace/Entrée au clavier) coche la carte au lieu d'ouvrir la lightbox.
@@ -3961,9 +4205,16 @@
     // Supprimer une ou plusieurs cartes : un seul bandeau « Annuler » les rétablit toutes, à leur place, mêmes nœuds.
     async function removeGalleryAssets(list) {
       const grid = gridOf(list[0].type), gen = grid._gen, dom = [];
-      if (selectedAsset && list.some(a => a.filename === selectedAsset.filename)) clearSelectedAsset();
       galleryRev++;
-      const undo = await gallerySource.remove(list);
+      const src = gallerySource;
+      let undo;
+      try { undo = await src.remove(list); }
+      catch (e) {   // rien n'a bougé (service : le déplacement à la corbeille est refusé en bloc)
+        if (e.max) return dropSay(false, "galleryTrashMax", e.max);
+        addEvent("WARN", e.message, "warn");
+        return dropSay(false, "galleryFail");
+      }
+      if (selectedAsset && list.some(a => a.filename === selectedAsset.filename)) clearSelectedAsset();
       for (const a of list) {
         addEvent("SYS", `Asset "${a.filename}" retiré de la galerie.`, "sys");
         const card = cardCache.get(a.pkey);
@@ -3973,19 +4224,21 @@
         if (grp && !grp.querySelector(".asset")) { Object.assign(r, { grp, gparent: grp.parentNode, gnext: grp.nextSibling }); grp.remove(); }
         dom.push(r);
       }
-      if (grid._next) grid._next = String(+grid._next - dom.length);   // curseur de browserSource = indice
+      if (grid._next && src.id === "browser") grid._next = String(+grid._next - dom.length);   // curseur de browserSource = indice (celui du service est opaque)
       refreshFolders(grid);
       refreshGalleryEmpty(grid);
       refreshGalleryCounts();
       undoToast(tr("Supprimé de la galerie"), async () => {
-        await undo();
+        let moved;
+        try { moved = await undo(); }
+        catch (e) { addEvent("WARN", e.message, "warn"); dropSay(false, "galleryFail"); return galleryReload(list[0].type); }
         galleryRev++;
-        if (gen !== grid._gen) return galleryReload(list[0].type);
+        if (gen !== grid._gen || moved) return galleryReload(list[0].type);   // moved : le service a rendu un autre nom (origine prise)
         for (const r of dom.reverse()) {   // ordre inverse du retrait : chaque voisin noté est de nouveau là
           if (r.grp) r.gparent.insertBefore(r.grp, r.gnext);
           r.parent.insertBefore(r.card, r.next?.parentNode === r.parent ? r.next : null);
         }
-        if (grid._next) grid._next = String(+grid._next + dom.length);
+        if (grid._next && src.id === "browser") grid._next = String(+grid._next + dom.length);
         refreshFolders(grid);
         refreshGalleryEmpty(grid);
         refreshGalleryCounts();
@@ -3993,7 +4246,9 @@
     }
     async function setGalleryFavs(list, on) {
       list = list.filter(a => !a.key.startsWith("cloud:"));
-      await gallerySource.setFav(list.map(a => a.key), on);
+      try { await gallerySource.setFav(list.map(a => a.key), on); }
+      catch (e) { addEvent("WARN", e.message, "warn"); return dropSay(false, "galleryFail"); }
+      for (const a of list) a.fav = on;   // l'objet d'une carte du service n'est pas dans galleryItems
       if (galleryFilter.fav) { galleryImages._stale = galleryVideos._stale = true; return galleryReload(); }
       for (const a of list) { const c = cardCache.get(a.pkey); if (c) markCard(c); }
       refreshGalleryCounts();
@@ -4019,7 +4274,7 @@
     function clearGallerySel() {
       const was = [...gallerySel.keys()];
       gallerySel.clear();
-      for (const k of was) markCard(cardCache.get(k));
+      for (const k of was) { const c = cardCache.get(k); if (c) markCard(c); }
       renderSelBar();
     }
     function setGallerySelecting(on) {
@@ -4044,11 +4299,45 @@
     // ── Filtres et taille des vignettes ──
     function setGalleryFilter(patch) {
       Object.assign(galleryFilter, patch);
-      $("galleryFavBtn").classList.toggle("active", galleryFilter.fav);
-      $("galleryFavBtn").setAttribute("aria-pressed", String(galleryFilter.fav));
+      syncGalleryControls();
       galleryImages._stale = galleryVideos._stale = true;
       galleryReload();
     }
+    // Reflet des filtres et des caps dans les contrôles : ce que la source ne sait pas faire est masqué (mode repli = UI du lot A).
+    function syncGalleryControls() {
+      const f = galleryFilter, caps = gallerySource.caps;
+      $("galleryFavBtn").classList.toggle("active", f.fav);
+      $("galleryFavBtn").setAttribute("aria-pressed", String(f.fav));
+      $("galleryScopeBtn").classList.toggle("active", f.scope === "all");
+      $("galleryScopeBtn").setAttribute("aria-pressed", String(f.scope === "all"));
+      $("galleryDateUnit").value = galleryDateUnit;
+      document.querySelectorAll("#galleryBlock [data-cap]").forEach(el => { el.hidden = !caps[el.dataset.cap]; });
+      $("galleryGotoChip").hidden = galleryGoto == null;
+      $("galleryDateTools").hidden = ![...$("galleryDateTools").children].some(c => !c.hidden);
+      renderGalleryDates();
+      renderPipelineFilter();
+      renderFacetSelects();
+    }
+    // Textes de la source service posés par le JS : rejoués au changement de langue (langSelect).
+    function renderGalleryDates() {
+      for (const el of document.querySelectorAll("#galleryBlock .date-group")) el.querySelector("summary span").textContent = periodLabel(el.dataset.period);
+      const sel = $("galleryGoto");
+      sel.replaceChildren(new Option(tr("Aller à…"), ""), ...galleryPeriods.map(p => new Option(`${periodLabel(p.start)} (${p.count})`, String(p.end))));
+      if (galleryGoto != null) $("galleryGotoChip").textContent = dyn("gallerySince", new Intl.DateTimeFormat(LANG, { day: "numeric", month: "long", year: "numeric" }).format(new Date(galleryGoto - 43200000)));
+    }
+    let galleryPeriods = [], galleryDatesRev = 0;
+    async function refreshGalleryDates() {
+      const src = gallerySource, rev = ++galleryDatesRev;
+      if (!src.caps.dates) return;
+      let periods;
+      try { periods = await src.dates(galleryDateUnit, { ...galleryFilter, from: null, to: null }); } catch { return; }   // le menu ne bascule rien : les listes s'en chargent
+      if (rev !== galleryDatesRev || src !== gallerySource) return;
+      galleryPeriods = periods;
+      renderGalleryDates();
+    }
+    let galleryNote = null;
+    function showGalleryNote(name, ...args) { galleryNote = name && [name, ...args]; renderGalleryNote(); }
+    function renderGalleryNote() { $("galleryNote").hidden = !galleryNote; $("galleryNote").textContent = galleryNote ? dyn(...galleryNote) : ""; }
     let gallerySearchTimer = 0;
     $("gallerySearch").addEventListener("input", () => {
       clearTimeout(gallerySearchTimer);
@@ -4056,6 +4345,37 @@
     });
     $("galleryPipeline").addEventListener("change", () => setGalleryFilter({ pipeline: $("galleryPipeline").value }));
     $("galleryFavBtn").addEventListener("click", () => setGalleryFilter({ fav: !galleryFilter.fav }));
+    $("galleryModel").addEventListener("change", () => setGalleryFilter({ model: $("galleryModel").value }));
+    $("galleryTag").addEventListener("change", () => setGalleryFilter({ tag: $("galleryTag").value }));
+    $("galleryScopeBtn").addEventListener("click", () => {
+      const scope = galleryFilter.scope === "all" ? "app" : "all";
+      saveLocal("galleryScope", scope);
+      setGalleryFilter({ scope });
+      refreshFacets();
+    });
+    // Période : minuit LOCAL en ms. « Au » est inclusif (le jour choisi en fait partie) : `to` du service est exclu, on envoie minuit du lendemain.
+    const dayMs = (v, plus = 0) => { if (!v) return null; const [y, m, d] = v.split("-").map(Number); return new Date(y, m - 1, d + plus).getTime(); };
+    for (const id of ["galleryFrom", "galleryTo"]) $(id).addEventListener("change", () => {
+      galleryGoto = null;   // les champs remplacent « Aller à… »
+      setGalleryFilter({ from: dayMs($("galleryFrom").value), to: dayMs($("galleryTo").value, 1) });
+    });
+    $("galleryDateUnit").addEventListener("change", () => {
+      galleryDateUnit = $("galleryDateUnit").value;
+      saveLocal("galleryDateUnit", galleryDateUnit);
+      setGalleryFilter({});
+    });
+    // « Aller à… » : période fixe, `to` = fin de la période ; la puce « depuis le … ✕ » l'annule.
+    $("galleryGoto").addEventListener("change", () => {
+      const end = +$("galleryGoto").value;
+      if (!end) return;
+      galleryGoto = end;
+      $("galleryTo").value = "";
+      setGalleryFilter({ to: end });
+    });
+    $("galleryGotoChip").addEventListener("click", () => {
+      galleryGoto = null;
+      setGalleryFilter({ to: dayMs($("galleryTo").value, 1) });
+    });
     try { const t = localStorage.getItem("galleryThumb"); if (t) $("galleryThumb").value = t; } catch {}
     const applyThumb = () => $("galleryBlock").style.setProperty("--thumb", `${$("galleryThumb").value}px`);
     applyThumb();
@@ -4070,6 +4390,66 @@
       }
       if (galleryAssets.length) addEvent("OK", `${galleryAssets.length} assets restaurés depuis le cache navigateur.`, "ok");
       galleryReload();
+    }
+
+    // Choix de la source au démarrage (C2). /gallery/health répond `ok` → source service, sinon source navigateur et une note discrète.
+    // Tant que ce choix n'est pas fait (galleryBooted), rien n'est listé : restoreGallery et les assets reçus n'alimentent que la liste locale.
+    async function galleryHealth() {
+      try {
+        const r = await fetch("/gallery/health", { cache: "no-store", signal: AbortSignal.timeout(3000) });
+        const h = r.ok ? await r.json() : null;
+        return h && h.ok === true ? h : null;
+      } catch { return null; }
+    }
+    async function galleryBoot() {
+      const h = await galleryHealth();
+      if (h) {
+        gallerySource = serviceSource;
+        addEvent("SYS", `Galerie : service gallery actif (${h.indexed} fichiers indexés).`, "sys");
+        await migrateGalleryFavs();
+        if (h.indexed === 0 && h.scanning) galleryPollIndex(1);
+        else if (h.warning) showGalleryNote("galleryWarn", h.warning);
+      } else {
+        addEvent("SYS", "Galerie : service gallery indisponible, images de ce navigateur seulement.", "sys");
+        showGalleryNote("galleryDown");
+      }
+      galleryBooted = true;
+      syncGalleryControls();
+      galleryReload();
+      refreshFacets();
+    }
+    // Index vide et scan en cours : « indexation en cours… », nouvel essai toutes les 5 s, 12 essais au plus.
+    function galleryPollIndex(n) {
+      showGalleryNote("galleryIndexing");
+      galleryIndexTimer = setTimeout(async () => {
+        if (gallerySource !== serviceSource) return;
+        const h = await galleryHealth();
+        if (gallerySource !== serviceSource) return;
+        if (h && h.indexed === 0 && h.scanning && n < 12) return galleryPollIndex(n + 1);
+        if (h?.warning) showGalleryNote("galleryWarn", h.warning); else showGalleryNote(null);
+        galleryImages._stale = galleryVideos._stale = true;
+        galleryReload();
+        refreshFacets();
+      }, 5000);
+    }
+    // Favoris locaux → service, une seule fois (galleryFavsMigrated) et par lots de 100 (le service refuse tout un lot dont une clé
+    // est inconnue : on retente clé par clé). Rien n'est retiré de galleryFavs. Une panne réseau laisse l'indicateur absent : nouvel essai au prochain chargement.
+    async function migrateGalleryFavs() {
+      try { if (localStorage.getItem("galleryFavsMigrated") !== null) return; } catch {}
+      const keys = [...galleryFavs];
+      if (!keys.length) return;
+      try {
+        for (let i = 0; i < keys.length; i += 100) {
+          const part = keys.slice(i, i + 100);
+          try { await svcFetch("/fav", { keys: part, fav: true }); }
+          catch (e) {
+            if (svcDown(e)) throw e;
+            for (const k of part) { try { await svcFetch("/fav", { keys: [k], fav: true }); } catch (e2) { if (svcDown(e2)) throw e2; } }
+          }
+        }
+      } catch { return; }
+      saveLocal("galleryFavsMigrated", "1");
+      addEvent("OK", `${keys.length} favoris du navigateur reportés dans le service galerie.`, "ok");
     }
 
     // Point d'entrée des cartes (cloud, et addAsset) : persistKey absent = image cloud de session (clé cloud:<nom>).
@@ -8802,6 +9182,7 @@ Answer ONLY with JSON: {"segments": ["...", "..."]} with exactly ${n} entries, i
     loadManifest();
     connectWS();
     restoreGallery();
+    galleryBoot();
     preloadGallery();
     loadModels();
     pollMonitor();
