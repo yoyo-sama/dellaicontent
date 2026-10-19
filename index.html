@@ -885,6 +885,18 @@
     .gallery-tools select#galleryDateUnit, .gallery-tools select#galleryGoto { flex: 0 1 150px; }
     .gallery-tools select#galleryModel, .gallery-tools select#galleryTag { flex: 0 1 200px; }
     .gallery-tools .secondary-btn.active { background: var(--grad); color: var(--on-grad); border-color: transparent; }
+    /* Lot B3b : tags compacts sur la carte, corbeille, barre de sélection. */
+    #galleryBlock .asset .asset-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+    #galleryBlock .asset .asset-tags:empty, #galleryBlock .asset .asset-trashed:empty { display: none; }
+    #galleryBlock .asset .asset-trashed { margin-top: 4px; font-size: 10.5px; color: var(--text-2); }
+    .tag-pill { font-style: normal; font-size: 10.5px; line-height: 1.5; padding: 0 7px; border-radius: var(--pill); background: var(--selected); color: var(--text-2);
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gallery-trash-help { margin: 0 0 10px; font-size: 12px; color: var(--text-2); }
+    .gallery-trash-help[hidden] { display: none; }
+    #gallerySelTagForm { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; }
+    #gallerySelTagForm[hidden] { display: none; }
+    #gallerySelTagForm input { flex: 1 1 130px; width: auto; min-width: 0; padding: 6px 10px; }
+    #galleryBlock.trash .asset .asset-actions button { color: var(--text); }
     #galleryBlock .asset .vbadge {
       grid-area: 1 / 1; align-self: end; justify-self: start; margin: 6px; width: 22px; height: 22px; border-radius: 50%;
       display: grid; place-items: center; font-size: 10px; background: rgba(0, 0, 0, 0.6); color: #fff; pointer-events: none;
@@ -1055,9 +1067,43 @@
       font-size: 14px;
       z-index: 101;
     }
-    #lightboxClose { right: 24px; }
+    #lightboxClose { right: 24px; position: fixed; }
     #lightboxCopy { left: 24px; }
-
+    /* Lot B3b : panneau de métadonnées (source service) à côté du média ; sous 768 px, sous le média (la lightbox défile). */
+    #lightboxBody { display: flex; align-items: center; justify-content: center; gap: 16px; }
+    #lightbox.has-meta #lightboxBody { align-items: stretch; width: min(1240px, 96vw); max-height: 88vh; }
+    #lightbox.has-meta #lightboxContent { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; }
+    #lightbox.has-meta #lightboxContent img, #lightbox.has-meta #lightboxContent video { max-width: 100%; max-height: 88vh; }
+    #lightboxMeta { flex: 0 0 340px; max-height: 88vh; overflow-y: auto; display: grid; gap: 12px; align-content: start; padding: 14px; font-size: 13px;
+      background: var(--bg); color: var(--text); border: 1px solid var(--border-light); border-radius: var(--radius); }
+    #lightboxMeta[hidden] { display: none; }
+    #lightbox.has-meta #lightboxCopy { position: static; padding: 4px 10px; font-size: 12px; }
+    .lb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; }
+    #lbPrompt { max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 10px; margin-top: 6px; user-select: text;
+      border: 1px solid var(--border-light); border-radius: var(--radius-sm); background: var(--card-2); font-size: 12.5px; line-height: 1.45; }
+    #lbFacts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+    #lbFacts dt { color: var(--text-2); }
+    #lbFacts dd { margin: 0; overflow-wrap: anywhere; user-select: text; }
+    #lbFacts [hidden] { display: none; }
+    .lb-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .lb-actions button, .lb-form button { padding: 6px 12px; font-size: 12px; }
+    .lb-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .lb-form[hidden] { display: none; }
+    .lb-form input { flex: 1 1 140px; min-width: 0; width: auto; padding: 6px 10px; }
+    #lbMsg { color: var(--text-2); font-size: 12px; }
+    #lbMsg:empty { display: none; }
+    #lbTags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+    .tag-chip { display: inline-flex; align-items: center; border: 1px solid var(--border-light); border-radius: var(--pill); background: var(--card-2); font-size: 12px; }
+    .tag-chip button { border: 0; background: transparent; color: inherit; font-size: 12px; padding: 2px 8px; min-height: 28px; cursor: pointer; border-radius: var(--pill); }
+    .tag-chip button:hover { color: var(--highlight); }
+    .tag-chip .tag-x { padding-left: 2px; color: var(--text-2); }
+    @media screen and (max-width: 767px) {
+      #lightbox { align-items: flex-start; overflow-y: auto; }
+      #lightbox.has-meta #lightboxBody { flex-direction: column; width: 100%; max-height: none; padding: 60px 12px 16px; }
+      #lightbox.has-meta #lightboxContent img, #lightbox.has-meta #lightboxContent video { max-height: 50vh; }
+      #lightboxMeta { flex: none; width: 100%; max-height: none; overflow: visible; }
+      .tag-chip button, .lb-actions button, .lb-form button { min-height: 44px; }
+    }
     /* Éditeur de prompt (planches, keyframes, cuts) — même empilement que la lightbox,
        une couche au-dessus pour pouvoir s'ouvrir depuis un aperçu. */
     .cut-engine { display: block; margin: 0 0 6px; max-width: 420px; }
@@ -2175,6 +2221,7 @@
               </div>
               <div class="gallery-tools svc" id="galleryDateTools" hidden>
                 <button type="button" class="secondary-btn" id="galleryScopeBtn" data-cap="scope" aria-pressed="false" hidden>Tout afficher</button>
+                <button type="button" class="secondary-btn" id="galleryTrashBtn" data-cap="trash" aria-pressed="false" hidden>Corbeille (0)</button>
                 <select id="galleryModel" data-cap="models" aria-label="Filtrer par modèle" hidden><option value="">Tous les modèles</option></select>
                 <select id="galleryTag" data-cap="tags" aria-label="Filtrer par tag" hidden><option value="">Tous les tags</option></select>
                 <label class="gallery-size" data-cap="dates" hidden>Du <input type="date" id="galleryFrom" /></label>
@@ -2185,10 +2232,17 @@
                 <select id="galleryGoto" data-cap="dates" aria-label="Aller à…" hidden><option value="">Aller à…</option></select>
                 <button type="button" class="secondary-btn" id="galleryGotoChip" hidden></button>
               </div>
+              <p class="gallery-trash-help" id="galleryTrashHelp" hidden>Les éléments supprimés sont rangés dans output/.trash/ : l'appli ne les efface jamais pour de bon, la purge se fait à la main.</p>
               <div class="gallery-selbar" id="gallerySelBar" hidden>
                 <span id="gallerySelCount" role="status" aria-live="polite"></span>
+                <button type="button" class="secondary-btn" id="gallerySelTag" aria-expanded="false">🏷 Taguer…</button>
+                <form id="gallerySelTagForm" hidden>
+                  <input type="text" id="gallerySelTagInput" list="galleryTagList" maxlength="40" autocomplete="off" aria-label="Nom du tag" placeholder="Nom du tag" />
+                  <button type="submit" class="secondary-btn">Ajouter</button>
+                </form>
                 <button type="button" class="secondary-btn" id="gallerySelFav">★ Favori</button>
                 <button type="button" class="secondary-btn" id="gallerySelDel">🗑 Supprimer</button>
+                <button type="button" class="secondary-btn" id="gallerySelRestore" hidden>↩ Restaurer</button>
                 <button type="button" class="secondary-btn" id="gallerySelNone">Tout désélectionner</button>
               </div>
               <div class="gallery" id="galleryImages">
@@ -2367,10 +2421,48 @@
     <div class="undo-toast-box" id="dropToastBox" hidden><span id="dropToastMsg"></span></div>
   </div>
 
-  <div id="lightbox" hidden>
+  <datalist id="galleryTagList"></datalist>
+  <div id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Détails">
     <button id="lightboxClose">✕ Fermer</button>
     <button id="lightboxCopy" hidden>📋 Copier le prompt</button>
-    <div id="lightboxContent"></div>
+    <div id="lightboxBody">
+      <div id="lightboxContent"></div>
+      <aside id="lightboxMeta" hidden aria-label="Détails">
+        <section>
+          <div class="lb-head"><span>Prompt</span><span id="lbCopySlot"></span></div>
+          <div id="lbPrompt" data-raw tabindex="0"></div>
+        </section>
+        <dl id="lbFacts">
+          <dt>Seed</dt><dd id="lbSeed" data-raw></dd>
+          <dt>Modèle</dt><dd id="lbModel" data-raw></dd>
+          <dt>LoRA</dt><dd id="lbLoras" data-raw></dd>
+          <dt>Taille</dt><dd id="lbDims" data-raw></dd>
+          <dt id="lbDurT">Durée</dt><dd id="lbDur" data-raw></dd>
+          <dt>Poids</dt><dd id="lbWeight" data-raw></dd>
+          <dt>Date</dt><dd id="lbDate" data-raw></dd>
+          <dt>Chemin</dt><dd id="lbPath" data-raw></dd>
+        </dl>
+        <div class="lb-actions">
+          <button type="button" class="secondary-btn" id="lbUse">→ Utiliser en entrée</button>
+          <button type="button" class="secondary-btn" id="lbReuse">↺ Réutiliser le prompt</button>
+          <button type="button" class="secondary-btn" id="lbRenameBtn">✎ Renommer</button>
+        </div>
+        <form class="lb-form" id="lbRenameForm" hidden>
+          <input type="text" id="lbRenameInput" maxlength="150" autocomplete="off" aria-label="Nouveau nom du fichier" />
+          <span id="lbRenameExt" data-raw></span>
+          <button type="submit" class="primary-btn">Renommer</button>
+          <button type="button" class="secondary-btn" id="lbRenameCancel">Annuler</button>
+        </form>
+        <div id="lbMsg" role="alert"></div>
+        <section>
+          <div class="lb-head"><span>Tags</span></div>
+          <div id="lbTags" data-raw></div>
+          <form class="lb-form" id="lbTagForm">
+            <input type="text" id="lbTagInput" list="galleryTagList" maxlength="40" autocomplete="off" aria-label="Ajouter un tag" placeholder="Ajouter un tag (Entrée)" />
+          </form>
+        </section>
+      </aside>
+    </div>
   </div>
 
   <script src="js/engine.js"></script>
@@ -2960,6 +3052,31 @@
       "Semaine": { en: "Week", es: "Semana", de: "Woche" },
       "Mois": { en: "Month", es: "Mes", de: "Monat" },
       "Aller à…": { en: "Go to…", es: "Ir a…", de: "Gehe zu…" },
+      "LoRA": {},
+      "Modèle": { en: "Model", es: "Modelo", de: "Modell" },
+      "Durée": { en: "Duration", es: "Duración", de: "Dauer" },
+      "Poids": { en: "File size", es: "Peso", de: "Dateigröße" },
+      "Date": { en: "Date", es: "Fecha", de: "Datum" },
+      "Chemin": { en: "Path", es: "Ruta", de: "Pfad" },
+      "Tags": { en: "Tags", es: "Etiquetas", de: "Tags" },
+      "↺ Réutiliser le prompt": { en: "↺ Reuse the prompt", es: "↺ Reutilizar el prompt", de: "↺ Prompt wiederverwenden" },
+      "✎ Renommer": { en: "✎ Rename", es: "✎ Renombrar", de: "✎ Umbenennen" },
+      "Renommer": { en: "Rename", es: "Renombrar", de: "Umbenennen" },
+      "Nouveau nom du fichier": { en: "New file name", es: "Nuevo nombre del archivo", de: "Neuer Dateiname" },
+      "Ajouter un tag": { en: "Add a tag", es: "Añadir una etiqueta", de: "Tag hinzufügen" },
+      "Ajouter un tag (Entrée)": { en: "Add a tag (Enter)", es: "Añadir una etiqueta (Intro)", de: "Tag hinzufügen (Enter)" },
+      "Filtrer la galerie sur ce tag": { en: "Filter the gallery on this tag", es: "Filtrar la galería por esta etiqueta", de: "Galerie nach diesem Tag filtern" },
+      "Prompt repris": { en: "Prompt reused", es: "Prompt reutilizado", de: "Prompt übernommen" },
+      "🏷 Taguer…": { en: "🏷 Tag…", es: "🏷 Etiquetar…", de: "🏷 Taggen…" },
+      "Nom du tag": { en: "Tag name", es: "Nombre de la etiqueta", de: "Tag-Name" },
+      "Ajouter": { en: "Add", es: "Añadir", de: "Hinzufügen" },
+      "↩ Restaurer": { en: "↩ Restore", es: "↩ Restaurar", de: "↩ Wiederherstellen" },
+      "Restaurer": { en: "Restore", es: "Restaurar", de: "Wiederherstellen" },
+      "La corbeille est vide.": { en: "The trash is empty.", es: "La papelera está vacía.", de: "Der Papierkorb ist leer." },
+      "Les éléments supprimés sont rangés dans output/.trash/ : l'appli ne les efface jamais pour de bon, la purge se fait à la main.": {
+        en: "Removed items are kept in output/.trash/: the app never erases them for good, purge them by hand.",
+        es: "Los elementos eliminados se guardan en output/.trash/: la app nunca los borra de forma definitiva, la purga se hace a mano.",
+        de: "Entfernte Elemente liegen in output/.trash/: Die App löscht sie nie endgültig, geleert wird von Hand." },
       "Autre": { en: "Other", es: "Otro", de: "Andere" },
       "★ Favoris": { en: "★ Favorites", es: "★ Favoritos", de: "★ Favoriten" },
       "Sélectionner": { en: "Select", es: "Seleccionar", de: "Auswählen" },
@@ -3019,6 +3136,27 @@
       galleryTrashMax: {
         fr: n => `Suppression limitée à ${n} éléments à la fois : sélectionnes-en moins.`, en: n => `Removal is limited to ${n} items at a time: select fewer.`,
         es: n => `La eliminación se limita a ${n} elementos a la vez: selecciona menos.`, de: n => `Entfernen ist auf ${n} Elemente gleichzeitig begrenzt: wähle weniger aus.` },
+      trashedOn: { fr: d => `Supprimé le ${d}`, en: d => `Removed on ${d}`, es: d => `Eliminado el ${d}`, de: d => `Entfernt am ${d}` },
+      trashCount: { fr: n => `Corbeille (${n})`, en: n => `Trash (${n})`, es: n => `Papelera (${n})`, de: n => `Papierkorb (${n})` },
+      lbMB: { fr: n => `${n} Mo`, en: n => `${n} MB`, es: n => `${n} MB`, de: n => `${n} MB` },
+      lbTagRemove: { fr: n => `Retirer le tag « ${n} »`, en: n => `Remove tag “${n}”`, es: n => `Quitar la etiqueta «${n}»`, de: n => `Tag „${n}“ entfernen` },
+      galleryTagged: {
+        fr: n => `Tag ajouté à ${n} élément(s).`, en: n => `Tag added to ${n} item(s).`,
+        es: n => `Etiqueta añadida a ${n} elemento(s).`, de: n => `Tag zu ${n} Element(en) hinzugefügt.` },
+      galleryRestored: {
+        fr: (n, r) => `${n} élément(s) restauré(s)` + (r ? ` (dont ${r} sous un autre nom : l'original existait déjà).` : "."),
+        en: (n, r) => `${n} item(s) restored` + (r ? ` (${r} under another name: the original already exists).` : "."),
+        es: (n, r) => `${n} elemento(s) restaurado(s)` + (r ? ` (${r} con otro nombre: el original ya existía).` : "."),
+        de: (n, r) => `${n} Element(e) wiederhergestellt` + (r ? ` (${r} unter anderem Namen: das Original existiert schon).` : ".") },
+      lbErr: {
+        fr: c => ({ exists: "Ce nom est déjà pris dans ce dossier.", locked: "Ce fichier est utilisé par une session storyboard : il ne peut pas être renommé (tu peux le supprimer).",
+          bad_request: "Nom refusé : ni / ni \\, 150 caractères au plus, pas de point au début." })[c],
+        en: c => ({ exists: "That name is already taken in this folder.", locked: "This file is used by a storyboard session: it cannot be renamed (you can remove it).",
+          bad_request: "Name refused: no / or \\, 150 characters at most, no leading dot." })[c],
+        es: c => ({ exists: "Ese nombre ya existe en esta carpeta.", locked: "Este archivo lo usa una sesión de storyboard: no se puede renombrar (sí puedes eliminarlo).",
+          bad_request: "Nombre rechazado: ni / ni \\, 150 caracteres como máximo, sin punto al principio." })[c],
+        de: c => ({ exists: "Dieser Name ist in diesem Ordner schon vergeben.", locked: "Diese Datei wird von einer Storyboard-Sitzung verwendet: Sie kann nicht umbenannt werden (du kannst sie entfernen).",
+          bad_request: "Name abgelehnt: weder / noch \\, höchstens 150 Zeichen, kein Punkt am Anfang." })[c] },
       galleryFail: {
         fr: () => "Le service de galerie n'a pas abouti : rien n'a été modifié.", en: () => "The gallery service did not complete: nothing was changed.",
         es: () => "El servicio de la galería no ha respondido: no se ha modificado nada.", de: () => "Der Galerie-Dienst hat nicht geantwortet: nichts wurde geändert." },
@@ -3113,7 +3251,7 @@
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode())) {
-        if (node.parentElement?.closest("#events, script, style")) continue;
+        if (node.parentElement?.closest("#events, script, style, [data-raw]")) continue;   // data-raw : texte venu du service (prompt, tags, noms), jamais traduit
         const orig = node.__orig ?? (node.__orig = node.nodeValue.trim());
         if (I18N[orig]) node.nodeValue = tr(orig);
       }
@@ -3156,6 +3294,7 @@
       for (const j of Object.values(jobs)) if (j.pct != null) j.statusEl.textContent = dyn("jobRunning", j.pct);
       refreshJobQueue();
       if (selectedAsset) $("assetChipName").textContent = dyn("assetChip", selectedAsset.filename);
+      if (!lightbox.hidden) renderLightboxMeta();
       retitleGallery();
       renderStyleOptions();
       renderSheetTemplateOptions();
@@ -3544,28 +3683,56 @@
     // extractFiles (fichiers d'une sortie de nœud) : js/engine.js.
     const seenAssets = new Set();
 
-    // ── Lightbox (lecteur intégré + copie du prompt) ───────────────
+    // ── Lightbox (lecteur intégré + copie du prompt ; source service : panneau de métadonnées, tags, renommage — lot B3b) ──
     const lightbox = $("lightbox"), lightboxContent = $("lightboxContent");
     const assetPrompts = new Map(Object.entries(JSON.parse(localStorage.getItem("assetPrompts") || "{}"))); // persisté : survit aux restart ComfyUI
-    let lightboxKey = null;
-    function openLightbox(url, isVideo, assetKey) {
-      lightboxContent.innerHTML = isVideo
-        ? `<video src="${url}" controls autoplay loop playsinline></video>`
-        : `<img src="${url}" alt="" />`;
+    let lightboxKey = null, lightboxAsset = null, lightboxPrompt = "", lightboxFull = false, lightboxSeq = 0, lightboxOpener = null, lbMsgState = null;
+    // `asset` (objet C1 de la source service) : le panneau est alimenté par detail(key). Sans lui (source navigateur, cloud), la lightbox du lot A.
+    function openLightbox(url, isVideo, assetKey, asset) {
+      const el = document.createElement(isVideo ? "video" : "img");
+      el.src = url;   // par propriété : l'URL vient du service
+      if (isVideo) Object.assign(el, { controls: true, autoplay: true, loop: true, playsInline: true }); else el.alt = "";
+      lightboxContent.replaceChildren(el);
       lightboxKey = assetKey || null;
-      const copyBtn = $("lightboxCopy");
-      copyBtn.hidden = !(lightboxKey && assetPrompts.has(lightboxKey));
+      lightboxAsset = asset || null;
+      lightboxOpener = document.activeElement;
+      const seq = ++lightboxSeq, copyBtn = $("lightboxCopy");
+      lightbox.classList.toggle("has-meta", !!asset);
+      $("lightboxMeta").hidden = !asset;
       copyBtn.textContent = tr("📋 Copier le prompt");
+      $("lbRenameForm").hidden = true;
+      lbSay(null);
+      if (asset) {
+        $("lbCopySlot").appendChild(copyBtn);
+        lightboxFull = false;
+        renderLightboxMeta();
+        serviceSource.detail(asset.key).then(d => {
+          if (seq !== lightboxSeq) return;
+          Object.assign(asset, d);   // le prompt complet aussi pour la carte (extrait) ; d.pkey = celui de la carte
+          lightboxFull = true;
+          renderLightboxMeta();
+        }).catch(e => { if (seq === lightboxSeq) { addEvent("WARN", e.message, "warn"); renderLightboxMeta(); } });
+      } else {
+        lightbox.insertBefore(copyBtn, $("lightboxBody"));
+        lightboxPrompt = (lightboxKey && assetPrompts.get(lightboxKey)) || "";
+        copyBtn.hidden = !lightboxPrompt;
+        copyBtn.disabled = false;
+      }
       lightbox.hidden = false;
+      $("lightboxClose").focus();
     }
     function closeLightbox() {
+      if (lightbox.hidden) return;
       lightbox.hidden = true;
-      lightboxContent.innerHTML = "";
-      lightboxKey = null;
+      lightboxContent.replaceChildren();
+      lightboxKey = lightboxAsset = null;
+      lightboxSeq++;
+      if (lightboxOpener?.isConnected) lightboxOpener.focus();
+      lightboxOpener = null;
     }
     $("lightboxClose").addEventListener("click", closeLightbox);
     $("lightboxCopy").addEventListener("click", async () => {
-      const p = lightboxKey && assetPrompts.get(lightboxKey);
+      const p = lightboxPrompt;
       if (!p) return;
       try {
         await navigator.clipboard.writeText(p);
@@ -3575,8 +3742,139 @@
         addEvent("WARN", "Copie refusée par le navigateur (presse-papiers).", "warn");
       }
     });
-    lightbox.addEventListener("click", e => { if (e.target === lightbox) closeLightbox(); });
+    lightbox.addEventListener("click", e => { if (e.target === lightbox || e.target === $("lightboxBody")) closeLightbox(); });
     document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
+    // Le focus reste dans la lightbox (modale) : Tab et Maj+Tab bouclent sur ses contrôles visibles, dans l'ordre du DOM.
+    lightbox.addEventListener("keydown", e => {
+      if (e.key !== "Tab") return;
+      const f = [...lightbox.querySelectorAll("button, input, video[controls], [tabindex='0']")].filter(x => !x.disabled && x.getClientRects().length);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+
+    // Panneau de métadonnées (source service). Toutes les valeurs viennent du service : textContent seulement (les cellules portent data-raw :
+    // translateTree ne les touche pas). Rejoué au changement de langue (dates, unités, libellés des puces).
+    function lbSay(...msg) { lbMsgState = msg[0] ? msg : null; $("lbMsg").textContent = lbMsgState ? dyn(...lbMsgState) : ""; }
+    function renderLightboxMeta() {
+      const a = lightboxAsset;
+      if (!a) return;
+      const dash = "—", set = (id, v) => { $(id).textContent = v ?? dash; }, vid = a.type === "video";
+      lightboxPrompt = a.prompt || "";
+      const full = lightboxFull || lightboxPrompt.length < 400;   // /assets tronque à 400 caractères : le prompt complet vient de detail()
+      $("lbPrompt").textContent = lightboxPrompt || dash;
+      $("lightboxCopy").hidden = !lightboxPrompt;
+      $("lightboxCopy").disabled = !full;
+      set("lbSeed", a.seed); set("lbModel", a.model);
+      set("lbLoras", a.loras?.length ? a.loras.join(", ") : null);
+      set("lbDims", a.w && a.h ? `${a.w} × ${a.h} px` : null);
+      $("lbDurT").hidden = $("lbDur").hidden = !vid;
+      set("lbDur", vid && a.duration != null ? `${+a.duration.toFixed(2)} s` : null);
+      set("lbWeight", a.size != null ? dyn("lbMB", new Intl.NumberFormat(LANG, { maximumFractionDigits: a.size < 1048576 ? 3 : 1 }).format(a.size / 1048576)) : null);
+      set("lbDate", a.ts ? new Intl.DateTimeFormat(LANG, { dateStyle: "long", timeStyle: "medium" }).format(a.ts) : null);
+      set("lbPath", a.key);
+      $("lbUse").hidden = vid;
+      $("lbReuse").disabled = !lightboxPrompt || !full;
+      $("lbTags").replaceChildren(...(a.tags || []).map(n => {
+        const chip = document.createElement("span"), name = document.createElement("button"), x = document.createElement("button");
+        chip.className = "tag-chip";
+        name.type = x.type = "button";
+        name.textContent = n; name.title = tr("Filtrer la galerie sur ce tag");
+        name.addEventListener("click", () => { closeLightbox(); setGalleryFilter({ tag: n }); });
+        x.className = "tag-x"; x.textContent = "✕"; x.title = dyn("lbTagRemove", n); x.setAttribute("aria-label", x.title);
+        x.addEventListener("click", () => lbTagOp([], [n]));
+        chip.append(name, x);
+        return chip;
+      }));
+      lbSay(...(lbMsgState || [null]));
+    }
+    // Tags de l'asset ouvert : le service rend les noms canoniques (unicité sans casse) ; la carte, les facettes et la grille suivent.
+    async function lbTagOp(add, remove) {
+      const a = lightboxAsset;
+      if (!a) return;
+      try { const r = await serviceSource.tag([a.key], add, remove); a.tags = r.find(x => x.key === a.key)?.tags ?? a.tags; }
+      catch (e) { addEvent("WARN", e.message, "warn"); return lbSay("galleryFail"); }
+      lbSay(null);
+      renderLightboxMeta();
+      afterTags([a]);
+    }
+    function afterTags(list) {
+      for (const a of list) { const c = cardCache.get(a.pkey); if (c) { c._asset.tags = a.tags; retitleCard(c); } }
+      refreshFacets();
+      if (galleryFilter.tag) { galleryImages._stale = galleryVideos._stale = true; galleryReload(); }   // le filtre de tag a peut-être changé ce qui passe
+    }
+    $("lbTagForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const n = $("lbTagInput").value.trim();
+      $("lbTagInput").value = "";
+      if (n) lbTagOp([n], []);
+    });
+    $("lbUse").addEventListener("click", () => {
+      const a = lightboxAsset;
+      if (!a) return;
+      closeLightbox();
+      setSelectedAsset({ filename: a.filename }, a.url);
+    });
+    // « Réutiliser le prompt » : remplace le texte du brief, SEULEMENT sur ce clic (règle du projet : le brief n'appartient qu'à l'utilisateur),
+    // avec « Annuler ». Aucun job, aucun appel gemma, ni pipeline ni moteur changés.
+    $("lbReuse").addEventListener("click", () => {
+      const a = lightboxAsset;
+      if (!a?.prompt) return;
+      const old = brief.value;
+      brief.value = a.prompt;
+      addEvent("REQ", `Prompt de "${a.filename}" repris dans le brief.`, "req");
+      closeLightbox();
+      undoToast(tr("Prompt repris"), () => { brief.value = old; });
+    });
+    $("lbRenameBtn").addEventListener("click", () => {
+      const a = lightboxAsset;
+      if (!a) return;
+      const input = $("lbRenameInput");
+      $("lbRenameForm").hidden = false;
+      $("lbRenameExt").textContent = /\.[^.]+$/.exec(a.filename)?.[0] ?? "";
+      input.value = a.filename.replace(/\.[^.]+$/, "");
+      lbSay(null);
+      input.focus(); input.select();
+    });
+    function closeRename() { $("lbRenameForm").hidden = true; lbSay(null); $("lbRenameBtn").focus(); }
+    $("lbRenameCancel").addEventListener("click", closeRename);
+    $("lbRenameInput").addEventListener("keydown", e => { if (e.key === "Escape") { e.stopPropagation(); closeRename(); } });   // Échap ferme d'abord le champ, pas la lightbox
+    $("lbRenameForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const a = lightboxAsset, ext = $("lbRenameExt").textContent;
+      if (!a) return;
+      let stem = $("lbRenameInput").value.trim();
+      if (ext && stem.toLowerCase().endsWith(ext.toLowerCase())) stem = stem.slice(0, -ext.length);   // extension retapée : ne pas la doubler
+      const name = stem + ext;
+      if (!stem || name === a.filename) return closeRename();
+      let n;
+      try { n = await serviceSource.rename(a.key, name); }
+      catch (err) { addEvent("WARN", err.message, "warn"); return lbSay(["exists", "locked", "bad_request"].includes(err.code) ? "lbErr" : "galleryFail", err.code); }
+      applyRename(a, n);
+      closeRename();
+    });
+    // Renommage réussi : la clé et la carte changent (mêmes objets, nouvelle carte : ses gestionnaires portent l'ancien nom), et le miroir local
+    // du repli (favoris, entrée navigateur, prompt) suit le fichier.
+    function applyRename(a, n) {
+      const oldPkey = a.pkey, oldKey = a.key, card = cardCache.get(oldPkey);
+      if (galleryFavs.delete(oldKey)) { galleryFavs.add(n.key); saveLocal("galleryFavs", JSON.stringify([...galleryFavs])); }
+      const e = galleryAssets.find(x => `${x.subfolder}/${x.filename}` === oldPkey);
+      if (e) { e.filename = n.filename; saveLocal("galleryAssets", JSON.stringify(galleryAssets)); }
+      const it = galleryItems.find(x => x.pkey === oldPkey);
+      if (it) { const url = viewURL({ filename: n.filename, subfolder: it.subfolder, type: "output" }); Object.assign(it, { filename: n.filename, key: n.key, pkey: n.pkey, url, thumb: it.type === "video" ? null : url }); }
+      if (assetPrompts.has(oldPkey)) { assetPrompts.set(n.pkey, assetPrompts.get(oldPkey)); assetPrompts.delete(oldPkey); saveAssetPrompts(); }
+      seenAssets.add(n.pkey);
+      assetURLs.delete(oldPkey);
+      for (const o of new Set([a, card?._asset].filter(Boolean))) Object.assign(o, n);
+      cardCache.delete(oldPkey);
+      if (gallerySel.delete(oldPkey)) gallerySel.set(n.pkey, a);
+      if (card?.isConnected) card.replaceWith(galleryCard(a));
+      lightboxKey = a.pkey;
+      addEvent("OK", `Asset "${oldKey}" renommé en "${n.key}".`, "ok");
+      renderLightboxMeta();
+      refreshFacets();
+    }
 
     // ── Éditeur de prompt (planches, keyframes, cuts) ──────────────────────────────
     // Une seule modale pour les trois usages : ce qui change d'un appelant à l'autre tient
@@ -3791,8 +4089,8 @@
           : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
       } catch (e) { throw Object.assign(new Error(`Service galerie injoignable : ${e.message}`), { net: true }); }
       if (!r.ok) {
-        let d = ""; try { d = (await r.json()).detail; } catch {}
-        throw Object.assign(new Error(`Service galerie : HTTP ${r.status} ${d}`), { status: r.status });
+        let d = "", code = ""; try { const j = await r.json(); d = j.detail; code = j.error; } catch {}
+        throw Object.assign(new Error(`Service galerie : HTTP ${r.status} ${d}`), { status: r.status, code });
       }
       return r.json();
     }
@@ -3807,7 +4105,7 @@
       async list(f, cursor) {
         const r = await svcFetch(`/assets?${svcQuery(f)}&limit=${GALLERY_PAGE}` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""));
         r.items.forEach(svcAsset);
-        const cloud = f.model || f.tag || f.from != null || f.to != null ? [] : galleryItems.filter(a => a.key.startsWith("cloud:") && galleryMatch(a, f));
+        const cloud = f.model || f.tag || f.from != null || f.to != null || f.scope === "trash" ? [] : galleryItems.filter(a => a.key.startsWith("cloud:") && galleryMatch(a, f));
         for (const a of cloud) r.counts[a.type]++;
         if (!cursor) r.items.unshift(...cloud.filter(a => a.type === f.type));
         return r;
@@ -3840,10 +4138,18 @@
       detail: async key => svcAsset(await svcFetch(`/asset?key=${encodeURIComponent(key)}`)),
       async dates(unit, f) { return (await svcFetch(`/dates?${svcQuery(f)}&unit=${unit}&tzOffset=${new Date().getTimezoneOffset()}`)).periods; },
       facets: f => svcFetch(`/facets?scope=${f.scope}`),
-      // Réservés au lot B3b (interface) : simples appels du contrat.
-      async tag(keys, add, remove) { await svcFetch("/tag", { keys, add, remove }); },
+      // Par lots de 100 (plafond du service) ; rendent la réponse du service : [{key, tags}] (noms canoniques) et [{trashKey, key}].
+      async tag(keys, add, remove) {
+        const out = [];
+        for (let i = 0; i < keys.length; i += 100) out.push(...(await svcFetch("/tag", { keys: keys.slice(i, i + 100), add, remove })).assets);
+        return out;
+      },
       async rename(key, name) { return svcAsset((await svcFetch("/rename", { key, name })).asset); },
-      async restore(trashKeys) { await svcFetch("/restore", { keys: trashKeys }); }
+      async restore(trashKeys) {
+        const out = [];
+        for (let i = 0; i < trashKeys.length; i += 100) out.push(...(await svcFetch("/restore", { keys: trashKeys.slice(i, i + 100) })).restored);
+        return out;
+      }
     };
 
     // ── Onglets et compteurs (counts de la source, jamais le nombre de cartes du DOM) ──
@@ -3972,7 +4278,7 @@
       refreshFacets();
       const grid = gridOf(a.type), f = galleryFilter;
       if (grid._pending || grid._stale) return galleryReload(a.type);
-      if (!s || a.label === "Historique" || f.q || f.pipeline || f.fav || f.model || f.tag || f.from != null || f.to != null) return;
+      if (!s || a.label === "Historique" || f.q || f.pipeline || f.fav || f.model || f.tag || f.from != null || f.to != null || f.scope === "trash") return;
       placeCard(grid, s, true);
       refreshFolders(grid);
       refreshGalleryEmpty(grid);
@@ -4046,6 +4352,7 @@
       if (!$(id)) grid.prepend(Object.assign(document.createElement("div"), { className: "gallery-empty", id }));
       const f = galleryFilter;
       $(id).textContent = f.q || f.pipeline || f.fav || f.model || f.tag || f.from != null || f.to != null ? "Aucun résultat pour ces filtres."
+        : f.scope === "trash" ? "La corbeille est vide."
         : grid === galleryVideos ? "Aucune vidéo générée pour l'instant." : "Aucune image générée pour l'instant. Lance une génération.";
       translateTree($(id));
     }
@@ -4073,7 +4380,13 @@
       const d = card.dataset, a = card._asset, meta = card.querySelector(".meta");
       meta.querySelector("strong").textContent = assetTitle(d.label, d.video === "1", a.pipeline);
       meta.querySelector(".asset-prompt").textContent = promptExcerpt(a.prompt ?? assetPrompts.get(d.key));
-      meta.title = d.filename;
+      // Tags (service) : 2 au plus + « +n » ; noms = données du service (textContent).
+      const t = a.tags || [], tg = meta.querySelector(".asset-tags"), pill = (text, cls = "") => Object.assign(document.createElement("i"), { className: "tag-pill " + cls, textContent: text });
+      tg.replaceChildren(...t.slice(0, 2).map(n => pill(n)), ...(t.length > 2 ? [pill(`+${t.length - 2}`, "more")] : []));
+      tg.title = t.join(", ");
+      // Corbeille : date de suppression visible, chemin d'origine en infobulle (trash.at / trash.origKey).
+      meta.querySelector(".asset-trashed").textContent = a.trash ? dyn("trashedOn", new Intl.DateTimeFormat(LANG, { dateStyle: "medium" }).format(a.trash.at)) : "";
+      meta.title = a.trash ? a.trash.origKey : d.filename;
     }
     function retitleGallery() {
       document.querySelectorAll("#galleryImages .asset[data-filename], #galleryVideos .asset[data-filename]").forEach(retitleCard);
@@ -4098,9 +4411,10 @@
       for (const [id, all, names, cur] of [["galleryModel", "Tous les modèles", galleryFacets.models.map(m => m.name), galleryFilter.model],
                                            ["galleryTag", "Tous les tags", galleryFacets.tags.map(t => t.name), galleryFilter.tag]]) {
         const sel = $(id), list = [...new Set([...names, cur].filter(Boolean))], sig = LANG + "\u0001" + list.join("\u0001");
-        if (sel._sig !== sig) { sel._sig = sig; sel.replaceChildren(new Option(tr(all), ""), ...list.map(n => new Option(n, n))); }
+        if (sel._sig !== sig) { sel._sig = sig; sel.replaceChildren(new Option(tr(all), ""), ...list.map(n => new Option(n, n))); for (const o of sel.options) if (o.value) o.setAttribute("data-raw", ""); }
         sel.value = cur;
       }
+      $("galleryTagList").replaceChildren(...galleryFacets.tags.map(t => Object.assign(document.createElement("option"), { value: t.name })));
     }
     async function refreshFacets() {
       const src = gallerySource;
@@ -4111,8 +4425,8 @@
     // Carte d'un asset : construite une fois, gardée dans cardCache.
     function galleryCard(a) {
       let card = cardCache.get(a.pkey);
-      if (card) { card._asset = a; retitleCard(card); translateTree(card); markCard(card); return card; }
-      const { url, filename, pkey: assetKey } = a, isVideo = a.type === "video", folder = a.subfolder;
+      if (card) { card._asset = a; if (!a.trash) assetURLs.set(`${a.subfolder || ""}/${a.filename}`, a.url); retitleCard(card); translateTree(card); markCard(card); return card; }
+      const { url, filename, pkey: assetKey } = a, isVideo = a.type === "video", folder = a.subfolder, trashed = !!a.trash;
       card = document.createElement("div");
       card.className = "asset fade-in";
       card._asset = a;
@@ -4121,12 +4435,16 @@
         ? `<video preload="metadata" muted loop playsinline></video>`
         : `<img alt="" loading="lazy" decoding="async" />` + (isVideo ? `<span class="vbadge" aria-hidden="true">▶</span>` : "");
       card.firstChild.src = isVideo && !a.thumb ? url : a.thumb;   // jamais dans l'innerHTML : ces URL viennent du service
-      card.firstChild.addEventListener("click", () => openLightbox(url, isVideo, assetKey));
-      assetURLs.set(`${folder || ""}/${filename}`, url);
+      // Panneau de métadonnées : source service seulement, jamais pour une image cloud de session. Corbeille : pas de pleine résolution.
+      const open = () => openLightbox(card._asset.url, isVideo, assetKey, gallerySource.id === "service" && !card._asset.key.startsWith("cloud:") ? card._asset : null);
+      if (!trashed) {
+        card.firstChild.addEventListener("click", open);
+        assetURLs.set(`${folder || ""}/${filename}`, url);
+      } else card.firstChild.style.cursor = "default";
       // Glisser-déposer : même charge utile que la galerie du Canvas (js/canvas-gallery.js) + repli texte. Le clic (agrandir) reste inchangé.
-      card.firstChild.draggable = true;
-      card.firstChild.addEventListener("dragstart", e => {
-        let type = "output"; try { type = new URL(url, location.href).searchParams.get("type") || "output"; } catch {}
+      card.firstChild.draggable = !trashed;
+      if (!trashed) card.firstChild.addEventListener("dragstart", e => {
+        let type = "output"; try { type = new URL(card._asset.url, location.href).searchParams.get("type") || "output"; } catch {}
         e.dataTransfer.setData("application/json", JSON.stringify({ filename, subfolder: folder || "", type }));
         e.dataTransfer.setData("text/plain", filename);
         e.dataTransfer.effectAllowed = "copy";
@@ -4134,7 +4452,7 @@
       const meta = document.createElement("div");
       meta.className = "meta";
       // Hiérarchie : le pipeline (ce qu'on reconnaît) domine, l'extrait du prompt suit (retitleCard).
-      meta.innerHTML = `<strong></strong><span class="asset-prompt"></span>`;
+      meta.innerHTML = `<strong></strong><span class="asset-prompt"></span><div class="asset-tags" data-raw></div><div class="asset-trashed"></div>`;
       Object.assign(card.dataset, { label: a.label ?? "", filename, key: assetKey, video: isVideo ? "1" : "0" });
       card.appendChild(meta);
       retitleCard(card);
@@ -4142,18 +4460,23 @@
       actions.className = "asset-actions";
       const viewBtn = document.createElement("button");
       viewBtn.textContent = isVideo ? "▶ Lire" : "⤢ Agrandir";
-      viewBtn.addEventListener("click", () => openLightbox(url, isVideo, assetKey));
-      actions.appendChild(viewBtn);
-      if (!isVideo) {
+      viewBtn.addEventListener("click", open);
+      if (!trashed) actions.appendChild(viewBtn);
+      if (trashed) {   // corbeille : « Restaurer » seulement
+        const rb = document.createElement("button");
+        rb.textContent = "Restaurer";
+        rb.addEventListener("click", () => restoreGalleryAssets([card._asset]));
+        actions.appendChild(rb);
+      } else if (!isVideo) {
         const useBtn = document.createElement("button");
         useBtn.textContent = "→ Utiliser en entrée";
-        useBtn.addEventListener("click", () => setSelectedAsset({ filename }, url));
+        useBtn.addEventListener("click", () => setSelectedAsset({ filename }, card._asset.url));   // card._asset : l'objet courant (carte gardée en cache)
         actions.appendChild(useBtn);
         const seqBtn = document.createElement("button");
         seqBtn.textContent = "➕ Séquence";
         seqBtn.title = "Ajouter à l'animatic multi-images";
         seqBtn.addEventListener("click", () => {
-          addSeqImage({ name: filename, url });
+          addSeqImage({ name: filename, url: card._asset.url });
           if (activeScenario !== "storyboard") selectScenario("storyboard");
           if (pipelineSelect.value !== "sequence2video" &&
               [...pipelineSelect.options].some(o => o.value === "sequence2video")) {
@@ -4164,7 +4487,7 @@
         });
         actions.appendChild(seqBtn);
       }
-      if (!a.key.startsWith("cloud:")) {   // favori : pas pour une image cloud de session
+      if (!trashed && !a.key.startsWith("cloud:")) {   // favori : pas pour une image cloud de session
         const favBtn = document.createElement("button");
         favBtn.className = "fav-btn";
         favBtn.textContent = "★";
@@ -4172,11 +4495,13 @@
         favBtn.addEventListener("click", () => setGalleryFavs([card._asset], !card._asset.fav));   // card._asset : la carte gardée en cache suit l'objet de la liste courante
         actions.appendChild(favBtn);
       }
-      const delBtn = document.createElement("button");
-      delBtn.textContent = "🗑";
-      delBtn.title = "Supprimer de la galerie";
-      delBtn.addEventListener("click", () => removeGalleryAssets([card._asset]));
-      actions.appendChild(delBtn);
+      if (!trashed) {
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "🗑";
+        delBtn.title = "Supprimer de la galerie";
+        delBtn.addEventListener("click", () => removeGalleryAssets([card._asset]));
+        actions.appendChild(delBtn);
+      }
       card.appendChild(actions);
       // Mode sélection : un clic (ou Espace/Entrée au clavier) coche la carte au lieu d'ouvrir la lightbox.
       card.addEventListener("click", e => {
@@ -4228,6 +4553,7 @@
       refreshFolders(grid);
       refreshGalleryEmpty(grid);
       refreshGalleryCounts();
+      refreshTrashCount();
       undoToast(tr("Supprimé de la galerie"), async () => {
         let moved;
         try { moved = await undo(); }
@@ -4242,8 +4568,52 @@
         refreshFolders(grid);
         refreshGalleryEmpty(grid);
         refreshGalleryCounts();
+        refreshTrashCount();
       });
     }
+    // Corbeille (source service) : « Restaurer » par carte ou par sélection. Le service rend le fichier à son dossier d'origine (sous un autre
+    // nom si l'origine est prise). Les clés historiques reviennent dans la galerie : deletedAssets n'en masque plus l'origine.
+    async function restoreGalleryAssets(list) {
+      list = list.filter(a => a.trash);
+      if (!list.length) return;
+      galleryRev++;
+      let r;
+      try { r = await serviceSource.restore(list.map(a => a.key)); }
+      catch (e) { addEvent("WARN", e.message, "warn"); return dropSay(false, "galleryFail"); }
+      const orig = k => k.includes("/") ? k : "/" + k;   // clé historique « dossier/fichier » (« /x.png » à la racine)
+      let renamed = 0, unmarked = false;
+      for (const x of r) {
+        const o = list.find(a => a.key === x.trashKey)?.trash.origKey;
+        if (o && o !== x.key) renamed++;
+        if (o && deletedAssets.delete(orig(o))) unmarked = true;
+      }
+      if (unmarked) saveLocal("deletedAssets", JSON.stringify([...deletedAssets]));
+      clearGallerySel();
+      galleryImages._stale = galleryVideos._stale = true;
+      galleryReload();
+      refreshTrashCount();
+      refreshFacets();
+      dropSay(true, "galleryRestored", r.length, renamed);
+    }
+    let galleryTrashN = 0;
+    async function refreshTrashCount() {
+      if (gallerySource.id !== "service") return;
+      try { const c = (await svcFetch("/assets?scope=trash&type=image&limit=1")).counts; galleryTrashN = c.image + c.video; renderTrashBtn(); } catch {}
+    }
+    function renderTrashBtn() {
+      const on = galleryFilter.scope === "trash";
+      $("galleryTrashBtn").textContent = dyn("trashCount", galleryTrashN);
+      $("galleryTrashBtn").classList.toggle("active", on);
+      $("galleryTrashBtn").setAttribute("aria-pressed", String(on));
+      $("galleryTrashHelp").hidden = !on;
+      $("galleryBlock").classList.toggle("trash", on);
+      $("galleryScopeBtn").disabled = on;
+    }
+    $("galleryTrashBtn").addEventListener("click", () => {
+      let pref = "app"; try { if (localStorage.getItem("galleryScope") === "all") pref = "all"; } catch {}
+      setGalleryFilter({ scope: galleryFilter.scope === "trash" ? pref : "trash" });
+      refreshFacets();
+    });
     async function setGalleryFavs(list, on) {
       list = list.filter(a => !a.key.startsWith("cloud:"));
       try { await gallerySource.setFav(list.map(a => a.key), on); }
@@ -4257,10 +4627,17 @@
     // ── Sélection multiple ──
     let gallerySelecting = false;
     const gallerySel = new Map();   // pkey → asset
+    let selTagOpen = false;
     function renderSelBar() {
+      const trash = galleryFilter.scope === "trash", tagging = gallerySource.caps.tags && !trash;
       $("gallerySelBar").hidden = !gallerySelecting;
       $("gallerySelCount").textContent = dyn("gallerySel", gallerySel.size);
-      $("gallerySelFav").disabled = $("gallerySelDel").disabled = !gallerySel.size;
+      $("gallerySelFav").hidden = $("gallerySelDel").hidden = trash;
+      $("gallerySelRestore").hidden = !trash;
+      $("gallerySelTag").hidden = !tagging;
+      $("gallerySelTagForm").hidden = !(tagging && selTagOpen);
+      $("gallerySelTag").setAttribute("aria-expanded", String(tagging && selTagOpen));
+      $("gallerySelFav").disabled = $("gallerySelDel").disabled = $("gallerySelRestore").disabled = $("gallerySelTag").disabled = !gallerySel.size;
       $("gallerySelectBtn").classList.toggle("active", gallerySelecting);
       $("gallerySelectBtn").setAttribute("aria-pressed", String(gallerySelecting));
       $("galleryBlock").classList.toggle("selecting", gallerySelecting);
@@ -4289,6 +4666,22 @@
       const list = [...gallerySel.values()];
       setGalleryFavs(list, !list.every(a => a.fav));
     });
+    $("gallerySelTag").addEventListener("click", () => { selTagOpen = !selTagOpen; renderSelBar(); if (selTagOpen) $("gallerySelTagInput").focus(); });
+    $("gallerySelTagForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const name = $("gallerySelTagInput").value.trim(), list = [...gallerySel.values()].filter(a => !a.key.startsWith("cloud:"));
+      if (!name || !list.length) return;
+      try {
+        const r = await serviceSource.tag(list.map(a => a.key), [name], []);   // par lots de 100
+        for (const a of list) { const t = r.find(x => x.key === a.key); if (t) a.tags = t.tags; }
+      } catch (err) { addEvent("WARN", err.message, "warn"); return dropSay(false, "galleryFail"); }
+      $("gallerySelTagInput").value = "";
+      selTagOpen = false;
+      renderSelBar();
+      afterTags(list);
+      dropSay(true, "galleryTagged", list.length);
+    });
+    $("gallerySelRestore").addEventListener("click", () => restoreGalleryAssets([...gallerySel.values()]));
     $("gallerySelDel").addEventListener("click", () => {
       const list = [...gallerySel.values()];
       clearGallerySel();
@@ -4317,6 +4710,8 @@
       renderGalleryDates();
       renderPipelineFilter();
       renderFacetSelects();
+      renderTrashBtn();
+      renderSelBar();
     }
     // Textes de la source service posés par le JS : rejoués au changement de langue (langSelect).
     function renderGalleryDates() {
@@ -4417,6 +4812,7 @@
       syncGalleryControls();
       galleryReload();
       refreshFacets();
+      refreshTrashCount();
     }
     // Index vide et scan en cours : « indexation en cours… », nouvel essai toutes les 5 s, 12 essais au plus.
     function galleryPollIndex(n) {
