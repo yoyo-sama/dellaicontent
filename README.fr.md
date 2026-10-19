@@ -2,9 +2,9 @@
 
 # Dell AI Content Studio — démo Media & Entertainment sur GB10
 
-**Version actuelle : 1.3.0** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
+**Version actuelle : 1.4.0** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
-Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit, Qwen Image 2.1) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception d'un petit service `updater` dédié aux mises à jour, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
+Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit, Qwen Image 2.1) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception de deux petits services : `updater`, dédié aux mises à jour, et `gallery`, qui indexe le dossier de sorties de ComfyUI pour la galerie, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 
 ## Déploiement (clone & run)
 
@@ -51,7 +51,12 @@ testé sur deux exécutions consécutives) :
    la bonne taille — aucun retéléchargement inutile).
 5. Tire le modèle Ollama `gemma4:e4b` s'il est absent, **par l'API HTTP** (`POST /api/pull`)
    et non par `docker exec` : identique que Ollama tourne dans un conteneur ou nativement.
-6. Attend que ComfyUI réponde sur `:8188` quand il vient d'être créé (premier démarrage :
+6. Construit et démarre les services propres à l'app : `updater` et `gallery` (l'index galerie du
+   dossier `output/` de ComfyUI, `127.0.0.1:8094`, atteint par `:8090/gallery/`). `output/` est
+   créé côté utilisateur s'il manque, et le script affiche (sans jamais l'exécuter) le
+   `sudo chown` qui vous le donne s'il n'est pas inscriptible ; un conteneur web de cette stack
+   déjà en marche est recréé pour que nginx charge la règle `/gallery/`.
+7. Attend que ComfyUI réponde sur `:8188` quand il vient d'être créé (premier démarrage :
    plusieurs minutes d'installation des userscripts), puis affiche un récapitulatif final
    (statut des services, emplacements réels, modèles, health-checks).
 
@@ -89,7 +94,7 @@ télécharger d'un coup, ou veut auditer ce qu'`install.sh` automatise :
 ```bash
 git clone <url-du-repo> ~/ai-content-studio
 cd ~/ai-content-studio
-docker compose up -d                                   # app seule (nginx :8090 + updater)
+docker compose up -d                                   # app seule (nginx :8090 + updater + gallery)
 docker compose -f ~/comfyui-spark/compose.yaml up -d   # ComfyUI (:8188)
 docker compose -f ~/ollama/compose.yaml up -d          # Ollama  (:11434)
 ```
@@ -98,7 +103,7 @@ Trois stacks distinctes, une par service, chacune à la racine du home :
 
 | Dossier | Conteneur | Image | Port | Rôle |
 |---|---|---|---|---|
-| `~/ai-content-studio` | `ai-content-studio-web` + `ai-content-studio-updater` | `nginx:alpine` | 8090 | Sert `index.html`/`canvas.html` + reverse-proxy vers ComfyUI/Ollama |
+| `~/ai-content-studio` | `ai-content-studio-web` + `ai-content-studio-updater` + `ai-content-studio-gallery` | `nginx:alpine` (+ images `updater` et `gallery` construites depuis `docker/`) | 8090 (updater 8093, gallery 8094, tous deux sur `127.0.0.1`) | Sert `index.html`/`canvas.html` + reverse-proxy vers ComfyUI/Ollama, `/update/` et `/gallery/` |
 | `~/comfyui-spark` | `comfyui-nvidia` | `mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest` | 8188 | Moteur de génération d'images/vidéos |
 | `~/ollama` | `ollama-api` | `ollama/ollama:latest` | 11434 | LLM local pour l'enrichissement de prompt |
 
@@ -107,6 +112,14 @@ ComfyUI n'écoute que sur `127.0.0.1` (accès distant à son interface par `:809
 Le conteneur `updater` tourne avec l'UID du propriétaire du dépôt, pas en root : `install.sh`
 écrit `APP_UID`/`APP_GID` (1000 par défaut) dans `.env`, et affiche le `chown` exact à lancer si
 `.git` contient des fichiers appartenant à quelqu'un d'autre (laissés par un ancien updater root).
+
+Le conteneur `gallery` tourne lui aussi avec cet utilisateur (`APP_UID`/`APP_GID`) et monte le
+dossier `output/` de ComfyUI en lecture-écriture (`COMFY_OUTPUT_DIR` dans `.env`, par défaut
+`../comfyui-spark/basedir/output`) : ce dossier doit vous appartenir. Son index, ses tags et ses
+favoris vivent dans le volume Docker `<projet>_gallery-data`. Après une mise à jour depuis l'app
+qui touche `docker/gallery/` ou `nginx.conf`, reconstruisez-le vous-même — l'updater ne fait que
+`git pull` : `docker compose up -d --build gallery && docker compose up -d --force-recreate ai-content-studio`.
+Voir `docs/TROUBLESHOOTING.fr.md` § 9.
 
 `install.sh` crée les deux stacks voisines à partir des gabarits `docker/stacks/*.yml`, en
 créant leurs dossiers **avant** les conteneurs : un bind-mount dont la source n'existe pas
@@ -138,6 +151,7 @@ dans le dossier `userscripts_dir` du conteneur ComfyUI si vous ne passez pas par
 curl http://localhost:8090/                    # app statique
 curl http://localhost:8188/system_stats         # ComfyUI vivant
 curl http://localhost:11434/api/version          # Ollama vivant
+curl http://localhost:8090/gallery/health       # service galerie vivant (ok, indexed, scanning, warning)
 ```
 
 ### Modèles à télécharger
@@ -324,6 +338,32 @@ vide il ne lance rien (sauf les déclinaisons par marché, dont le prompt vient 
   studio défilent jusqu'à elles, les actions de projet sont en bas, et chaque cible fait au moins
   44 px.
 
+### La galerie
+
+Depuis la 1.4.0 la galerie liste **tout le dossier `output/` de ComfyUI**, et non plus seulement
+les 200 dernières images mémorisées par ce navigateur. Le service `gallery` indexe le dossier
+(SQLite) et sert les miniatures ; la page l'atteint par `:8090/gallery/`.
+
+- **Recherche et filtres** : mots du prompt (ou du nom de fichier ou de modèle, préfixes admis,
+  accents ignorés), pipeline, modèle, tag, favoris ; **Tout afficher** élargit la vue de ce que
+  l'app a produit à tout le dossier.
+- **Dates** : regroupement par jour, semaine ou mois ; *Du* / *Au* et *Aller à…* sautent à une
+  période.
+- **Détails** : la lightbox montre le prompt complet, la seed, le modèle, les LoRA, la taille, la
+  durée, le poids, la date, le chemin et les tags. *↺ Réutiliser le prompt* le copie dans le
+  brief seulement sur votre clic (avec un bandeau Annuler) ; rien n'est rendu.
+- **Tags et favoris** sont gardés par le service, jamais dans les fichiers image. Sélectionnez
+  plusieurs cartes pour les taguer, les mettre en favori ou les supprimer ensemble (suppression
+  limitée à 100 à la fois). *✎ Renommer* agit dans le même dossier (pas sous `studio/story/` ni
+  `studio/relay/`).
+- **Corbeille** : supprimer déplace le fichier vers `output/.trash/`, avec un bandeau Annuler ; la
+  vue *Corbeille* le liste avec *↩ Restaurer*. L'app ne supprime jamais rien définitivement : videz
+  la corbeille à la main (`rm -r ~/comfyui-spark/basedir/output/.trash`).
+- **Repli** : si le service ne répond pas, la galerie montre les images mémorisées par ce
+  navigateur (une note le dit) et la génération n'est pas affectée.
+
+Conception, API et limites : `docs/GALERIE.md`.
+
 ### Le studio storyboard
 
 `storyboard_v2` et `reference2video` passent toujours par une **revue étape par étape** dans un
@@ -380,7 +420,9 @@ js/                         ← engine.js (partagé par les deux pages), nodes-s
                               canvas-gallery.js (Canvas), update-check.js (les deux pages)
 js/vendor/                  ← litegraph.js 0.7.18 + CSS vendorisés (Canvas, sans CDN)
 install.sh                  ← installation/mise à jour idempotente en une commande (recommandé)
-docker-compose.yml          ← app seule : nginx (8090) + updater (8093)
+docker-compose.yml          ← app seule : nginx (8090) + updater (8093) + gallery (8094)
+docker/gallery/             ← service galerie : Dockerfile + server.py (Python stdlib, SQLite/FTS5, Pillow, ffmpeg)
+docker/updater/             ← service updater : git pull depuis l'UI, téléversement de LoRA
 docker/stacks/*.yml         ← gabarits des stacks voisines : ~/comfyui-spark et ~/ollama
 docker/userscripts/         ← scripts déployés dans le conteneur ComfyUI par install.sh (dont comfy_kitchen)
 scripts/models.txt          ← 22 modèles requis : dossier|fichier|taille|URL (source de vérité pour install.sh et le README)
@@ -394,6 +436,7 @@ docs/
   TROUBLESHOOTING.md        ← dépannage installation/déploiement (EN) : symptômes, diagnostic, réparation, remise à zéro
   TROUBLESHOOTING.fr.md     ← même guide en français
   ARCHITECTURE.md           ← anatomie de l'app et des formats
+  GALERIE.md                ← galerie 1.4.0 : périmètre, lots livrés, contrat (API, SQLite, source JS), limites connues
   LESSONS.md                ← pièges & patterns validés (LIRE AVANT DE MODIFIER)
   TESTING.md                ← méthode de validation (rendus réels, bancs headless, extraction frames/audio)
   CODE-REVIEW-*.md          ← revues de code et d'UX du 2026-09-23, avec l'état de chaque trouvaille

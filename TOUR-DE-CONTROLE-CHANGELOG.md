@@ -1,5 +1,73 @@
 # Tour de contrôle — changelog
 
+## 2026-09-26 — v1.4.0 — Refonte de la galerie (A puis B)
+
+Demande : la galerie ne montrait que les 200 dernières entrées du navigateur (`galleryAssets`) alors que `~/comfyui-spark/basedir/output`
+en contient environ 1 766 ; impossible de retrouver une image par mot du prompt, pipeline, modèle ou période. Décision de l'utilisateur :
+**voie A puis B**, pas de galerie tierce. A = front seul (liste de données à deux sources, source navigateur) ; B = nouveau **service Docker
+`gallery`** (index SQLite/FTS5 de `output/`, miniatures, tags, favoris, corbeille) et la source « service » de la page. Version **1.4.0**.
+Cadrage, contrat, écarts et limites : `docs/GALERIE.md` ; architecture : `docs/ARCHITECTURE.md` § Galerie et § Backend `gallery`.
+
+**Lots et commits** (SHA vérifiés par `git log`) :
+- **L0** `990cc64` — `docs/GALERIE.md` (cadrage + contrat C1-C6) et règles du chantier dans `AGENTS.md`.
+- **B1** `08c83a5` — service `gallery` en lecture : `docker/gallery/{Dockerfile,server.py}` (`python:3.14-alpine`, Pillow 12.3.0, ffmpeg),
+  `docker-compose.yml` (service + volume `gallery-data`), `nginx.conf` (`location ^~ /gallery/`, `Host $http_host`), `install.sh`
+  (`COMFY_OUTPUT_DIR` dans `.env`, `output/` créé côté utilisateur, `sudo chown` affiché jamais exécuté, build du service, recréation du web
+  avec `-t 0`, health-check `/gallery/health`), `.gitignore`. Routes `/health /assets /asset /thumb /dates /facets`.
+- **B2** `48693b5` — écriture et sécurité dans `server.py` : `/fav /tags /tag /rename /trash /restore`, contrôle de même origine avant le routage,
+  déplacements par `os.link` puis `os.unlink` sous le verrou et dans la transaction SQLite, corbeille `output/.trash/`, restauration, verrou
+  `studio/(story|relay)/` sur le renommage ; correctif du rescan de B1.
+- **A** `6846b51` — `index.html` seul : `galleryItems`, `browserSource`, paquets de 60 (`IntersectionObserver`), grille dense à curseur de taille,
+  recherche, filtre pipeline, favoris locaux (`galleryFavs`), sélection multiple, état vide ; `ts` sur les nouvelles entrées de `galleryAssets`.
+- **B3a** `1c57cba` — `index.html` seul : `serviceSource`, choix de la source au démarrage (`galleryBoot`) et repli automatique (`galleryFallback`),
+  « Tout afficher », filtres modèle / tag / pipeline / période, groupes par jour / semaine / mois, « Aller à… », migration des favoris locaux.
+- **B3b** `11f3ae7` — `index.html` seul : lightbox à panneau de métadonnées (`detail`), « ↺ Réutiliser le prompt » (sur clic, avec Annuler, sans job),
+  renommage, tags (lightbox et sélection), vue Corbeille avec restauration, `[data-raw]` pour les données du service. Commité le 2026-10-19
+  d'après `git log` (les autres lots les 2026-09-25 et 09-26).
+- **D** (ce lot) — documentation à l'état livré (`docs/GALERIE.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, les deux
+  `TROUBLESHOOTING`, les deux README, ce changelog) et `VERSION` 1.4.0. Aucun code.
+
+**Fichiers** : `docker/gallery/` (nouveau), `docker-compose.yml`, `nginx.conf`, `install.sh`, `.gitignore`, `index.html` ; docs ci-dessus. `js/`, `canvas.html`
+et `workflows/` intacts : la galerie du Canvas n'est pas branchée sur le service (hors périmètre).
+
+**Décisions** : tags et favoris en SQLite, jamais dans les fichiers (les PNG ne sont jamais réécrits) ; supprimer = déplacer vers `output/.trash/`, purge
+manuelle (`rm -r`), aucune route de suppression définitive ; le service ne contacte jamais ComfyUI et ne soumet aucun job ; si le service est injoignable,
+la page retombe sur la source navigateur ; un asset reçu en direct est toujours persisté côté navigateur pour que le repli reste utile ; « Réutiliser le
+prompt » n'écrit dans le brief que sur un clic ; les clés historiques du localStorage gardent `${subfolder}/${filename}` (pas de migration), les
+nouvelles clés suivent le contrat.
+
+**Écarts actés** (détail dans `docs/GALERIE.md`, reportés dans son § Contrat) :
+- B1 : la remontée du graphe s'arrête aux nœuds `TextGenerate` et ne suit pas l'entrée `negative` (sinon la consigne système de l'enhancer, 2 131 car.,
+  devenait le prompt de `Krea2_turbo_00070_.png`, et 80 PNG Qwen 2.1 prenaient leur négatif) ; consigne et négatif restent dans `texts`.
+- B2 : contrôle de même origine avant le routage (POST sans JSON sur une route de lecture = 415) ; clés en double = 400 ; 500 de `/trash` et `/restore`
+  avec la liste du déjà-fait ; un renommage ne change que la clé ; noms de tag uniques à la casse Unicode près ; **correctif de perte de données de B1** :
+  le rescan supprimait par l'id du cliché, un renommage pendant un scan faisait perdre tags et favori (preuve : le même test échoue avec la boucle de B1).
+- B3a : « Au » = minuit local du lendemain du jour choisi ; `/dates` calculé avec le `tzOffset` du jour.
+- B3b : `serviceSource.tag` et `restore` travaillent par lots de 100 et **rendent** `[{key, tags}]` / `[{trashKey, key}]` (le contrat disait `Promise<void>`) ;
+  `translateTree` ignore `[data-raw]` ; `location ^~ /gallery/` passe avant la regex qui refuse `/.` (`GET /gallery/.trash/x` : 404 du service, nginx ne
+  protège que le site statique) ; ComfyUI `/comfy/view` sert les fichiers sous `.trash/` mais l'interface ne s'en sert pas.
+
+**Preuves chiffrées** (journaux de lot, bancs hors dépôt, jeu factice pour toute écriture) :
+- B1 : banc de lecture 269 contrôles + garde anti-vidage 5, 0 échec ; 1 767 fichiers indexés (`indexed` = `find`, écart 0), scan initial 14,4 s dans le conteneur,
+  rescan sans changement 0,01 s, base de 10 Mo ; miniature à froid ~23 ms (image) / ~225 ms (vidéo), `/assets` (60) ~4 ms ; coupure du web à la recréation
+  10,1 s sans `-t 0`, 0,15 s avec.
+- B2 : banc hostile 146, banc d'écriture 85, banc de lecture 273 + 5 ; `--check` OK dans l'image ; 7 mutations du service toutes tuées (une survivante était un mutant
+  équivalent, redéfinie puis tuée) ; en production : `Origin` étranger et absent = 403, `GET /trash` = 405, aucune écriture valide, `RestartCount` 0.
+- A : `bench-gallery` 49/49 (témoin négatif `GALLERY_PAGE = Infinity` : 41/49) ; matrice de graphes identique octet pour octet (37 scénarios, 112 corps `/prompt`,
+  407 243 o, 219 uploads, 17 corps ollama, 15 103 o) ; parité des prompts 52 119 contrôles ; `proofs-4a` 159, `proofs-4b` 92, `proofs-mem` 44 ; audit i18n vide dans
+  les 4 langues ; `bench-dnd` 141, `bench-queue` 42.
+- B3a : `bench-service` 152/152, aussi en `TZ` Los Angeles et Kolkata ; témoin négatif tué ; couture (champs du service lus par la page) vérifiée.
+- B3b : `bench-meta` 134/134, aussi derrière un vrai `nginx:alpine` avec le `nginx.conf` du dépôt et en `TZ` Los Angeles ; couture 19/19 champs de l'objet C1 ;
+  mutations de l'annulation tuées ; `proofs-4a` 159, `proofs-4b` 92 (une règle « usted » et un compte d'enfants de `.meta` des bancs ont été adaptés, rejoués verts) ;
+  contrôle de production en lecture seule (une corbeille réelle de 50 éléments, `/comfy/view` sur `.trash` servi en 200).
+
+**Limites connues** (liste complète dans `docs/GALERIE.md`) : LoRA court-circuitée listée ; prompt des fichiers ComfyUI manuels possiblement la consigne système ;
+date = `mtime` ; rescan de 60 s ; sessions storyboard qui désignent des fichiers d'output (renommage `studio/story|relay` refusé, corbeille permise) ;
+collision `_restored` ; suppression multiple limitée à 100 ; migration des favoris locaux (clés inconnues ignorées, favori posé en repli après la migration non reporté) ;
+`/dates` avec le `tzOffset` du jour ; `promptForNode` du navigateur ne lit pas les prompts littéraux de `TextEncodeQwenImage21` ; rail « Studio | Canvas » qui
+chevauche la recherche à partir de 768 px (défaut préexistant, non corrigé) ; Q3 (source unique des prompts Studio / Engine, I13-B) toujours ouverte, garde-fou
+`node tools/parity-prompts.js`.
+
 ## 2026-09-25 — Lot UX-DND : glisser-déposer galerie → entrées d'image, file de jobs repliable (Studio)
 
 Deux demandes de l'utilisateur, `index.html` seul (`js/canvas-gallery.js` et `js/engine.js` intacts).

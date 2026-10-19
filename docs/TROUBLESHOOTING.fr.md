@@ -18,6 +18,7 @@ Aucune n'installe ni ne supprime quoi que ce soit sans que ce soit dit explicite
 | `skipped (port 11434 busy)` / `port is already allocated` | Un autre processus tient le port | [3](#3-ollama) |
 | Vous réinstallez sur un poste où une version précédente du script a déjà tourné | Migration de l'ancienne mise en page vers les stacks voisines | [4](#4-réinstaller-sur-un-poste-où-une-version-précédente-du-script-a-déjà-tourné) |
 | `git add` ou une mise à jour depuis l'app échoue en « permission denied » sous `.git/objects` | Objets git créés en `root` par un ancien updater ou un conteneur | [8](#8-objets-git-appartenant-à-root) |
+| La galerie affiche « Galerie complète indisponible — images de ce navigateur seulement », ou la corbeille/le renommage affiche « Le service de galerie n'a pas abouti : rien n'a été modifié. » | Le service `gallery` ne répond pas, ou ne peut pas écrire dans `output/` | [9](#9-service-galerie) |
 
 **La langue du prompt n'est jamais en cause.** Un `JSON.parse` qui échoue « line 1 column 1 »
 signifie que le premier caractère reçu n'est pas du JSON (typiquement le `<` de `<html>`) :
@@ -286,7 +287,7 @@ Si l'inventaire a montré un ComfyUI ou un Ollama **sans label** (créé hors co
 après avoir vérifié qu'il vient bien de votre tentative d'installation.
 
 Le volume `ollama-data` est conservé : `install.sh` en recopie les poids vers `~/ollama/data`,
-ce qui évite 9,6 Go de retéléchargement.
+ce qui évite 9,6 Go de retéléchargement. Le volume `ai-content-studio_gallery-data` l'est aussi (index de la galerie, tags et favoris).
 
 ### Remise à zéro totale
 
@@ -294,7 +295,7 @@ Tout part, y compris les images (~30 Go) et **les modèles (~150 Go, plusieurs h
 téléchargement)** :
 
 ```bash
-docker rm -f ai-content-studio-web ai-content-studio-updater comfyui-nvidia ollama-api 2>/dev/null; docker volume rm ollama-data 2>/dev/null; docker rmi mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest ollama/ollama:latest ai-content-studio-updater 2>/dev/null; sudo rm -rf ~/comfyui-spark ~/ollama ~/ai-content-studio
+docker rm -f ai-content-studio-web ai-content-studio-updater ai-content-studio-gallery comfyui-nvidia ollama-api 2>/dev/null; docker volume rm ollama-data ai-content-studio_gallery-data 2>/dev/null; docker rmi mmartial/comfyui-nvidia-docker:ubuntu24_cuda13.1-dgx-latest ollama/ollama:latest ai-content-studio-updater ai-content-studio-gallery 2>/dev/null; sudo rm -rf ~/comfyui-spark ~/ollama ~/ai-content-studio
 ```
 
 Relisez l'inventaire avant de la lancer : `~/comfyui-spark` peut **préexister** à
@@ -325,7 +326,8 @@ cd ~/ai-content-studio && ./install.sh 2>&1 | tail -25
 ```
 
 Attendu : `reused` sur les trois services, `already present (not re-downloaded) : 22`,
-`Ollama model gemma4:e4b: present`, et quatre `HTTP 200` en health-checks. Ensuite seulement,
+`Ollama model gemma4:e4b: present`, et cinq `HTTP 200` en health-checks (`:8188`, `:11434`, `:8090`,
+`/update/status`, `/gallery/health`). Ensuite seulement,
 ouvrez `http://<ip>:8090`, testez **✨ Enrichir le brief (LLM)** sur un champ de prompt, puis une
 génération d'image simple (Krea 2) avant d'essayer la vidéo.
 
@@ -356,3 +358,81 @@ find ~/ai-content-studio/.git ! -user "$(id -un)" -print -quit        # une sort
 sudo chown -R "$(id -un):$(id -gn)" ~/ai-content-studio/.git
 cd ~/ai-content-studio && docker compose up -d --build --force-recreate updater
 ```
+
+## 9. Service galerie
+
+Le service `gallery` (conteneur `ai-content-studio-gallery`, `127.0.0.1:8094`, atteint par `:8090/gallery/`) indexe le dossier `output/` de ComfyUI pour la galerie : recherche, filtres, dates, tags, favoris, corbeille. La génération n'en dépend jamais : s'il ne répond pas, la galerie retombe sur les images mémorisées par ce navigateur (une note le dit et le journal d'événements reçoit un `WARN`).
+
+### 9.1 Le service ne répond pas
+
+```bash
+curl -s http://localhost:8090/gallery/health                    # {"ok": true, "indexed": …, "scanning": …, "warning": null, …}
+docker compose ps gallery                                       # Up ?
+docker logs --tail 50 ai-content-studio-gallery                 # erreurs seulement : les requêtes ne sont pas journalisées
+docker inspect -f '{{.RestartCount}} {{.State.Status}}' ai-content-studio-gallery
+```
+
+- `docker compose ps gallery` n'affiche rien ou `Exited` : `docker compose up -d --build gallery`.
+- `RestartCount` ne cesse de monter : le service plante au démarrage et Docker le relance. Les dernières lignes du log disent pourquoi (port occupé : 9.2 ; problème sur `output/` : 9.3).
+- Le conteneur est `Up` et répond sur `127.0.0.1:8094`, mais `:8090/gallery/health` donne un `404` ou une page HTML : le conteneur web n'a jamais chargé la règle `/gallery/` de `nginx.conf` (monté en fichier unique, un nginx déjà lancé ne voit pas le changement). `docker compose up -d --force-recreate ai-content-studio` ; ajoutez `-t 0` pour éviter ~10 s d'attente des WebSocket ouvertes.
+- `"indexed": 0` avec `"scanning": true` juste après un démarrage : le premier scan tourne (environ 15 s pour 1 800 fichiers), la galerie l'attend toute seule. Un `"warning"` signifie que le dossier de sorties est absent ou vide alors que l'index ne l'est pas : le service ne supprime alors rien — vérifiez que `output/` est bien monté.
+
+### 9.2 Le port 8094 est occupé
+
+Le service tourne en réseau hôte et écoute toujours sur `127.0.0.1:8094`. Si un autre processus tient ce port, le conteneur s'arrête aussitôt et Docker le relance en boucle.
+
+```bash
+ss -ltnp "sport = :8094"          # qui le tient ?
+```
+
+Libérez le port, puis `docker compose up -d gallery`. Changer de port impose de modifier `PORT` dans `docker-compose.yml` **et** le `proxy_pass` de `location ^~ /gallery/` dans `nginx.conf` (puis de recréer le conteneur web, voir 9.1).
+
+### 9.3 `output/` n'est pas inscriptible
+
+La lecture marche, mais la corbeille, le renommage ou la restauration répondent une erreur (la page affiche « Le service de galerie n'a pas abouti : rien n'a été modifié. » ; les logs montrent un `PermissionError`). Le service tourne avec `APP_UID:APP_GID` de `.env` (1000:1000 par défaut), déplace les fichiers par lien physique, et un dossier ou un fichier qui ne lui appartient pas ne peut pas être déplacé.
+
+```bash
+ls -ld ~/comfyui-spark/basedir/output ~/comfyui-spark/basedir/output/.trash   # propriétaire ?
+docker exec ai-content-studio-gallery id                                      # uid=1000 gid=1000
+find ~/comfyui-spark/basedir/output ! -user "$(id -un)" -print -quit           # une sortie = un fichier d'un autre propriétaire
+```
+
+`install.sh` affiche le correctif sans jamais l'exécuter. Lancez-le vous-même, une fois :
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" ~/comfyui-spark/basedir/output
+```
+
+Cela arrive aussi quand `output/` n'existait pas avant le premier `docker compose up` : Docker le crée alors en `root`.
+
+### 9.4 Réindexer à zéro
+
+L'index ne contient que ce qui se recalcule depuis les fichiers, **sauf les tags et les favoris**, qui n'existent que dans le volume `gallery-data` : réindexer les efface. Les images ne sont jamais touchées. Pour repartir de zéro (index corrompu, `APP_UID` changé après la création du volume, doute sur le schéma) :
+
+```bash
+cd ~/ai-content-studio
+docker compose down gallery && docker volume rm <projet>_gallery-data && docker compose up -d --build gallery
+```
+
+`<projet>` est le nom du projet compose, c'est-à-dire le nom du dossier du dépôt (`ai-content-studio` pour le clone par défaut) : `docker volume ls | grep gallery-data` donne le nom exact. Le premier scan prend environ 15 s pour 1 800 fichiers. Les favoris de ce navigateur (`galleryFavs`) ne sont envoyés au service qu'une seule fois : pour les renvoyer après une réindexation, supprimez la clé `galleryFavsMigrated` du stockage local du navigateur, puis rechargez.
+
+### 9.5 Vider la corbeille
+
+« Supprimer » dans la galerie déplace le fichier vers `~/comfyui-spark/basedir/output/.trash/` et reste annulable (vue Corbeille, « Restaurer »). L'interface n'a aucune suppression définitive : elle est manuelle et **irréversible**.
+
+```bash
+rm -r ~/comfyui-spark/basedir/output/.trash
+```
+
+(ou un seul dossier `.trash/<id>`). Le service a créé ces dossiers avec son propre UID : aucun `sudo` n'est nécessaire s'il tourne sous votre compte. En moins d'une minute (`SCAN_INTERVAL`, 60 s) la vue Corbeille se vide : les lignes dont le fichier a disparu sont supprimées, avec leurs tags.
+
+### 9.6 Après une mise à jour faite par l'updater
+
+L'updater de l'app ne fait que `git pull` : il ne reconstruit jamais l'image `gallery` et ne recrée pas le conteneur web. Quand une mise à jour touche `docker/gallery/` ou `nginx.conf`, lancez :
+
+```bash
+cd ~/ai-content-studio
+docker compose up -d --build gallery && docker compose up -d --force-recreate ai-content-studio
+```
+
+La seconde commande est nécessaire pour tout changement de `nginx.conf` (montage en fichier unique, voir 9.1) ; ajoutez `-t 0` pour éviter ~10 s d'attente des WebSocket ouvertes.

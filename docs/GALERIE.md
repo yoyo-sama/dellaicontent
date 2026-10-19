@@ -1,8 +1,10 @@
-# Galerie — Chantier 1.4.0
+# Galerie — Chantier 1.4.0 (livré)
+
+**État : livré en six lots (L0, B1, B2, A, B3a, B3b), puis documentation (D) et version 1.4.0.** Ce document garde le cadrage d'origine (Pourquoi, Décisions, Hors périmètre), décrit ce qui a été livré lot par lot, liste les écarts actés et les limites connues, puis porte le contrat (§ Contrat), corrigé uniquement pour les écarts actés dans les commits ou les notes de lot. Vue d'ensemble de l'architecture : `docs/ARCHITECTURE.md` § Galerie et § Backend `gallery`.
 
 ## Pourquoi
 
-La galerie ne montre que les 200 dernières entrées mémorisées dans le navigateur (localStorage `galleryAssets`, coupé par `slice(0,200)` dans `persistAsset` ; prompts dans `assetPrompts`). Or `~/comfyui-spark/basedir/output` contient environ 1 766 images et vidéos (1 396 PNG d'environ 1,5 Mo, 370 mp4 d'environ 1 Mo). Chaque vignette charge l'image d'origine. Les douleurs : retrouver une image précise (mot du prompt, pipeline, modèle), parcourir par période ou par session, historique perdu.
+Avant 1.4.0, la galerie ne montrait que les 200 dernières entrées mémorisées dans le navigateur (localStorage `galleryAssets`, coupé par `slice(0,200)` dans `persistAsset` ; prompts dans `assetPrompts`). Or `~/comfyui-spark/basedir/output` contient environ 1 766 images et vidéos (1 396 PNG d'environ 1,5 Mo, 370 mp4 d'environ 1 Mo). Chaque vignette chargeait l'image d'origine. Les douleurs : retrouver une image précise (mot du prompt, pipeline, modèle), parcourir par période ou par session, historique perdu.
 
 ## Décisions
 
@@ -14,21 +16,85 @@ La galerie ne montre que les 200 dernières entrées mémorisées dans le naviga
 
 Galerie du Canvas branchée sur le service, notes/commentaires/rôles, exposition client, remix, OmniQuery, transcodage, gestion de dossiers (seul le renommage dans le même dossier est prévu), virtual scrolling complet, SmartGallery.
 
-## Lots
+## Lots livrés
 
-- **L0** : ce document
-- **A** : front, source navigateur
-- **B1** : service, Docker + lecture
-- **B2** : écriture + sécurité
-- **B3a** : source service, filtres, dates
-- **B3b** : lightbox métadonnées, tags, sélection, corbeille
-- **D** : docs finales, VERSION 1.4.0
+A était en parallèle de B1 puis B2 ; le reste était séquentiel. Les SHA sont ceux de `git log` (branche `main`).
 
-A est en parallèle de B1 puis B2 ; le reste est séquentiel.
+| Lot | Commit | Date (git) | Contenu livré |
+|---|---|---|---|
+| L0 | `990cc64` | 2026-09-25 | Ce document (cadrage et contrat) et les règles du chantier dans `AGENTS.md`. |
+| B1 | `08c83a5` | 2026-09-25 | Service `gallery` : `docker/gallery/{Dockerfile,server.py}`, service et volume `gallery-data` dans `docker-compose.yml`, `location ^~ /gallery/` dans `nginx.conf`, `install.sh` (dossier `output/`, `COMFY_OUTPUT_DIR` dans `.env`, build du service, recréation du web, health-check). Lecture seule : `/health /assets /asset /thumb /dates /facets`, indexeur SQLite/FTS5, miniatures WebP. |
+| B2 | `48693b5` | 2026-09-25 | Écriture et sécurité : `/fav /tags /tag /rename /trash /restore`, contrôle de même origine, corbeille `output/.trash/`, restauration, verrou `studio/(story\|relay)/` sur le renommage ; correctif du rescan de B1 (perte de tags et de favoris lors d'un renommage pendant un scan). |
+| A | `6846b51` | 2026-09-25 | `index.html` seul. Galerie en liste de données à deux sources (`browserSource` livrée ici), rendu par paquets de 60, grille dense à curseur de taille, recherche, filtre pipeline, favoris locaux (`galleryFavs`), sélection multiple, état vide. |
+| B3a | `1c57cba` | 2026-09-26 | `index.html` seul. `serviceSource` : liste indexée, « Tout afficher », filtres modèle / tag / pipeline / période, groupes par jour, semaine ou mois, « Aller à… », favoris et corbeille côté service, choix de la source au démarrage et repli automatique, migration des favoris locaux. |
+| B3b | `11f3ae7` | 2026-10-19 | `index.html` seul. Lightbox à panneau de métadonnées, « Réutiliser le prompt », renommage, tags (lightbox et sélection multiple), vue Corbeille avec restauration, `[data-raw]` pour les données venues du service. |
+| D | (ce lot) | — | Documentation à l'état livré et `VERSION` 1.4.0. Aucun code. |
+
+### Ce que fait la galerie livrée
+
+- **Deux sources derrière une interface unique** (§ C2) : `browserSource` (historique du navigateur, repli) et `serviceSource` (index complet de `output/`). Au démarrage, `galleryBoot()` interroge `GET /gallery/health` (délai 3 s) : réponse `ok` = source service, sinon source navigateur et note « Galerie complète indisponible — images de ce navigateur seulement ». Une erreur réseau ou HTTP ≥ 500 d'un `list` en cours de session fait aussi retomber sur la source navigateur (`galleryFallback`) ; une erreur 4xx est journalisée sans basculer.
+- **Recherche et filtres** : mots du prompt, du nom de fichier ou du modèle (tous les mots, préfixes admis, sans accents), pipeline (dont « Autre »), modèle, tag, favoris, période (Du / Au, « Aller à… » par jour, semaine ou mois), « Tout afficher » (périmètre `all` : tout l'output, pas seulement ce que produit l'app).
+- **Rendu** : paquets de 60 par `IntersectionObserver`, miniatures WebP du service (`/gallery/thumb`, y compris pour les vidéos, avec pastille ▶), glisser-déposer et « → Utiliser en entrée » sur l'image pleine résolution (`/comfy/view`).
+- **Lightbox à panneau** (service) : prompt complet (`detail`), seed, modèle, LoRA, taille, durée, poids, date, chemin, tags ; « Copier », « → Utiliser en entrée », « ↺ Réutiliser le prompt » (écrit dans le brief sur ce clic seulement, avec « Annuler », sans aucun job), « ✎ Renommer ».
+- **Tags, favoris, corbeille** : tags par image ou par lot de 100 ; favoris migrés du navigateur une seule fois ; 🗑 déplace vers `.trash/` avec bandeau « Annuler » ; vue « Corbeille (n) » avec « Restaurer ». Aucune suppression définitive, ni bouton ni route.
+- **Repli** : tout asset reçu en direct est aussi mémorisé côté navigateur (`persistAsset`, avec `ts`), donc la source navigateur reste utile quand le service est arrêté.
+
+## Écarts actés
+
+Écarts par rapport au contrat, tous décidés et reportés dans le § Contrat ci-dessous (marqués « Écart acté ») ou ici.
+
+- **B1, extraction du prompt** (2026-09-25) : la remontée du graphe s'arrête aux nœuds `class_type == "TextGenerate"` (leur entrée est une consigne de LLM, pas un prompt d'image) et ne suit jamais l'entrée nommée `negative`. Sans cela `Krea2_turbo_00070_.png` aurait eu pour prompt la consigne système (2 131 caractères) au lieu de la description (289), et 80 PNG `Qwen_image_2.1_*` auraient pris leur négatif par défaut, plus long que le positif. Consigne et négatif restent dans `texts` : la recherche les trouve.
+- **B2, contrôle de même origine** (2026-09-25) : il s'exécute avant le routage ; un POST sans `Content-Type` JSON sur une route de lecture répond 415, pas 405 ; PUT, DELETE, PATCH et HEAD répondent 405 partout ; les clés en double dans une requête sont refusées (400) ; les 500 de `/trash` et `/restore` portent la liste de ce qui est déjà fait ; un renommage ne change que la clé (pipeline et périmètre « app » gardent leur valeur d'origine).
+- **B2, correctif du rescan** : avant toute suppression de ligne, le rescan relit la ligne par sa clé sous le verrou (B1 supprimait par l'id du cliché et perdait tags et favori d'un fichier renommé pendant un scan). Preuve : le même test échoue avec la boucle de B1.
+- **B2, noms de tag** : unicité sans casse sur toute la casse Unicode (`casefold`, « Été » = « ÉTÉ »), en plus du `COLLATE NOCASE` de SQLite qui ne replie que l'ASCII.
+- **B3a, bornes de période** : « Du » = minuit local du jour choisi ; « Au » = minuit local du **lendemain** du jour choisi (`to` du service est exclu : sans cela « Du = Au » donnerait une période vide).
+- **B3a/B3b, interface de source (C2)** : `serviceSource.tag(keys, add, remove)` travaille par lots de 100 et **rend** `[{key, tags}]` (le contrat disait `Promise<void>`) ; `restore(trashKeys)` travaille par lots de 100 et **rend** `[{trashKey, key}]` ; `list` n'ajoute plus les éléments `cloud:*` de session en `scope=trash` ; `svcFetch` conserve le champ `error` du service dans `code`.
+- **B3a, clés historiques** : `pkey` (hors contrat) = `${subfolder}/${filename}` sert aux clés localStorage historiques (`deletedAssets`, `assetPrompts`) et au cache de cartes ; les nouvelles clés (favoris `galleryFavs`, requêtes au service) suivent le format du contrat.
+- **B3b, `[data-raw]`** : `translateTree` ignore les nœuds texte sous un élément portant `data-raw` (prompt, seed, puces de tag, options des listes Modèle et Tag) : un tag ou un modèle nommé « Image » ou « Canvas » n'est jamais traduit.
+- **B3b, nginx et clés `.trash`** : aucune clé `.trash/…` ne voyage dans un chemin d'URL (corps JSON pour les POST, query encodée pour `GET /gallery/thumb` et `/gallery/asset`). Vérifié derrière un vrai nginx (`nginx:alpine` avec le `nginx.conf` du dépôt). `location ^~ /gallery/` passe avant la regex `location ~ /\.` : `GET /gallery/.trash/x` n'est donc pas refusé par nginx (le service répond 404) ; la règle « nginx refuse `/.` » ne protège que le site statique.
+- **B3b, ComfyUI et `.trash`** : ComfyUI `/comfy/view` sert les fichiers sous `.trash/…` (constaté en lecture sur la production, 200 `image/png`). L'interface ne s'en sert pas : la vue Corbeille passe uniquement par `/gallery/thumb`.
+
+## Limites connues
+
+**Indexation et données**
+
+- **LoRA court-circuitée** : `loras` liste tout nœud `LoraLoader*` situé en amont du nœud de sauvegarde ; une LoRA contournée par un switch est quand même listée.
+- **Prompt des fichiers ComfyUI manuels** : dans un fichier produit à la main dans ComfyUI (hors app), le texte le plus long peut être la consigne système de l'enhancer plutôt que le prompt de l'utilisateur ; la remontée ne s'arrête que sur `class_type == "TextGenerate"`. La consigne reste dans `texts`, donc la recherche trouve le fichier.
+- **Date = `mtime`** du fichier. Renommer, mettre à la corbeille et restaurer ne la changent pas (déplacement par lien physique, même inode). La vue Corbeille classe par date du fichier, pas par date de suppression.
+- **Rescan de 60 s** : un fichier créé ou modifié en dehors du service apparaît au plus tard après `SCAN_INTERVAL` (60 s par défaut ; `docker-compose.yml` ne le fixe pas) ; un fichier de moins de 5 s est ignoré (il peut être en cours d'écriture), `/asset` l'indexe à la demande. Un fichier supprimé en dehors du service disparaît de l'index au passage suivant. Le cache de miniatures n'est jamais purgé.
+- **Fichiers abîmés** (`meta_ok = 0` : PNG tronqué, mp4 de 0 octet, `ffprobe` en échec) : listés avec un prompt `null`, sans miniature (404), non réessayés tant que `(mtime_ns, size)` ne change pas.
+- **Sessions storyboard** : elles désignent leurs fichiers d'output par leur nom. Le renommage des clés `studio/story/` et `studio/relay/` est donc refusé (409 `locked`). La corbeille reste permise : un fichier mis à la corbeille n'est plus à son emplacement tant qu'il n'est pas restauré.
+- **Collision `_restored`** : ComfyUI réutilise le numéro d'un fichier supprimé s'il était le dernier ; si l'emplacement d'origine est repris, la restauration rend `<stem>_restored<ext>`, puis `_restored2`… ; annuler une suppression dont le service a ainsi renommé le fichier recharge la grille mais le miroir navigateur du repli garde l'ancien nom.
+- **Périmètre « app »** : la regex d'exclusion (`^studio/(lot1|lotA|q21|inspect)/|^studio/lot\d`) est une proposition du plan, implémentée telle quelle (§ C5).
+
+**Interface**
+
+- **Pas de retrait de tag en masse**, pas de renommage de tag, pas de compte par tag dans les listes (`/facets` les donne, la page ne les affiche pas). `/facets` ne dépend que de `scope` : les listes Modèle et Tag ne se resserrent pas selon les autres filtres.
+- **Sélection multiple** : suppression limitée à 100 éléments (message, rien ne bouge) ; tags, favoris et restauration travaillent par lots de 100, et une panne au milieu laisse les premiers lots appliqués alors que le bandeau dit « rien n'a été modifié ».
+- **Migration des favoris locaux** : clés inconnues du service ignorées (le lot refusé est rejoué clé par clé) ; un favori posé en mode repli **après** la migration n'est pas reporté ; `galleryFavs` n'est jamais vidé.
+- **`/dates`** calcule ses périodes avec le `tzOffset` du jour (contrat) : pour une période tombée en heure d'hiver, « Aller à… » peut déborder d'une heure autour de minuit. Les groupes de la grille sont calculés dans le navigateur avec l'heure locale réelle de chaque fichier.
+- **Source navigateur** : `promptForNode` ne lit pas les nœuds `TextEncodeQwenImage21` ni `TextEncodeQwenImageEditPlus` ni `PrimitiveString` : un prompt écrit littéralement dans l'un de ces nœuds (cas des images Qwen 2.1) manque donc côté navigateur. Non corrigé (hors périmètre) ; le service, lui, les lit.
+- **Rail « Studio | Canvas »** : il déborde et recouvre le début du champ de recherche à partir de 768 px (défaut préexistant, visible dès avant la galerie sur « Options avancées » ; non corrigé).
+- **Une lightbox pleine résolution n'existe pas pour la corbeille** (miniature seulement).
+
+**Sécurité et exploitation**
+
+- Le contrôle `Origin` = `Host` ne protège pas d'un rebinding DNS (même exposition que le reste de l'app : ComfyUI est proxifié sans authentification). Parade possible : liste d'hôtes autorisés (`server_name` nginx).
+- Un fichier de `output/` qui n'appartient pas à l'UID du service (créé en root) ne peut pas être déplacé : `os.link` échoue (`protected_hardlinks=1`), réponse 500, rien ne bouge.
+- `nginx.conf` est monté en fichier unique : après modification, le conteneur web doit être recréé (`docker compose up -d --force-recreate ai-content-studio`).
+- **Q3 (source unique des prompts Studio / Engine, I13-B)** : toujours ouverte, décision de l'utilisateur en attente ; le garde-fou reste `node tools/parity-prompts.js`.
+
+## Preuves (bancs hors dépôt, voir `docs/TESTING.md` § « Bancs de la galerie »)
+
+- **B1** : banc de lecture 269 contrôles + garde anti-vidage 5, 0 échec ; scan initial de 1 767 fichiers en 14,4 s dans le conteneur (dominé par `ffprobe` des mp4), rescan sans changement 0,01 s, base de 10 Mo ; `indexed` = `find … | wc -l` (écart 0).
+- **B2** : `--check` du service, banc hostile 146 contrôles, banc d'écriture 85, banc de lecture 273 + 5 ; 7 mutations du service, toutes tuées (la mutation 3 a d'abord survécu : mutant équivalent, redéfinie puis tuée).
+- **A** : `bench-gallery` 49/49 (témoin négatif 41/49) ; graphes soumis identiques octet pour octet (37 scénarios, 112 corps `/prompt`, 407 243 o, 219 uploads, 17 corps ollama, 15 103 o) ; parité des prompts 52 119 contrôles.
+- **B3a** : `bench-service` 152/152, aussi dans les fuseaux Los Angeles et Kolkata ; témoin négatif tué ; couture champ par champ.
+- **B3b** : `bench-meta` 134/134, aussi derrière un vrai nginx et dans le fuseau Los Angeles ; 19/19 champs de l'objet C1 affichés ou cités ; `proofs-4a` 159, `proofs-4b` 92, `proofs-mem` 44 ; audit i18n vide dans les 4 langues.
 
 ## Contrat
 
-> Source unique. Le lot L0 le copie **tel quel** dans `docs/GALERIE.md § Contrat`. B1, B2, B3a et B3b s'y conforment. A implémente le §2 (source navigateur).
+> Source unique. Le lot L0 l'a copié **tel quel** dans ce § Contrat ; B1, B2, B3a et B3b s'y sont conformés, A a implémenté le §2 (source navigateur). Le lot D ne l'a corrigé que pour les **écarts actés** dans les commits ou les notes de lot (marqués « Écart acté »).
 
 ### C1. Objet « asset » commun (JSON côté service, objet JS côté navigateur)
 
@@ -81,14 +147,14 @@ const source = {
   detail(key),           // → Promise<Asset> (prompt complet ; indexe à la demande un fichier récent)
   dates(unit, f),        // → Promise<{ start, end, count }[]>, unit = "day"|"week"|"month"
   facets(f),             // → Promise<{ pipelines, models, tags }>
-  tag(keys, add, remove),// → Promise<void>
+  tag(keys, add, remove),// → Promise<[{key, tags}]>    (écart acté B3b : le contrat disait Promise<void> ; lots de 100)
   rename(key, name),     // → Promise<Asset>
-  restore(trashKeys)     // → Promise<void>
+  restore(trashKeys)     // → Promise<[{trashKey, key}]> (écart acté B3b : le contrat disait Promise<void> ; lots de 100)
 };
 ```
 
 - `browserSource.caps` = tout à `false`. `serviceSource.caps` = tout à `true`.
-- **Les éléments de session** (`cloud:*`) sont toujours affichés en tête, quelle que soit la source.
+- **Les éléments de session** (`cloud:*`) sont toujours affichés en tête, quelle que soit la source. **Écart acté (B3b)** : sauf dans le périmètre `trash`, où la source service n'en ajoute pas.
 - **Un asset reçu en direct** (WebSocket ou historique) est toujours persisté dans la source navigateur (`persistAsset`, avec `ts`), même quand la source active est le service, pour que le repli reste utile.
 
 ### C3. API HTTP du service `gallery`
@@ -127,7 +193,7 @@ const source = {
 | Route | Corps | Réponse |
 |---|---|---|
 | `/fav` | `{"keys":[≤100],"fav":bool}` | `{"ok":true,"changed":n}` |
-| `/tags` | `{"name":"…"}` (1-40 caractères après trim, sans caractère de contrôle, unique sans casse) | `{"ok":true,"tag":{"name","count"}}`, idempotent |
+| `/tags` | `{"name":"…"}` (1-40 caractères après trim, sans caractère de contrôle, unique sans casse ; écart acté B2 : casse Unicode complète, `casefold`) | `{"ok":true,"tag":{"name","count"}}`, idempotent |
 | `/tag` | `{"keys":[≤100],"add":[noms],"remove":[noms]}` | `{"ok":true,"assets":[{"key","tags":[…]}]}`. Un tag ajouté qui n'existe pas est créé. |
 | `/rename` | `{"key":"…","name":"nouveau.png"}` | `{"ok":true,"asset":Asset}`. Même dossier, même extension (sans casse), 150 caractères au plus, ni `/`, ni `\`, ni NUL, ni caractère de contrôle, pas de `.` initial. 409 `exists` si la destination existe, 409 `locked` si la clé correspond à `^studio/(story\|relay)/` (fichiers référencés par les sessions storyboard). |
 | `/trash` | `{"keys":[≤100]}` | `{"ok":true,"trashed":[{"key":"<origine>","trashKey":".trash/<ms>-<hex6>/<origine>"}]}`. Toutes les clés sont validées avant tout déplacement. Si un déplacement échoue, réponse 500 avec la liste de ce qui est déjà déplacé. |
