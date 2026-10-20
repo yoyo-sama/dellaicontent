@@ -187,7 +187,8 @@
       "pipeline": "sequence2video",
       "model": "LTX 2.5 22B",
       "file": null,
-      "builder": "flf2v"
+      "builder": "flf2v",
+      "enrich": "builtin"
     },
     {
       "id": "storyboard_v2",

@@ -780,7 +780,7 @@
   // ici. Chacun impose à gemma la clé de sortie ATTENDUE — TOUJOURS `f.k` du champ, d'où
   // {"prompt": …} pour k:"prompt", {"instruction": …} pour k:"instruction", etc.
   const ENHANCE = {
-    // Krea 2 : consigne du Studio (js/engine.js, clé de sortie {"prompt"}). cfg tel que le négatif
+    // Krea 2 : consigne de js/engine.js, partagée avec le Studio (même texte, clé de sortie {"prompt"}). cfg tel que le négatif
     // n'est jamais encodé (piège n°16) → tout est formulé positivement ; le remplissage que gemma
     // glisse malgré l'interdiction est retiré de la sortie (stripPromptPadding, cf. addEnhanceButton).
     krea2Prompt: window.Engine.KREA2_ENRICH_SYSTEM,
@@ -791,17 +791,17 @@
     // négatif est omis (la carte passe negative "" : à cfg 1 Qwen Image 2.1 ne l'utilise pas). Pas de stripPromptPadding :
     // comme au Studio, réservé à Krea 2.
     qwenImagePrompt: "You are a prompt engineer for diffusion image models.\nRewrite the user's creative brief into a single rich English diffusion prompt (subject, style, lighting, composition, mood).\nAnswer ONLY with JSON: {\"prompt\": \"...\"}",
-    // Minimax H3 i2v uniquement. LTX 2.5 est volontairement EXCLU (cf. le `enhance` de
+    // Minimax H3 (js/engine.js, H3_VIDEO_ENRICH_SYSTEM). LTX 2.5 est volontairement EXCLU (cf. le `enhance` de
     // simple/video) : son graphe embarque déjà `TextGenerateLTX2Prompt` à cfg 1, un second
     // enrichissement côté client ferait double emploi — même arbitrage que le cockpit
     // (ai-content-studio-cockpit/index.html, « Enrichissement intégré au workflow »).
-    videoPrompt: "Tu es un ingénieur de prompts pour un modèle de diffusion texte/image→vidéo (Minimax H3). Réécris la description de mouvement de l'utilisateur en un prompt riche en anglais décrivant l'action et le mouvement de caméra, sans inventer de personnage ou de décor non mentionné. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"prompt\": \"...\"}.",
+    videoPrompt: window.Engine.H3_VIDEO_ENRICH_SYSTEM,
     // Qwen-Edit : interdiction explicite du vocabulaire « storyboard/keyframe/panel », qui
     // fait dessiner une planche annotée au lieu d'éditer l'image (AGENTS.md, pièges).
     qwenInstruction: "Tu es un ingénieur de prompts pour un modèle d'édition d'image (Qwen-Edit). Réécris l'instruction de l'utilisateur en une consigne d'édition claire et positive en anglais (décris le résultat voulu, jamais ce qu'il faut éviter). N'utilise JAMAIS les mots \"storyboard\", \"keyframe\", \"panel\" ou équivalents — ils font dessiner une planche annotée au lieu d'éditer l'image. Réponds UNIQUEMENT en JSON : {\"instruction\": \"...\"}.",
-    // r2v : personnage et décor sont posés automatiquement dans le bloc subject_definitions de la
+    // r2v (js/engine.js, R2V_BRIEF_ENRICH_SYSTEM, partagée avec le Studio) : personnage et décor sont posés automatiquement dans le bloc subject_definitions de la
     // grammaire Ref2VA (Ref2VideoNode) — les redécrire ici les dupliquerait dans le prompt final.
-    r2vBrief: "Tu es un ingénieur de prompts pour Minimax H3 reference2video. Le personnage et le décor sont DÉJÀ décrits séparément et ajoutés automatiquement avant ton texte — ne les redécris pas. Réécris uniquement l'action/le contexte/l'ambiance du brief de l'utilisateur, en anglais, sans inventer de nouveau personnage ou lieu. N'utilise pas de balises entre chevrons ni de syntaxe de référence d'image. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}.",
+    r2vBrief: window.Engine.R2V_BRIEF_ENRICH_SYSTEM,
     // Fiches + storyboard : ce brief est ENSUITE repassé à gemma par
     // characterSheetFromBrief/locationSheetFromBrief/shotListFromBrief pour en extraire des
     // champs structurés. On enrichit donc en prose simple, sans anticiper cette structuration.

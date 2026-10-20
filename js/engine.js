@@ -773,6 +773,12 @@ Rules:
 Before answering, re-read your prompt and delete any banned word that slipped in.
 Answer ONLY with JSON: {"prompt": "..."}`;
 
+  // Consignes gemma de Minimax H3 (texte du Canvas, `ENHANCE.videoPrompt`/`ENHANCE.r2vBrief`, désormais ici : source
+  // unique pour les deux pages). H3 n'encode aucun négatif : aucune des deux n'en demande. Clés de sortie :
+  // {"prompt"} (t2v/i2v), {"brief"} (r2v ; les jetons <Subject N> ne la traversent jamais, cf. h3TokensOut côté Studio).
+  const H3_VIDEO_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour un modèle de diffusion texte/image→vidéo (Minimax H3). Réécris la description de mouvement de l'utilisateur en un prompt riche en anglais décrivant l'action et le mouvement de caméra, sans inventer de personnage ou de décor non mentionné. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"prompt\": \"...\"}.";
+  const R2V_BRIEF_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour Minimax H3 reference2video. Le personnage et le décor sont DÉJÀ décrits séparément et ajoutés automatiquement avant ton texte — ne les redécris pas. Réécris uniquement l'action/le contexte/l'ambiance du brief de l'utilisateur, en anglais, sans inventer de nouveau personnage ou lieu. N'utilise pas de balises entre chevrons ni de syntaxe de référence d'image. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}.";
+
   // Filet déterministe (porté du Studio) : gemma4:e4b n'honore PAS de façon fiable une
   // interdiction de vocabulaire. On retire ces termes après coup. Liste volontairement
   // étroite — uniquement des termes sans direction visuelle : "photorealistic", "fine
@@ -1249,7 +1255,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // I13 : corrections de prompt du Studio (planches selon le sujet, ancrages keyframe,
       // grammaire Minimax H3) — dépendances en arguments, prêtes pour le Studio et le Canvas
       SHEET_TEMPLATES, charsheetPromptFrom, charKindOf, KEYFRAME_ANCHOR_SOLO, KEYFRAME_ANCHOR_DUAL,
-      stripPromptPadding, KREA2_ENRICH_SYSTEM,
+      stripPromptPadding, KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM,
       h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, capH3Prompt, h3CutBodyText,
       h3Alignment, h3VideoFrames, h3RealDuration, h3CutSubjects, buildH3CutPrompt, compileCutPromptFor,
       // LLM

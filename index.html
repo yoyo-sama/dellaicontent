@@ -2478,7 +2478,9 @@
       // I13-B : compilation de prompts, source unique dans js/engine.js (adaptateurs Studio plus bas)
       OLLAMA_MODEL, CAMERA_LIB, LIGHTING_LIB, STYLE_PACKS, SHEET_TEMPLATES, KEYFRAME_ANCHOR_SOLO, KEYFRAME_ANCHOR_DUAL,
       styleTextFor, stripPromptPadding, fieldText, charKindOf, charFieldKeys, LOC_FIELD_KEYS, charDescFromFields, locDescFromFields,
-      h3Subject, h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, h3Alignment, h3VideoFrames, h3RealDuration
+      h3Subject, h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, h3Alignment, h3VideoFrames, h3RealDuration,
+      // I13-B lot 2 : consignes gemma de Krea 2 et de Minimax H3 (t2v/i2v, r2v), partagées avec le Canvas
+      KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM
     } = window.Engine;
 
     // ── Configuration ──────────────────────────────────────────────
@@ -5097,28 +5099,15 @@
     const KREA2_WORKFLOWS = new Set(["krea2_t2i", "campaign_full"]);
     const isKrea2Workflow = wf => !!wf && KREA2_WORKFLOWS.has(wf.id);
 
-    // Deux consignes : la générique (moteurs qui encodent réellement un négatif) et celle
-    // de Krea 2. Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a
+    // La consigne générique (moteurs qui encodent réellement un négatif). Krea 2 a la sienne
+    // (KREA2_ENRICH_SYSTEM, js/engine.js, clé {"prompt"}), Minimax H3 aussi (voir briefEnrichSystem).
+    // Krea 2 route le négatif dans ConditioningZeroOut et api/krea2_t2i.json n'a
     // même pas de placeholder {{NEGATIVE_PROMPT}} : un négatif enrichi y serait perdu en
     // silence (LESSONS piège n°16). Sa consigne impose donc l'ordre de construction, la
     // longueur, l'interdiction du remplissage et la reformulation POSITIVE des contraintes.
     const ENRICH_SYSTEM = `You are a prompt engineer for diffusion image and video models.
 Rewrite the user's creative brief into a single rich English diffusion prompt (subject, style, lighting, composition, mood) and a matching negative prompt.
 Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
-
-    const KREA2_ENRICH_SYSTEM = `You are a visual prompt architect for Krea 2, an aesthetic-focused image model.
-Rewrite the user's brief into ONE English image prompt, built in this order and keeping only what carries visual information: subject, action, environment, style, lighting, camera and optics, composition, color, material and texture, atmosphere.
-Rules:
-- Name the main subject first and unambiguously; never let style wording replace or obscure it.
-- Preserve the user's subject, action and intent exactly. Invent no detail the brief does not imply.
-- Describe the visual result, not how to achieve it.
-- Krea 2 never encodes a negative prompt, so express every constraint POSITIVELY: write "clean seamless background", never "no clutter"; write "both hands fully visible and correctly formed", never "no extra limbs".
-- Keep one dominant style. Do not stack unrelated style keywords.
-- 40 to 100 words. Every phrase must add visual information; delete filler.
-- Never use "masterpiece", "best quality", "8k", "ultra detailed", "award winning", "stunning" or "beautiful lighting" — they carry no visual direction.
-- A PRIMARY_STYLE line may follow the brief. Build the description so it fits that style, but do NOT restate the style wording itself: it is appended separately.
-Before answering, re-read your prompt and delete any banned word that slipped in.
-Answer ONLY with JSON: {"positive_prompt": "..."}`;
 
     // Consigne dédiée Qwen-Edit (keyframes de storyboard_v2/reference2video). Krea 2 GÉNÈRE
     // une image, Qwen-Edit en COMPOSE une nouvelle à partir d'images de référence : la
@@ -5329,29 +5318,46 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // pour que gemma compose autour de lui au lieu d'en inventer un concurrent — il n'est
     // pas réécrit dans le prompt, il est ajouté en fin de prompt au moment de la soumission.
     const Q21_TOKEN_RE = /[<>]\s*image\s*(\d+)\s*[<>]/gi, Q21_STUB_RE = /\bQ21IMAGEREF\s*_?(\d+)\b/gi;
+    // Point de décision unique de l'enrichissement du brief : [consigne gemma, clé de sortie] selon le workflow, ou null
+    // quand le workflow construit lui-même ses prompts (LTX 2.5 : TextGenerateLTX2Prompt dans le graphe) — aucun appel.
+    // Chaque moteur a SA consigne : celle de Krea 2 (aucun négatif), celle de H3 (aucun négatif non plus ; t2v/i2v), celle du
+    // brief r2v (jetons <Subject N> protégés par enrichBrief). Le reste, storyboard compris, garde la consigne générique.
+    function briefEnrichSystem(wf) {
+      if (isKrea2Workflow(wf)) return [KREA2_ENRICH_SYSTEM, "prompt"];
+      if (wf?.id === "minimax_h3_t2v" || wf?.id === "minimax_h3_i2v") return [H3_VIDEO_ENRICH_SYSTEM, "prompt"];
+      if (wf?.id === "minimax_h3_r2v") return [R2V_BRIEF_ENRICH_SYSTEM, "brief"];
+      if (wf?.enrich === "builtin" && wf.pipeline !== "storyboard_v2") return null;
+      return [ENRICH_SYSTEM, "positive_prompt"];
+    }
     async function enrichBrief(wf) {
-      const krea2 = isKrea2Workflow(wf);
-      const system = krea2 ? KREA2_ENRICH_SYSTEM : ENRICH_SYSTEM;
+      const route = briefEnrichSystem(wf);
+      if (!route) { addEvent("SYS", `Le workflow ${wf.label} construit ses propres prompts — brief transmis tel quel.`, "sys"); return; }
+      const [system, key] = route, krea2 = isKrea2Workflow(wf);
       const styleText = krea2 ? currentStyleText() : "";
       // i2i Qwen Image 2.1 : les <imageN> du brief ne traversent pas gemma (strip-then-reappend, comme
-      // les <Subject N> de H3) ; si l'une manque à la sortie, le brief d'origine est conservé.
-      const q21 = wf?.id === "qwen21_i2i", src = brief.value.trim();
+      // les <Subject N> de H3) ; si l'une manque à la sortie, le brief d'origine est conservé. Idem r2v : <Subject N>.
+      const q21 = wf?.id === "qwen21_i2i", r2v = wf?.id === "minimax_h3_r2v", src = brief.value.trim();
       const cited = q21 ? [...src.matchAll(Q21_TOKEN_RE)].map(m => m[1]) : [];
-      const user = (q21 ? src.replace(Q21_TOKEN_RE, (_, n) => `Q21IMAGEREF${n}`) : src) + (styleText ? `\nPRIMARY_STYLE: ${styleText}` : "");
+      const citedH3 = r2v ? [...src.matchAll(H3_TOKEN_RE)].map(m => m[1]) : [];
+      const user = (q21 ? src.replace(Q21_TOKEN_RE, (_, n) => `Q21IMAGEREF${n}`) : r2v ? h3TokensOut(src) : src) + (styleText ? `\nPRIMARY_STYLE: ${styleText}` : "");
       $("stepEnrich").classList.add("active");
       try {
         const out = await gemmaJSON(system, user);
         let stripped = 0;
-        if (out.positive_prompt) {
-          const raw = q21 ? out.positive_prompt.replace(Q21_STUB_RE, (_, n) => `<image${n}>`).replace(Q21_TOKEN_RE, (_, n) => `<image${n}>`) : out.positive_prompt;
+        if (out[key]) {
+          const got = r2v ? h3NormalizeTokens(h3TokensIn(out[key])) : out[key];
+          const raw = q21 ? got.replace(Q21_STUB_RE, (_, n) => `<image${n}>`).replace(Q21_TOKEN_RE, (_, n) => `<image${n}>`) : got;
           if (cited.some(n => !raw.includes(`<image${n}>`)))
             addEvent("WARN", "Enrichissement écarté : les mentions <imageN> de ta consigne avaient disparu de la sortie de gemma — consigne d'origine conservée.", "warn");
+          else if (citedH3.some(n => !raw.includes(h3Subject(n))))
+            addEvent("WARN", "Enrichissement écarté : les mentions <Subject N> de ta consigne avaient disparu de la sortie de gemma — consigne d'origine conservée.", "warn");
           else {
             brief.value = krea2 ? stripPromptPadding(raw) : raw;
-            stripped = out.positive_prompt.length - brief.value.length;
+            stripped = got.length - brief.value.length;
           }
         }
-        if (!krea2 && out.negative_prompt) negative.value = out.negative_prompt;
+        // Seule la consigne générique demande un négatif ; Krea 2 et H3 n'en encodent aucun (il ne serait pas encodé : piège n°16).
+        if (key === "positive_prompt" && out.negative_prompt) negative.value = out.negative_prompt;
         addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
         if (stripped > 0) addEvent("SYS", `Remplissage retiré du prompt (${stripped} caractères sans direction visuelle).`, "sys");
       } finally {

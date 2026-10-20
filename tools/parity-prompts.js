@@ -67,7 +67,7 @@ const REF_NAMES = ["OLLAMA_MODEL", "CAMERA_LIB", "LIGHTING_LIB", "STYLE_PACKS", 
   "buildH3RefPrompt", "capH3Prompt", "h3VideoFrames", "h3RealDuration", "h3Alignment"];
 // Noms déclarés par le Studio actuel (adaptateurs, helpers d'état, ce qui lui reste propre) ; le reste
 // vient de sa déstructuration de window.Engine, extraite telle quelle.
-const CUR_NAMES = ["KREA2_ENRICH_SYSTEM", "currentStyleId", "currentStyleText", "compileKeyframePrompt", "compileCutPrompt",
+const CUR_NAMES = ["currentStyleId", "currentStyleText", "compileKeyframePrompt", "compileCutPrompt",
   "h3CutSubjects", "h3CutBodyText", "buildH3CutPrompt", "compileCutPromptFor", "HOLD_MOTION",
   "MAX_SHOT_SUBJECTS", "shotSubjectIdx", "shotSubjects", "shotCharDesc",
   "characterSheetFromBrief", "locationSheetFromBrief", "shotListFromBrief",
@@ -75,7 +75,7 @@ const CUR_NAMES = ["KREA2_ENRICH_SYSTEM", "currentStyleId", "currentStyleText", 
   "warnH3", "capH3Prompt"];
 // Noms d'Engine.* utilisés (tous doivent exister, sinon erreur explicite).
 const ENGINE_NAMES = ["OLLAMA_MODEL", "STYLE_PACKS", "CAMERA_LIB", "LIGHTING_LIB", "SHEET_CLEAN", "SHEET_TEMPLATES", "KEYFRAME_ANCHOR_SOLO", "KEYFRAME_ANCHOR_DUAL",
-  "KREA2_ENRICH_SYSTEM", "stripPromptPadding", "charKindOf", "charDescFromFields", "locDescFromFields", "charsheetPromptFrom", "buildCharsheetGraph",
+  "KREA2_ENRICH_SYSTEM", "H3_VIDEO_ENRICH_SYSTEM", "R2V_BRIEF_ENRICH_SYSTEM", "stripPromptPadding", "charKindOf", "charDescFromFields", "locDescFromFields", "charsheetPromptFrom", "buildCharsheetGraph",
   "buildLocsheetGraph", "styleTextFor", "compileKeyframePrompt", "compileCutPrompt", "compileCutPromptFor", "buildH3CutPrompt", "h3CutSubjects",
   "h3CutBodyText", "h3AssignSubjects", "h3Summary", "h3RefBody", "buildH3RefPrompt", "capH3Prompt", "h3Alignment", "h3VideoFrames", "h3RealDuration",
   "characterSheetFromBrief", "locationSheetFromBrief", "shotListFromBrief"];
@@ -249,9 +249,10 @@ async function matrix(X, S) {
   same("KEYFRAME_ANCHOR_*", [X.KEYFRAME_ANCHOR_SOLO, X.KEYFRAME_ANCHOR_DUAL], [E.KEYFRAME_ANCHOR_SOLO, E.KEYFRAME_ANCHOR_DUAL]);
   same("OLLAMA_MODEL", X.OLLAMA_MODEL, E.OLLAMA_MODEL);
   truth("OLLAMA_MODEL", X.OLLAMA_MODEL === "gemma4:e4b", "OLLAMA_MODEL doit rester gemma4:e4b (règle du projet)");
-  // KREA2_ENRICH_SYSTEM : seule exception de texte admise = la clé de sortie ({"positive_prompt"} côté Studio, {"prompt"} côté Canvas).
+  // KREA2_ENRICH_SYSTEM : seule exception de texte admise entre la référence et Engine = la clé de sortie ({"positive_prompt"} côté
+  // Studio d'avant, {"prompt"} dans Engine). Le Studio actuel lit la consigne d'Engine (lot 2, D1) : pas de comparaison « Studio actuel ».
   truth("KREA2_ENRICH_SYSTEM (clé {\"prompt\"})", X.KREA2_ENRICH_SYSTEM.includes('{"positive_prompt": "..."}'), "la clé de sortie attendue du Studio a changé : mettre à jour l'exception");
-  same("KREA2_ENRICH_SYSTEM (clé {\"prompt\"})", X.KREA2_ENRICH_SYSTEM.replace('{"positive_prompt": "..."}', '{"prompt": "..."}'), E.KREA2_ENRICH_SYSTEM);
+  sameRef("KREA2_ENRICH_SYSTEM (clé {\"prompt\"})", X.KREA2_ENRICH_SYSTEM.replace('{"positive_prompt": "..."}', '{"prompt": "..."}'), E.KREA2_ENRICH_SYSTEM);
 
   // B. stripPromptPadding / PROMPT_PADDING : une entrée par alternative de la regex de la référence (et le décompte doit suivre)
   truth("stripPromptPadding", alts.split("|").length === PAD_TERMS.length && PAD_TERMS.every(([a]) => alts.includes(a)),
