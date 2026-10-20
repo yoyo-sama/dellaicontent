@@ -165,7 +165,7 @@ const STUBS = String.raw`(() => {
   // Réponse gemma : clés de TOUTES les consignes ; si le message utilisateur porte un jeton substitué (SUBJECTREFn, Q21IMAGEREFn),
   // le texte rendu le recopie (comme le ferait gemma), ce qui prouve l'aller-retour des jetons.
   const reply = user => {
-    const t = /SUBJECTREF\d|Q21IMAGEREF\d/.test(user) ? "enriched: " + user : TEXT;
+    const t = /SUBJECTREF\d|Q21IMAGEREF\d/.test(user) && !C.dropTokens ? "enriched: " + user : TEXT;   // C.dropTokens : gemma « oublie » les jetons (sortie sans eux)
     return { positive_prompt: t, negative_prompt: "blurry", prompt: t, brief: t, description: t, action: t, instruction: t, label: "",
       kind: "human", face: "round face with freckles", hair: "short brown hair", outfit: "blue wool coat", accessories: "", palette: "blue and brown",
       place: "a quiet harbor pier", architecture: "wooden piers", materials: "wet planks", lighting: "soft dawn light",
@@ -384,8 +384,12 @@ const SPEC = [
     const sb = add("adv/storyboard", { brief: "the fox crosses the pier", shotCount: 4, segmentDuration: 2 }); cs.connect(0, sb, 0); ls.connect(0, sb, 1); SEL(sb); await wait(100);
     await enhance("brief"); await sb.generate(); __extra.shots = sb.properties.shots.length;` },
   { id: "C-H2", page: "canvas", run: `const cs = resolved("adv/charsheet", { charDesc: "a red fox in a raincoat" }, "charsheet_1.png"), ls = resolved("adv/locsheet", { locDesc: "a harbor pier at dawn" }, "locsheet_1.png");
-    const r = add("adv/r2v", { brief: "<Subject 1> walks along the pier", duration: 2 }); cs.connect(0, r, 0); ls.connect(0, r, 1); SEL(r); await wait(100);
-    await enhance("brief"); __extra = { prop: r.properties.brief }; await r.generate();` },
+    const r = add("adv/r2v", { brief: "<Subject 1> walks along the pier and meets <Subject 2>", duration: 2 }); cs.connect(0, r, 0); ls.connect(0, r, 1); SEL(r); await wait(100);
+    await enhance("brief"); __extra = { prop: r.properties.brief, field: document.getElementById("pf-brief").value }; await r.generate();
+    // gemma (bouchon) renvoie une sortie SANS les jetons : le champ et la propriété restent intacts, l'erreur s'affiche sous le bouton
+    SEL(r); await wait(100); const orig = "<Subject 1> looks at <Subject 2>"; await setField("brief", orig);
+    __cfg.dropTokens = true; await enhance("brief"); __cfg.dropTokens = false;
+    __extra.drop = { orig, prop: r.properties.brief, field: document.getElementById("pf-brief").value, err: document.querySelector('[data-enhance="brief"]').nextElementSibling.textContent };` },
   { id: "C-CV", page: "canvas", run: `const cs = resolved("adv/charsheet", { charDesc: "a red fox in a raincoat" }, "charsheet_1.png"), ls = resolved("adv/locsheet", { locDesc: "a harbor pier at dawn" }, "locsheet_1.png");
     const sb = add("adv/storyboard", { brief: "the fox crosses the pier", shotCount: 2, segmentDuration: 2 }); cs.connect(0, sb, 0); ls.connect(0, sb, 1);
     Object.assign(sb.properties, { charDesc: "a red fox in a raincoat", locDesc: "a harbor pier at dawn", styleId: "cinematic",
@@ -624,9 +628,14 @@ E["C-SB2"] = (r, T) => {
   T(r.extra.shots === 4, `4 plans (${r.extra.shots})`); r.prompts[0] ? krea2Graph(T, r.prompts[0], "planche décor") : T(false, "graphe absent");
 };
 E["C-H2"] = (r, T) => {
-  nCalls(T, r, 1); sysIs(T, r, 0, "R2V_BRIEF (ENHANCE.r2vBrief)");
+  nCalls(T, r, 2); sysIs(T, r, 0, "R2V_BRIEF (ENHANCE.r2vBrief)"); sysIs(T, r, 1, "R2V_BRIEF (ENHANCE.r2vBrief)");
   const t = r.prompts[0] && r2vPrompt(r.prompts[0]); if (T(!!t, "graphe r2v sans grammaire Ref2VA")) { h3Fields(T, t, "r2v"); T(t.includes(r.extra.prop), "le brief enrichi est dans detailed_description"); }
-  if (/<Subject/.test(r.ollama[0]?.user || "")) T.note("Canvas : la carte r2v envoie les jetons <Subject N> BRUTS à gemma (pas de substitution SUBJECTREFn comme au Studio) — hors périmètre I13-B");
+  // jetons <Subject N> : substitués avant gemma, restaurés après (piège n°26), comme au Studio (S-H3)
+  for (const i of [0, 1]) { const u = r.ollama[i]?.user || ""; T(!/<Subject/i.test(u) && /SUBJECTREF1/.test(u) && /SUBJECTREF2/.test(u), `Canvas : les jetons <Subject N> ne doivent jamais atteindre gemma (appel ${i + 1}), reçu « ${u.slice(0, 80)} »`); }
+  for (const [k, v] of [["propriété", r.extra.prop], ["champ", r.extra.field]]) T(/<Subject 1>/.test(v) && /<Subject 2>/.test(v) && !/SUBJECTREF/.test(v), `Canvas : ${k} du brief enrichi doit retrouver <Subject 1> et <Subject 2>, reçu « ${String(v).slice(0, 80)} »`);
+  const d = r.extra.drop || {};
+  T(d.prop === d.orig && d.field === d.orig, `sortie de gemma sans jeton : le brief doit rester inchangé, reçu propriété « ${d.prop} » champ « ${d.field} »`);
+  T(/<Subject N>/.test(d.err || "") && /^Enrichissement impossible : /.test(d.err || ""), `sortie de gemma sans jeton : l'erreur doit s'afficher sous le bouton, reçu « ${d.err} »`);
 };
 E["C-CV"] = (r, T) => {
   nCalls(T, r, 0); T(r.nPrompts === 6, `6 graphes (2 cuts × 3 moteurs), ${r.nPrompts}`);
@@ -649,6 +658,8 @@ const MUTANTS = [
     edits: t => { const i = t.indexOf("function enrichBrief"), j = i < 0 ? -1 : t.indexOf("h3TokensOut(", i); return j < 0 || j - i > 4000 ? null : [[t.slice(j - 20, j + 12), t.slice(j - 20, j) + "String("]]; } },
   { id: "M5", about: "Canvas : ENHANCE.videoPrompt remplacé par krea2Prompt", scenarios: ["C-H1"], file: "canvas.html",
     edits: () => [['n.properties.engine === "minimax_h3" ? ENHANCE.videoPrompt : null', 'n.properties.engine === "minimax_h3" ? ENHANCE.krea2Prompt : null']] },
+  { id: "M6", about: "h3TokensOut retiré de l'enrichissement r2v du Canvas (addEnhanceButton)", scenarios: ["C-H2"], file: "canvas.html",
+    edits: () => [["E.h3TokensOut(inp.value)", "String(inp.value)"]] },
 ];
 
 // ── Principal ───────────────────────────────────────────────────────────────────────────────────────────────────

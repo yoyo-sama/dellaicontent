@@ -2478,7 +2478,7 @@
       // I13-B : compilation de prompts, source unique dans js/engine.js (adaptateurs Studio plus bas)
       OLLAMA_MODEL, CAMERA_LIB, LIGHTING_LIB, STYLE_PACKS, SHEET_TEMPLATES, KEYFRAME_ANCHOR_SOLO, KEYFRAME_ANCHOR_DUAL,
       styleTextFor, stripPromptPadding, fieldText, charKindOf, charFieldKeys, LOC_FIELD_KEYS, charDescFromFields, locDescFromFields,
-      h3Subject, h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, h3Alignment, h3VideoFrames, h3RealDuration,
+      h3Subject, h3TokensOut, h3TokensIn, h3NormalizeTokens, H3_TOKEN_RE, H3_TOKEN_STUB, h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, h3Alignment, h3VideoFrames, h3RealDuration,
       // I13-B lot 2 : consignes gemma de Krea 2 et de Minimax H3 (t2v/i2v, r2v), partagées avec le Canvas
       KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM
     } = window.Engine;
@@ -6557,41 +6557,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // ── Grammaire de prompt Minimax H3 (Ref2VA / I2VA) ─────────────────────────────
     // Portage du composer de référence BMB12d3/minimax-h3-prompt-composer : <Picture N> (entrée
     // physique) / <Subject N> (identité), h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt,
-    // plafond de 7 000 caractères (capH3Prompt), h3Alignment : js/engine.js. Restent ici les
-    // jetons autour de gemma et l'adaptateur de capH3Prompt (avertissement au journal).
-
-    // ── Jetons <Subject N> : ils ne traversent JAMAIS gemma ────────────────────────
-    // Constaté en rendu réel le 2026-09-22 sur la chaîne relay : le texte d'un segment
-    // renvoyé par « ✨ Enrichir » revenait avec « >Subject 1> » (chevron ouvrant devenu
-    // fermant) et « <Subject 1> 's fingers » (espace avant l'apostrophe). La consigne
-    // d'alors interdisait les jetons ; gemma les recopiait quand même, abîmés. C'est le
-    // strip-then-reappend du piège n°21 : le code RETIRE les jetons avant l'appel et les
-    // REMET après, au lieu de compter sur une consigne.
-    // Le substitut est un mot nu, sans chevron ni ponctuation : un modèle de langue le
-    // traite comme un nom propre ordinaire et le recopie intact, là où « <Subject 1> »
-    // ressemble à du balisage qu'il croit devoir reformater.
-    const H3_TOKEN_STUB = n => `SUBJECTREF${n}`;
-    // Tolérant sur les deux chevrons : « <Subject 1> », « >Subject 1> », « < subject 1 > ».
-    const H3_TOKEN_RE = /[<>]\s*subject\s*(\d+)\s*[<>]/gi;
-    const H3_STUB_RE = /\bSUBJECT\s*_?\s*REF\s*_?\s*(\d+)\b/gi;
-    const h3TokensOut = text => String(text || "").replace(H3_TOKEN_RE, (_, n) => H3_TOKEN_STUB(n));
-    const h3TokensIn = text => String(text || "").replace(H3_STUB_RE, (_, n) => h3Subject(n));
-
-    // Dernier filet, appliqué à la SORTIE de gemma uniquement — jamais au texte de
-    // l'utilisateur, qui part verbatim (règle projet « prompt éditable, prompt verbatim »).
-    // Répare le jeton mal reformé qui aurait échappé à la substitution et les deux scories
-    // de recopie que gemma produit autour : l'espace avant une apostrophe et la virgule
-    // collée à un point. C'est le validateur du composer de référence
-    // (BMB12d3/minimax-h3-prompt-composer), jamais repris jusqu'ici.
-    function h3NormalizeTokens(text) {
-      return String(text || "")
-        .replace(H3_TOKEN_RE, (_, n) => h3Subject(n))
-        .replace(/(<Subject \d+>)\s+'/g, "$1'")
-        .replace(/,\s*([.!?])/g, "$1")
-        .replace(/\s+([,.!?])/g, "$1")
-        .replace(/\s{2,}/g, " ")
-        .trim();
-    }
+    // plafond de 7 000 caractères (capH3Prompt), h3Alignment, jetons autour de gemma (h3TokensOut/In,
+    // h3NormalizeTokens) : js/engine.js. Reste ici l'adaptateur de capH3Prompt (avertissement au journal).
 
     // Plafond dur du modèle, rogné en le disant au journal (WARN, texte d'Engine).
     function warnH3(msg) { addEvent("WARN", msg, "warn"); }

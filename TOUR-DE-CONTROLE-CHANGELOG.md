@@ -1,5 +1,52 @@
 # Tour de contrôle — changelog
 
+## 2026-10-20 — v1.4.2 — Jetons `<Subject N>` protégés sur la carte r2v du Canvas
+
+Demande : le bouton « ✨ Enrichir (LLM) » du champ « Brief » de la carte r2v du Canvas envoyait le texte brut à gemma ; un `<Subject N>` saisi le traversait tel quel, contre la
+règle d'`AGENTS.md` (« Jetons `<Subject N>` et gemma », `docs/LESSONS.md` piège n°26). Signalé comme écart ouvert par la 1.4.1 (NOTE de `tools/prompt-systems.js`). Version **1.4.2**.
+
+**Fichiers** : `js/engine.js` (+37 −1), `index.html` (+3 −36), `canvas.html` (+12 −3), `tools/prompt-systems.js` (+16 −5), `VERSION`, `AGENTS.md`, `docs/ARCHITECTURE.md`,
+`docs/TESTING.md`, `docs/LESSONS.md`, `docs/NOUVEAUX-MODELES-QWEN21.md`, les deux README, ce changelog. `tools/parity-prompts.js`, `js/nodes-*.js`, `workflows/`, `docker/`, `nginx.conf` intacts.
+
+**Ce qui change** :
+- **Source unique** : `H3_TOKEN_STUB`, `H3_TOKEN_RE`, `H3_STUB_RE`, `h3TokensOut`, `h3TokensIn`, `h3NormalizeTokens` quittent `index.html` (copies supprimées) pour `js/engine.js`, à côté de
+  `h3Subject`, **mêmes regex, mêmes remplacements, même ordre**. Exports : `h3TokensOut`, `h3TokensIn`, `h3NormalizeTokens`, `H3_TOKEN_RE`, `H3_TOKEN_STUB` — **`Engine` 83 → 88 clés**,
+  Studio **51 → 56 noms déstructurés** (mesurés par script sur `index.html`). Justification de chaque nom (usages mesurés par grep) : `h3TokensOut` et `h3TokensIn` — Studio (`enrichBrief`, enrichissement des cuts) ET Canvas (`addEnhanceButton`) ;
+  `h3NormalizeTokens` — Studio (`enrichBrief`, cuts, composeur du relay) ET Canvas ; `H3_TOKEN_RE` — Studio (`enrichBrief`, jetons cités) ET Canvas ; `H3_TOKEN_STUB` — Studio seul (consigne du
+  composeur du relay, `H3_SCENARIO_SYSTEM`), exporté parce que la demande le fixe et que c'est le pendant de `h3TokensOut`. `H3_STUB_RE` n'est lu que par `h3TokensIn` : il reste interne (pas exporté). `HOLD_MOTION` n'entre pas dans `Engine` (`load-check` : `hasRemoved []`).
+- **Canvas, `addEnhanceButton`** : pour `system === Engine.R2V_BRIEF_ENRICH_SYSTEM`, (a) les jetons du texte saisi sont cités par `H3_TOKEN_RE` ; (b) gemma reçoit `h3TokensOut(texte)` ;
+  (c) la sortie passe par `h3NormalizeTokens(h3TokensIn(·))` ; (d) si un jeton cité n'est plus dans le résultat (`h3Subject(n)` absent), le champ et la propriété ne sont PAS écrasés et
+  l'erreur s'affiche par le mécanisme existant sous le bouton : « Enrichissement impossible : Les mentions <Subject N> de ta consigne ont disparu de la sortie de gemma — ton texte
+  d'origine est conservé. » (entrée `I18N` FR/EN/ES/DE, tutoiement). Aucun job ne part au clic. Les autres champs enrichissables sont inchangés.
+- **Studio** : aucun changement de comportement (usages d'`enrichBrief`, du relay et des cuts inchangés, textes d'`addEvent`/`throw` inchangés).
+- **`tools/prompt-systems.js`** : la NOTE « jetons bruts hors périmètre I13-B » de C-H2 est remplacée par 9 contrôles (11 → 20) : gemma ne reçoit que `SUBJECTREF1`/`SUBJECTREF2` (aucun
+  `<Subject`), la propriété et le champ retrouvent `<Subject 1>`/`<Subject 2>`, une sortie sans jeton (bouchon `__cfg.dropTokens`) laisse le brief inchangé et affiche l'erreur, empreinte
+  `R2V_BRIEF` inchangée ; mutant **M6** (`h3TokensOut` retiré du handler Canvas). Aucune empreinte ni aucun autre scénario ne change.
+
+**Décision (écart au pas-à-pas demandé)** : (b) et (c) ne s'appliquent QUE si le brief cite au moins un jeton. Sans jeton, le corps envoyé à gemma ET la sortie sont ceux de la 1.4.1 octet
+pour octet : appliquer `h3NormalizeTokens` à toute sortie aurait réécrit les espaces/retours à la ligne d'un brief sans jeton (`\s{2,}` → espace, `\s+([,.!?])` → `$1`) — un changement
+de comportement sans rapport avec les jetons. Le Studio, lui, normalise toujours (inchangé). Une ligne à changer dans `addEnhanceButton` si l'on préfère l'alignement strict.
+
+**Preuves** (copies `~/.cache/ai-content-studio/r2vtokens/{before,after}/`, `before` = `git archive 2d0310c`, dépôt vérifié identique à `before/` avant installation ; tout bouchonné, aucun job GPU,
+aucune requête vers `:8090`/`:8188`/`:11434`) :
+- `node --check` : scripts inline d'`index.html` (1) et `canvas.html` (2), `js/*.js` (5), `tools/*.js` (2) ; `node tools/parity-prompts.js` : **158 294 contrôles · 179 groupes · `Engine` 88 clés,
+  TOUT PASSE** ; `node tools/prompt-systems.js` : **338 contrôles · 34 scénarios · tout vert, mutants M1 à M6 tués** ; le même outil sur `before/` : **C-H2 rouge** (14/20, les 6 nouveaux contrôles), les 33 autres verts.
+- Banc dédié `test-r2v-tokens.js` (38 vérifications) : brief sans jeton → corps gemma identique à celui de HEAD octet pour octet (676 o) et sortie non normalisée ; deux jetons → gemma
+  reçoit `SUBJECTREF1 hugs SUBJECTREF2…`, le champ retrouve `<Subject 1>`/`<Subject 2>` (témoin HEAD : jetons bruts) ; substituts abîmés réparés ; fiche personnage et prompt Krea 2 : corps
+  identiques à HEAD ; sortie sans jeton (ou avec un seul des deux) → champ intact et message exact en FR, EN, ES, DE (témoin HEAD : champ écrasé) ; compteur `/comfy/prompt` = 0 sur les clics ✨, témoin « Générer » = 1.
+- Chaîne de bancs : matrice de graphes 37 scénarios identiques à HEAD (36 identiques au golden `i13b-0` sauf `krea2_lora_style_enrich`, déjà connu) · **112 corps `/prompt` (407 215 o) · 219 uploads · 17 corps
+  ollama (15 094 o)** ; load-check 0 exception, 0 `console.error`, 0 `ReferenceError`, `engineKeys` 88 (Studio et Canvas), `hasRemoved []` ; `check-keys-engine` 94/0/6 ; `scan-register` 0 ;
+  audit i18n 0 texte non couvert ; `proofs-4a` 159, `proofs-4b` 92, `proofs-mem` 44, `bench-dnd` 141, `bench-queue` 42, `bench-q21` 79, `bench-refs` 61, `bench-gallery` 49/49,
+  `bench-service` **152/152**, `bench-meta` 134/134 ; `bench-canvas` (copie adaptée, assertion 83 → 88) PASS ; `bench-q21canvas` 46 PASS + 1 échec attendu (« graphe sauvegardé par HEAD sans propriété `engine` »,
+  comme aux lots précédents) ; captures du panneau avec l'erreur (FR/EN, clair/sombre, 1250 et 390 px) lues.
+
+**Limites** : l'audit i18n et `check-keys` ne lisent que `index.html` : la nouvelle clé `I18N` du Canvas est prouvée par le banc dédié (4 langues), pas par l'audit. `check-keys` sort toujours en code 1
+(41 clés orphelines hors `engine.js`, préexistant). Rendu réel de gemma sur le GB10 non fait (le test prouve ce que gemma reçoit et ce qui revient dans le champ).
+
+**Points ouverts** : l'écart « carte r2v du Canvas (`<Subject N>` bruts) » signalé par la 1.4.1 est **clos**. Restent B4, B5 et le ✨ manuel du brief de storyboard (voir 1.4.1).
+
+**Retour arrière** : `git revert` du commit du lot (aucune migration, aucune donnée).
+
 ## 2026-10-20 — v1.4.1 — Source unique des prompts Studio / Engine et bonne consigne gemma par modèle (I13-B)
 
 Demande : le code de compilation de prompts existait en deux exemplaires (`index.html` et `js/engine.js`), à corriger deux fois et gardé par un test de parité
@@ -44,7 +91,7 @@ générique et les `<Subject N>` bruts (S-H3). `docs/LESSONS.md` piège n°34.
 
 **Écarts signalés, non changés** : **B4** `QWEN_EDIT_ENRICH_SYSTEM(n)` nomme « Qwen-Image-Edit-2509 » même en moteur 2.1 ; **B5** Qwen-Edit 2509 en `image2image` du Studio passe
 par `ENRICH_SYSTEM` (négatif perdu) alors que le Canvas a `qwenInstruction` ; le ✨ manuel du brief de `storyboard_v2*` envoie `ENRICH_SYSTEM` alors que son workflow est `builtin` ;
-la carte r2v du Canvas envoie les `<Subject N>` bruts à gemma (NOTE du test) ; `ENHANCE.qwenImagePrompt` est une variante voulue d'`ENRICH_SYSTEM` à trois écarts de texte
+la carte r2v du Canvas envoie les `<Subject N>` bruts à gemma (NOTE du test ; **clos en 1.4.2**) ; `ENHANCE.qwenImagePrompt` est une variante voulue d'`ENRICH_SYSTEM` à trois écarts de texte
 (`docs/NOUVEAUX-MODELES-QWEN21.md`).
 
 **Preuves chiffrées** (journaux de lot dans `~/.cache/ai-content-studio/i13b-0/` à `i13b-3/` ; tout bouchonné, aucun job GPU, aucune requête vers `:8090`/`:8188`/`:11434`) :
@@ -72,7 +119,7 @@ la carte r2v du Canvas envoie les `<Subject N>` bruts à gemma (NOTE du test) ; 
 **Points ouverts** :
 - **Rendu réel réduit de Minimax H3 avec la nouvelle consigne** (D2 t2v/i2v et D4 r2v) : à faire par l'utilisateur sur le GB10 (`docs/TESTING.md` § 6, point 4) ; le test prouve la
   consigne reçue et la grammaire envoyée, pas la qualité du rendu. Rien n'a été rendu sur GPU dans ce chantier.
-- B4, B5, ✨ manuel du brief de storyboard, carte r2v du Canvas (`<Subject N>` bruts) : signalés ci-dessus, à trancher.
+- B4, B5, ✨ manuel du brief de storyboard, carte r2v du Canvas (`<Subject N>` bruts ; **clos en 1.4.2**) : signalés ci-dessus, à trancher.
 - Contraste `i.tag-pill` : corrigé (voir « Correctif »).
 
 **Correctif (2026-10-20, après v1.4.1)** : `.tag-pill` (pastille de tag des cartes de la galerie, `index.html`) passe de `color: var(--text-2)` à `color: var(--text)` : en thème clair `#6b778c` sur `#e8f2fb` donnait 3,99:1 (< 4,5:1), il donne maintenant 12,7:1 (sombre : 11,2:1). Un seul changement CSS, aucun autre fichier ; `bench-service` 152/152 sur le dépôt (contraste clair et sombre : 0 texte < 4,5:1). Le défaut venait du lot B3b (le même banc affichait 152/152 sur le jeu de test du lot, selon la donnée).

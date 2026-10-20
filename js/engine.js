@@ -530,6 +530,40 @@
   const h3Subject = n => `<Subject ${n}>`;
   const h3Picture = n => `<Picture ${n}>`;
 
+  // ── Jetons <Subject N> : ils ne traversent JAMAIS gemma ────────────────────────
+  // Source unique (Studio et Canvas) : le Canvas les applique au bouton « Enrichir » de la carte r2v.
+  // Constaté en rendu réel le 2026-09-22 sur la chaîne relay : le texte d'un segment
+  // renvoyé par « ✨ Enrichir » revenait avec « >Subject 1> » (chevron ouvrant devenu
+  // fermant) et « <Subject 1> 's fingers » (espace avant l'apostrophe). La consigne
+  // d'alors interdisait les jetons ; gemma les recopiait quand même, abîmés. C'est le
+  // strip-then-reappend du piège n°21 : le code RETIRE les jetons avant l'appel et les
+  // REMET après, au lieu de compter sur une consigne.
+  // Le substitut est un mot nu, sans chevron ni ponctuation : un modèle de langue le
+  // traite comme un nom propre ordinaire et le recopie intact, là où « <Subject 1> »
+  // ressemble à du balisage qu'il croit devoir reformater.
+  const H3_TOKEN_STUB = n => `SUBJECTREF${n}`;
+  // Tolérant sur les deux chevrons : « <Subject 1> », « >Subject 1> », « < subject 1 > ».
+  const H3_TOKEN_RE = /[<>]\s*subject\s*(\d+)\s*[<>]/gi;
+  const H3_STUB_RE = /\bSUBJECT\s*_?\s*REF\s*_?\s*(\d+)\b/gi;
+  const h3TokensOut = text => String(text || "").replace(H3_TOKEN_RE, (_, n) => H3_TOKEN_STUB(n));
+  const h3TokensIn = text => String(text || "").replace(H3_STUB_RE, (_, n) => h3Subject(n));
+
+  // Dernier filet, appliqué à la SORTIE de gemma uniquement — jamais au texte de
+  // l'utilisateur, qui part verbatim (règle projet « prompt éditable, prompt verbatim »).
+  // Répare le jeton mal reformé qui aurait échappé à la substitution et les deux scories
+  // de recopie que gemma produit autour : l'espace avant une apostrophe et la virgule
+  // collée à un point. C'est le validateur du composer de référence
+  // (BMB12d3/minimax-h3-prompt-composer), jamais repris jusqu'ici.
+  function h3NormalizeTokens(text) {
+    return String(text || "")
+      .replace(H3_TOKEN_RE, (_, n) => h3Subject(n))
+      .replace(/(<Subject \d+>)\s+'/g, "$1'")
+      .replace(/,\s*([.!?])/g, "$1")
+      .replace(/\s+([,.!?])/g, "$1")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
   // Définition et note de rétention par nature de sujet. `leadMulti` (piège n°23) : deux
   // personnages ne peuvent pas être tous deux « the main character ».
   const H3_SUBJECT_KINDS = {
@@ -775,7 +809,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
   // Consignes gemma de Minimax H3 (texte du Canvas, `ENHANCE.videoPrompt`/`ENHANCE.r2vBrief`, désormais ici : source
   // unique pour les deux pages). H3 n'encode aucun négatif : aucune des deux n'en demande. Clés de sortie :
-  // {"prompt"} (t2v/i2v), {"brief"} (r2v ; les jetons <Subject N> ne la traversent jamais, cf. h3TokensOut côté Studio).
+  // {"prompt"} (t2v/i2v), {"brief"} (r2v ; les jetons <Subject N> ne la traversent jamais, cf. h3TokensOut, Studio et Canvas).
   const H3_VIDEO_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour un modèle de diffusion texte/image→vidéo (Minimax H3). Réécris la description de mouvement de l'utilisateur en un prompt riche en anglais décrivant l'action et le mouvement de caméra, sans inventer de personnage ou de décor non mentionné. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"prompt\": \"...\"}.";
   const R2V_BRIEF_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour Minimax H3 reference2video. Le personnage et le décor sont DÉJÀ décrits séparément et ajoutés automatiquement avant ton texte — ne les redécris pas. Réécris uniquement l'action/le contexte/l'ambiance du brief de l'utilisateur, en anglais, sans inventer de nouveau personnage ou lieu. N'utilise pas de balises entre chevrons ni de syntaxe de référence d'image. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}.";
 
@@ -1263,6 +1297,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       charDescFromFields, locDescFromFields,
       // I13-B : ce que le Studio lit encore hors des compilateurs (menus de fiche, jetons H3, éditeur de prompt)
       fieldText, charFieldKeys, LOC_FIELD_KEYS, h3Subject, locsheetPromptFrom,
+      // jetons <Subject N> autour de gemma (strip-then-reappend, piège n°26) : Studio et Canvas r2v
+      h3TokensOut, h3TokensIn, h3NormalizeTokens, H3_TOKEN_RE, H3_TOKEN_STUB,
       // ComfyUI I/O
       submitGraph, waitForJobs, outputFiles, extractFiles, reupload, uploadBlob, viewURL,
       // progression WebSocket : clientId partagé + enregistrement prompt_id -> nœud

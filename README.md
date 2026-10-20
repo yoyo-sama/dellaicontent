@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — Media & Entertainment demo on GB10
 
-**Current version: 1.4.1** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
+**Current version: 1.4.2** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
 
 **Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit, Qwen Image 2.1) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from two small backend services: `updater`, which handles in-app updates, and `gallery`, which indexes ComfyUI's output folder for the gallery — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
 
@@ -239,7 +239,7 @@ time) and the canvas takes the full width; the ⤢ button fits the view to the c
 character-sheet card has a "Subject type" selector (auto / human / other) that overrides the
 LLM's guess on the next generation, and the Storyboard, Video, Video generation and Reference2Video
 cards compile their prompts with the Studio's corrected rules (subject-aware sheets, Minimax H3
-prompt grammar). Both pages share one copy of the prompt compilers and of the gemma enrichment prompts for Krea 2 and Minimax H3 (`js/engine.js`).
+prompt grammar). Both pages share one copy of the prompt compilers and of the gemma enrichment prompts for Krea 2 and Minimax H3 (`js/engine.js`). On the Reference2Video card, the `<Subject N>` mentions of the brief never reach the LLM (swapped out before the call and restored after); if one is missing from the LLM's answer, the brief is kept and an error is shown under the button.
 The Image creation card has an Engine selector — Krea 2 Turbo by default, or Qwen Image 2.1 (same
 sizes and same graph as Studio; no style LoRA in that case).
 

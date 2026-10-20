@@ -449,6 +449,7 @@
     "Enrichissement…": { en: "Enhancing…", es: "Enriqueciendo…", de: "Anreichern…" },
     "Enrichissement impossible : ": { en: "Enhancement failed: ", es: "Enriquecimiento imposible: ", de: "Anreicherung fehlgeschlagen: " },
     "réponse sans champ ": { en: "response missing field ", es: "respuesta sin campo ", de: "Antwort ohne Feld " },
+    "Les mentions <Subject N> de ta consigne ont disparu de la sortie de gemma — ton texte d'origine est conservé.": { en: "The <Subject N> mentions in your instruction disappeared from gemma's output — your original text is kept.", es: "Las menciones <Subject N> de tu consigna han desaparecido de la salida de gemma — se conserva tu texto original.", de: "Die <Subject N>-Verweise deiner Anweisung sind in der Ausgabe von gemma verschwunden — dein ursprünglicher Text bleibt erhalten." },
     "L'état sauvegardé du canvas était illisible : le canvas repart vide.": { en: "The saved canvas state was unreadable: the canvas starts empty.", es: "El estado guardado del lienzo era ilegible: el lienzo empieza vacío.", de: "Der gespeicherte Zustand der Leinwand war unlesbar: Die Leinwand startet leer." },
     "Supprimer toutes les cartes du canvas ? Cette action est irréversible.": { en: "Delete every card on the canvas? This action cannot be undone.", es: "¿Eliminar todas las tarjetas del lienzo? Esta acción es irreversible.", de: "Alle Karten der Leinwand löschen? Diese Aktion ist unwiderruflich." },
 
@@ -1704,11 +1705,19 @@
       const label = btn.textContent;
       btn.disabled = true; btn.textContent = tr("Enrichissement…"); err.textContent = "";
       try {
-        const out = await window.Engine.gemmaJSON(system, inp.value);
-        const txt = typeof out?.[f.k] === "string" ? out[f.k].trim() : "";
+        // Brief r2v : les <Subject N> saisis ne traversent JAMAIS gemma (piège n°26, strip-then-reappend,
+        // comme le Studio). Sans jeton (ou autre champ), `cited` est vide et rien n'est substitué.
+        const E = window.Engine, cited = system === E.R2V_BRIEF_ENRICH_SYSTEM ? [...inp.value.matchAll(E.H3_TOKEN_RE)].map(m => m[1]) : [];
+        const out = await E.gemmaJSON(system, cited.length ? E.h3TokensOut(inp.value) : inp.value);
+        let txt = typeof out?.[f.k] === "string" ? out[f.k].trim() : "";
         if (!txt) throw new Error(tr("réponse sans champ ") + `"${f.k}"`);
+        if (cited.length) {
+          txt = E.h3NormalizeTokens(E.h3TokensIn(txt));
+          if (cited.some(n => !txt.includes(E.h3Subject(n))))
+            throw new Error(tr("Les mentions <Subject N> de ta consigne ont disparu de la sortie de gemma — ton texte d'origine est conservé."));
+        }
         // Le champ n'est écrasé QU'en cas de succès : sur erreur, le texte saisi survit.
-        const clean = system === window.Engine.KREA2_ENRICH_SYSTEM ? window.Engine.stripPromptPadding(txt) : txt;
+        const clean = system === E.KREA2_ENRICH_SYSTEM ? E.stripPromptPadding(txt) : txt;
         inp.value = clean;
         setProp(node, f.k, f.w, clean);
       } catch (e) {
