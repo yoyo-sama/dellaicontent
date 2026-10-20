@@ -1,7 +1,8 @@
 // engine.js — logique de génération de `index.html` extraite en fonctions paramétrées.
 //
 // Partagé avec le Studio : `index.html` charge aussi ce fichier et déstructure `window.Engine`
-// pour ses E/S et builders identiques ; le reste (prompts, submit*Job, sa WebSocket) y reste dupliqué.
+// pour ses E/S, builders ET compilateurs de prompt (source unique depuis I13-B : le Studio n'en
+// garde que des adaptateurs fins) ; submit*Job, resolveImageJob et sa WebSocket y restent dupliqués.
 // Ce fichier reprend la même logique métier (templates, substitutions, ordre des appels
 // réseau) mais chaque fonction reçoit ses paramètres en argument explicite au lieu de les
 // lire dans des éléments DOM globaux uniques (`brief.value`, `$("shotCount").value`,
@@ -990,22 +991,28 @@ Answer ONLY with JSON: {"prompt": "..."}`;
 
   // Planche personnage multi-vues (ancre d'apparence, image 1 des keyframes duales).
   // Format 16:9 large obligatoire (layout prouvé au Lot 1), indépendant du ratio UI.
-  // `kind`/`templateId` optionnels (voir charsheetPromptFrom).
-  function buildCharsheetGraph(charDesc, negText, seed, width, height, styleId, loraName, kind, templateId) {
+  // `kind`/`templateId` optionnels (voir charsheetPromptFrom) ; `promptOverride` comme buildLocsheetGraph.
+  function buildCharsheetGraph(charDesc, negText, seed, width, height, styleId, loraName, kind, templateId, promptOverride) {
     const { g, add } = makeGraphBuilder();
     const kx = addKrea2Shared(add, loraName);
-    const dec = addKrea2Shot(add, kx, charsheetPromptFrom(charDesc, kind, templateId, styleId), seed, 1920, 1088, 1);
+    const dec = addKrea2Shot(add, kx, promptOverride || charsheetPromptFrom(charDesc, kind, templateId, styleId), seed, 1920, 1088, 1);
     add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/charsheet" });
     return g;
   }
 
+  // Prompt de planche décor (sans graphe) : le Studio le montre dans l'éditeur de prompt.
+  function locsheetPromptFrom(locDesc, styleId) {
+    const styleText = styleTextFor(styleId);
+    return `A professional photorealistic environment reference sheet of one single location, composited as a clean multi-view layout on a smooth seamless dark neutral background: ${locDesc}. Arranged neatly, the sheet shows several wide establishing photographs of the same location from different angles across the top, below them a row of medium shots of key structures, and along the bottom a cluster of tight close-up material and detail studies. The location is completely empty and deserted, showing only architecture, materials and scenery. Consistent art direction, matching lighting and color palette across every view. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`;
+  }
+
   // Planche décor multi-vues (ancre d'environnement, image 2 des keyframes duales).
-  function buildLocsheetGraph(locDesc, negText, seed, width, height, styleId, loraName) {
+  // `promptOverride` (optionnel, Studio) : prompt saisi dans l'éditeur, envoyé verbatim.
+  function buildLocsheetGraph(locDesc, negText, seed, width, height, styleId, loraName, promptOverride) {
     const { g, add } = makeGraphBuilder();
     const kx = addKrea2Shared(add, loraName);
-    const styleText = styleTextFor(styleId);
     const dec = addKrea2Shot(add, kx,
-      `A professional photorealistic environment reference sheet of one single location, composited as a clean multi-view layout on a smooth seamless dark neutral background: ${locDesc}. Arranged neatly, the sheet shows several wide establishing photographs of the same location from different angles across the top, below them a row of medium shots of key structures, and along the bottom a cluster of tight close-up material and detail studies. The location is completely empty and deserted, showing only architecture, materials and scenery. Consistent art direction, matching lighting and color palette across every view. ${SHEET_CLEAN}${styleText ? " " + styleText : ""}`,
+      promptOverride || locsheetPromptFrom(locDesc, styleId),
       seed, 1920, 1088, 1);
     add("SaveImage", { images: [dec, 0], filename_prefix: "studio/story/locsheet" });
     return g;
@@ -1248,6 +1255,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // LLM
       gemmaJSON, characterSheetFromBrief, locationSheetFromBrief, shotListFromBrief,
       charDescFromFields, locDescFromFields,
+      // I13-B : ce que le Studio lit encore hors des compilateurs (menus de fiche, jetons H3, éditeur de prompt)
+      fieldText, charFieldKeys, LOC_FIELD_KEYS, h3Subject, locsheetPromptFrom,
       // ComfyUI I/O
       submitGraph, waitForJobs, outputFiles, extractFiles, reupload, uploadBlob, viewURL,
       // progression WebSocket : clientId partagé + enregistrement prompt_id -> nœud
