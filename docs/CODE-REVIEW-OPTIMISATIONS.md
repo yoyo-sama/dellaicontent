@@ -359,6 +359,8 @@ s'appliquent au Canvas. Si oui, les fonctions existent déjà dans `index.html` 
 
 **État (2026-09-25)** : traité — l'utilisateur a décidé le 2026-09-24 de porter ces corrections au Canvas (Vague 3, lots A1 à A3) : `55b02ff` (portage dans `js/engine.js` : fiches selon le type de sujet, ancrages keyframe, grammaire H3, `STYLE_PACKS` à 14 styles, `Engine` de 57 à 75 clés), `4145b2c` (cartes branchées : fiches, cuts H3, carte Vidéo H3, r2v, « Enrichir »), `d001015` (cuts `minimax_h3_r2v` en grammaire Ref2VA, sélecteur « Type de sujet », `h3CutBodyText` exporté, `Engine` à 76 clés). **Reste ouvert** : le code est porté, donc dupliqué entre `index.html` et `js/engine.js` (I13-B, source unique : décision en attente) ; les keyframes à deux sujets ne sont pas câblées au Canvas (la 3ᵉ fiche reste une référence de plus) ; test de parité ajouté ensuite : `node tools/parity-prompts.js` (`docs/TESTING.md` § « Parité des prompts Studio / Canvas »).
 
+**État (2026-10-20)** : le « reste ouvert » sur la duplication est clos — la source unique (I13-B, décision de l'utilisateur) est livrée en 1.4.1 : `f60666f` (une seule copie des compilateurs de prompt dans `js/engine.js`, adaptateurs fins côté Studio, `Engine` à 81 clés, `tools/parity-prompts.js` devenu une non-régression à trois voies contre `a6d65c0`) puis `c72873f` (bonne consigne gemma selon le modèle : Krea 2, Minimax H3 t2v/i2v/r2v, LTX 2.5 et `flf2v_chain` sans appel ; `Engine` à 83 clés ; `tools/prompt-systems.js`). Les keyframes à deux sujets restent non câblées au Canvas.
+
 ### I14 — Duplication Studio / Canvas : une vingtaine de fonctions « portées verbatim » à maintenir deux fois
 
 `index.html` recopie depuis `js/engine.js` : `buildGraph`, `getTemplate`, `extractFiles`,
@@ -379,6 +381,8 @@ Risque : modéré (le Studio n'a pas de tests de non-régression automatisés) �
 avec la capture headless habituelle des deux apps.
 
 **État (2026-09-24)** : corrigé — commit `aff8a12`
+
+**État (2026-10-20)** : complété. `aff8a12` ne couvrait que le sous-ensemble identique au caractère près (hors compilateurs de prompt). Les compilateurs de prompt, qui divergeaient volontairement, sont à leur tour en source unique dans `js/engine.js` depuis la 1.4.1 (`f60666f`, `c72873f`) : `index.html` déstructure 51 noms d'`Engine` (83 clés) et n'a plus que 14 adaptateurs de prompt (`docs/ARCHITECTURE.md` § Code partagé). Restent dupliqués, hors périmètre : `submit*Job`, `resolveImageJob`, `applyStyleLora`/`addH3StyleLora`, `LTX25_FPS`, la WebSocket et `handleWS`.
 
 ---
 

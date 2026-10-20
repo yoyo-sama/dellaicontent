@@ -82,7 +82,7 @@ A était en parallèle de B1 puis B2 ; le reste était séquentiel. Les SHA sont
 - Le contrôle `Origin` = `Host` ne protège pas d'un rebinding DNS (même exposition que le reste de l'app : ComfyUI est proxifié sans authentification). Parade possible : liste d'hôtes autorisés (`server_name` nginx).
 - Un fichier de `output/` qui n'appartient pas à l'UID du service (créé en root) ne peut pas être déplacé : `os.link` échoue (`protected_hardlinks=1`), réponse 500, rien ne bouge.
 - `nginx.conf` est monté en fichier unique : après modification, le conteneur web doit être recréé (`docker compose up -d --force-recreate ai-content-studio`).
-- **Q3 (source unique des prompts Studio / Engine, I13-B)** : toujours ouverte, décision de l'utilisateur en attente ; le garde-fou reste `node tools/parity-prompts.js`.
+- **Q3 (source unique des prompts Studio / Engine)** : tranchée par l'utilisateur et livrée en 1.4.1, après la galerie. Les compilateurs de prompt n'existent plus qu'en une copie, dans `js/engine.js` ; le Studio n'en garde que des adaptateurs (`docs/ARCHITECTURE.md` § Code partagé), et la bonne consigne gemma par modèle est contrôlée (`docs/TESTING.md`, `node tools/parity-prompts.js` et `node tools/prompt-systems.js`). La galerie n'est pas concernée.
 
 ## Preuves (bancs hors dépôt, voir `docs/TESTING.md` § « Bancs de la galerie »)
 

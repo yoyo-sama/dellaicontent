@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — démo Media & Entertainment sur GB10
 
-**Version actuelle : 1.4.0** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
+**Version actuelle : 1.4.1** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
 Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit, Qwen Image 2.1) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception de deux petits services : `updater`, dédié aux mises à jour, et `gallery`, qui indexe le dossier de sorties de ComfyUI pour la galerie, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 
@@ -240,7 +240,7 @@ d'écran (une seule ouverte à la fois) et le canvas prend toute la largeur ; le
 la vue sur les cartes. La carte Fiche personnage a un sélecteur « Type de sujet » (auto /
 humain / autre) qui corrige le choix du LLM à la génération suivante, et les cartes Storyboard,
 Vidéo, Génération vidéo et Reference2Video composent leurs prompts avec les règles corrigées du Studio (planches
-selon le sujet, grammaire de prompt Minimax H3).
+selon le sujet, grammaire de prompt Minimax H3). Les deux pages partagent une seule copie des compilateurs de prompt et des consignes gemma de Krea 2 et Minimax H3 (`js/engine.js`).
 La carte Création d'image a un sélecteur Moteur — Krea 2 Turbo par défaut, ou Qwen Image 2.1 (mêmes tailles et même
 graphe que le Studio ; pas de LoRA de style dans ce cas).
 
@@ -416,7 +416,7 @@ pas de récupération par URL).
 ```
 index.html                  ← mode formulaire (CSS + HTML + JS)
 canvas.html                 ← mode éditeur de nœuds (façon ComfyUI)
-js/                         ← engine.js (partagé par les deux pages), nodes-simple.js, nodes-advanced.js,
+js/                         ← engine.js (partagé par les deux pages, copie unique des compilateurs de prompt), nodes-simple.js, nodes-advanced.js,
                               canvas-gallery.js (Canvas), update-check.js (les deux pages)
 js/vendor/                  ← litegraph.js 0.7.18 + CSS vendorisés (Canvas, sans CDN)
 install.sh                  ← installation/mise à jour idempotente en une commande (recommandé)
@@ -431,7 +431,7 @@ workflows/
   api/*.json                ← templates API mono-branche avec placeholders {{PROMPT}}…
   *.json                    ← workflows complets format UI (drag-drop dans ComfyUI)
   README.md                 ← détail des workflows
-tools/                      ← convert.py (UI→API), onboard.py, validate.py (voir docs/TESTING.md)
+tools/                      ← convert.py (UI→API), onboard.py, validate.py, parity-prompts.js et prompt-systems.js (tests des prompts, voir docs/TESTING.md)
 docs/
   TROUBLESHOOTING.md        ← dépannage installation/déploiement (EN) : symptômes, diagnostic, réparation, remise à zéro
   TROUBLESHOOTING.fr.md     ← même guide en français

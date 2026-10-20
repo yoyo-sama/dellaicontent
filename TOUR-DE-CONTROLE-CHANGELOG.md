@@ -1,5 +1,83 @@
 # Tour de contrôle — changelog
 
+## 2026-10-20 — v1.4.1 — Source unique des prompts Studio / Engine et bonne consigne gemma par modèle (I13-B)
+
+Demande : le code de compilation de prompts existait en deux exemplaires (`index.html` et `js/engine.js`), à corriger deux fois et gardé par un test de parité
+(I13-B, décision de l'utilisateur en attente depuis la Vague 3). Décision de l'utilisateur (2026-10-20) : **source unique dans `js/engine.js`**, et vérifier que la
+**bonne consigne système gemma** part selon le modèle (Minimax H3, Krea 2, LTX 2.5). Version **1.4.1**. Cadrage et plan : orchestrateur (Opus), lots exécutés par
+des sous-agents, rien n'est testé sur GPU (tout bouchonné). Documentation à l'état livré : `docs/ARCHITECTURE.md` § Code partagé, `docs/TESTING.md` §§ « Non-régression
+des prompts » et « Consigne gemma selon le modèle », `docs/LESSONS.md` piège n°34, `AGENTS.md`.
+
+**Lots et commits** (SHA vérifiés par `git log`, tous du 2026-10-20) :
+- **Lot 0** — aucun commit, aucun fichier du dépôt : références figées de `a6d65c0` hors dépôt (`~/.cache/ai-content-studio/i13b-0/REFERENCES.md`) : empreintes sha256 de
+  28 consignes, matrice de graphes de référence, inventaire des rouges de HEAD, et construction du test de consigne sur le code d'avant (5 scénarios rouges attendus).
+- **Lot 1** `f60666f` — source unique : `js/engine.js` reçoit les compilateurs (5 exports de plus : `fieldText`, `charFieldKeys`, `LOC_FIELD_KEYS`, `h3Subject`,
+  `locsheetPromptFrom`, soit 81 clés), `index.html` n'en garde que 14 adaptateurs sous les mêmes noms (`index.html` −616 lignes : 79 ajoutées, 695 supprimées),
+  `tools/parity-prompts.js` devient une non-régression à trois voies contre `a6d65c0`. **Zéro diff observable** (graphes, prompts, appels gemma identiques).
+- **Lot 2** `c72873f` — routage des consignes par modèle (voir D1 à D4) : `js/engine.js` + 2 exports (`H3_VIDEO_ENRICH_SYSTEM`, `R2V_BRIEF_ENRICH_SYSTEM`, soit 83 clés),
+  `canvas.html` (`ENHANCE.videoPrompt`/`r2vBrief` pointent sur Engine, mêmes octets), `index.html` (`briefEnrichSystem(wf)`, point de décision unique d'`enrichBrief`),
+  `workflows/manifest.json` (`flf2v_chain` : `"enrich": "builtin"`), nouveau `tools/prompt-systems.js` (703 lignes).
+- **Lot 3** (ce lot) — documentation à l'état livré (`AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/LESSONS.md`, `docs/GALERIE.md`,
+  `docs/CODE-REVIEW-OPTIMISATIONS.md`, `docs/NOUVEAUX-MODELES-QWEN21.md`, les deux README, ce changelog) et `VERSION` 1.4.1. Aucun code. SHA : le commit « I13-B, lot 3 » (voir `git log`).
+
+**Fichiers** : `js/engine.js`, `index.html`, `canvas.html`, `workflows/manifest.json`, `tools/parity-prompts.js`, `tools/prompt-systems.js` (nouveau) ; docs ci-dessus.
+`js/nodes-*.js`, `docker/`, `nginx.conf` et le service `gallery` intacts.
+
+**Décisions** : une seule copie des textes dans `js/engine.js`, adaptateurs de 1 à 8 lignes côté Studio sous les mêmes noms (sites d'appel inchangés) ; **pas de registre
+`PROMPT_SYSTEMS[modèle]`** (les textes sont uniques, le routage reste local à chaque page : `briefEnrichSystem` au Studio, `ENHANCE` au Canvas, égalité des deux fixée par
+empreinte) ; `forceKind` conservé tel quel (le Studio n'y recourt jamais) ; un test de consigne **dans le dépôt** (exception à « bancs hors dépôt » : aucun port fixe, Chromium
+seul) ; hors périmètre : `submit*Job`, `resolveImageJob`, `applyStyleLora`/`addH3StyleLora`, `LTX25_FPS`, WebSocket (suite I14) ; version de correctif (1.4.1).
+
+**Changements de comportement voulus** (seuls diffs de sortie du lot 2 ; le Canvas n'a aucun diff, vérifié par `--dump` contre HEAD) :
+- **D1 — Krea 2 (Studio)** : la consigne est celle d'Engine, identique au Canvas, avec la clé de sortie `{"prompt"}` (c'était `{"positive_prompt"}`) ; sha256 `9318a954…` → `d7d318d8…`.
+  Touche S-K1, S-K2, S-K3 et, dans la matrice de graphes, `krea2_lora_style_enrich`.
+- **D2 — Minimax H3 t2v/i2v (Studio)** : consigne `H3_VIDEO_ENRICH_SYSTEM` (sha256 `0312447b…`, 381 caractères, = `ENHANCE.videoPrompt` du Canvas à l'octet près) au lieu de
+  `ENRICH_SYSTEM` ; le négatif de l'utilisateur n'est plus réécrit (le gabarit H3 n'en encode aucun).
+- **D3 — LTX 2.5 ✨ manuel et `flf2v_chain`** : plus aucun appel gemma ; ligne SYS « Le workflow … construit ses propres prompts — brief transmis tel quel » (celle du
+  chemin auto) ; `flf2v_chain` devient `"enrich": "builtin"` dans le manifest ; brief et négatif partent intacts au `TextGenerateLTX2Prompt` du graphe.
+- **D4 — r2v ✨ manuel** : consigne `R2V_BRIEF_ENRICH_SYSTEM` (sha256 `c34e55f2…`, 501 caractères, = `ENHANCE.r2vBrief`), clé `{"brief"}`, jetons `<Subject N>` remplacés par
+  `SUBJECTREFn` avant l'appel et rétablis après ; si un jeton cité a disparu, brief d'origine conservé et WARN ; négatif intact.
+
+**Bogues de routage corrigés** (visibles à `a6d65c0` par 5 scénarios rouges de `tools/prompt-systems.js`) : **B1** H3 t2v/i2v recevait la consigne générique (S-H1, S-H2) ;
+**B2** le ✨ manuel de LTX 2.5 appelait gemma sans la garde `builtin` (S-L3) ; **B2′** `flf2v_chain` sans `enrich: builtin` (S-L4) ; **B3** le ✨ r2v envoyait la consigne
+générique et les `<Subject N>` bruts (S-H3). `docs/LESSONS.md` piège n°34.
+
+**Écarts signalés, non changés** : **B4** `QWEN_EDIT_ENRICH_SYSTEM(n)` nomme « Qwen-Image-Edit-2509 » même en moteur 2.1 ; **B5** Qwen-Edit 2509 en `image2image` du Studio passe
+par `ENRICH_SYSTEM` (négatif perdu) alors que le Canvas a `qwenInstruction` ; le ✨ manuel du brief de `storyboard_v2*` envoie `ENRICH_SYSTEM` alors que son workflow est `builtin` ;
+la carte r2v du Canvas envoie les `<Subject N>` bruts à gemma (NOTE du test) ; `ENHANCE.qwenImagePrompt` est une variante voulue d'`ENRICH_SYSTEM` à trois écarts de texte
+(`docs/NOUVEAUX-MODELES-QWEN21.md`).
+
+**Preuves chiffrées** (journaux de lot dans `~/.cache/ai-content-studio/i13b-0/` à `i13b-3/` ; tout bouchonné, aucun job GPU, aucune requête vers `:8090`/`:8188`/`:11434`) :
+- Lot 1 : parité à trois voies 158 296 contrôles · 181 groupes · 52 653 cas × 3 voies, TOUT PASSE ; matrice de graphes 37/37 identique à la référence de `a6d65c0`
+  (112 corps `/prompt`, 407 243 o, 219 uploads, 17 corps ollama, 15 103 o) ; dump de `prompt-systems` identique octet pour octet à celui de HEAD ; banc de DOM i18n 16/16.
+- Lot 2 : `tools/prompt-systems.js` **329 contrôles · 34 scénarios · tout vert, mutants M1 à M5 tués** (sur `a6d65c0` : 5 scénarios rouges) ; dump comparé à HEAD : 8 scénarios
+  diffèrent (S-K1/2/3 = D1, S-H1/2 = D2, S-L3/L4 = D3, S-H3 = D4), Canvas 0 ; parité 158 294 contrôles · 179 groupes, `Engine` 83 clés ; matrice de graphes 37 scénarios ·
+  112 corps `/prompt` (**407 215 o**) · 219 uploads · 17 corps ollama (**15 094 o**) — 36 scénarios identiques, seul `krea2_lora_style_enrich` diffère (D1) ; load-check 0 exception,
+  0 `console.error`, 0 `ReferenceError`, `engineKeys` 83 (Studio et Canvas), `HOLD_MOTION` absent d'Engine ; `proofs-4a` 159, `proofs-4b` 92, `proofs-mem` 44, `bench-dnd` 141,
+  `bench-queue` 42, `bench-q21` 79, `bench-refs` 61, `bench-gallery` 49/49, `bench-meta` 134/134, audit i18n 0 texte non couvert, `scan-register` 0 ; `bench-canvas` PASS
+  (seul écart attendu : `Object.keys(Engine)` 76 → 83) ; `bench-service` **151/152** (voir Limites).
+- Lot 3 (rejoué sur le dépôt livré) : `node tools/parity-prompts.js` 158 294 contrôles · 179 groupes · 83 clés, TOUT PASSE ; `node tools/prompt-systems.js` 329 · 34, mutants M1 à M5
+  tués, sortie 0 (2 min 42 s) ; load-check 0/0/0 et `engineKeys` 83 ; témoin de source unique : 5 copies d'`engine.js` modifiées d'un caractère ne font échouer que des groupes
+  « référence = … » (10, 9, 16, 2 et 6 groupes, aucun « Studio actuel = Engine ») et 3 adaptateurs d'`index.html` cassés sont vus (8, 2 et 5 groupes en échec).
+
+**Limites connues** :
+- **`bench-service` 151/152** : un seul échec, de contraste en thème clair (`i.tag-pill « b3b-tag » 3,99:1` < 4,5:1) ; préexistant (même résultat sur `a6d65c0`, alors que la
+  livraison de la 1.4.0 donnait 152/152, cause non expliquée), **non corrigé**, à traiter à part.
+- `check-keys` sort en code 1 (6 clés `I18N` orphelines, préexistantes) ; les bancs `check-keys` et `bench-canvas` lisent aussi `js/engine.js` / comptent les clés d'Engine
+  (76 → 83) : à rejouer en copies adaptées ; les bancs restent hors dépôt.
+- `tools/parity-prompts.js` exige `git show a6d65c0:index.html` (ou `--baseline-file`) : l'historique doit rester disponible. `tools/prompt-systems.js` exige Node 22 et
+  `chrome-headless-shell`.
+- `AGENTS.md` : `enrich: "builtin"` (« jamais enrichi génériquement ») vaut désormais aussi pour le bouton ✨ de LTX 2.5 et de `flf2v_chain` (exceptions : r2v, storyboard).
+
+**Points ouverts** :
+- **Rendu réel réduit de Minimax H3 avec la nouvelle consigne** (D2 t2v/i2v et D4 r2v) : à faire par l'utilisateur sur le GB10 (`docs/TESTING.md` § 6, point 4) ; le test prouve la
+  consigne reçue et la grammaire envoyée, pas la qualité du rendu. Rien n'a été rendu sur GPU dans ce chantier.
+- B4, B5, ✨ manuel du brief de storyboard, carte r2v du Canvas (`<Subject N>` bruts) : signalés ci-dessus, à trancher.
+- Contraste `i.tag-pill` (ci-dessus).
+
+**Retour arrière** : `git revert` du commit du lot 3 (documentation), puis de `c72873f` (lot 2), puis de `f60666f` (lot 1), **du plus récent au plus ancien** (le lot 2 s'appuie sur
+`js/engine.js` et `index.html` du lot 1).
+
 ## 2026-09-26 — v1.4.0 — Refonte de la galerie (A puis B)
 
 Demande : la galerie ne montrait que les 200 dernières entrées du navigateur (`galleryAssets`) alors que `~/comfyui-spark/basedir/output`

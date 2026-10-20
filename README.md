@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — Media & Entertainment demo on GB10
 
-**Current version: 1.4.0** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
+**Current version: 1.4.1** — see `TOUR-DE-CONTROLE-CHANGELOG.md` for the change history.
 
 **Fully local** AI creative studio: image generation (Krea 2, Qwen-Edit, Qwen Image 2.1) and video generation with audio (LTX 2.5, Minimax H3) via ComfyUI on a Dell Pro Max GB10, with prompt enrichment by a local LLM (Ollama). The application is served by nginx, with no build step and no framework (aside from two small backend services: `updater`, which handles in-app updates, and `gallery`, which indexes ComfyUI's output folder for the gallery — see below) — two static modes to choose from: the `index.html` form (guided scenarios, see below) and the `canvas.html` node editor (see dedicated section below).
 
@@ -239,7 +239,7 @@ time) and the canvas takes the full width; the ⤢ button fits the view to the c
 character-sheet card has a "Subject type" selector (auto / human / other) that overrides the
 LLM's guess on the next generation, and the Storyboard, Video, Video generation and Reference2Video
 cards compile their prompts with the Studio's corrected rules (subject-aware sheets, Minimax H3
-prompt grammar).
+prompt grammar). Both pages share one copy of the prompt compilers and of the gemma enrichment prompts for Krea 2 and Minimax H3 (`js/engine.js`).
 The Image creation card has an Engine selector — Krea 2 Turbo by default, or Qwen Image 2.1 (same
 sizes and same graph as Studio; no style LoRA in that case).
 
@@ -407,7 +407,7 @@ upload only, no download-by-URL).
 ```
 index.html                  ← form mode (CSS + HTML + JS)
 canvas.html                 ← node-editor mode (ComfyUI-style)
-js/                         ← engine.js (shared by both pages), nodes-simple.js, nodes-advanced.js,
+js/                         ← engine.js (shared by both pages, including the single copy of the prompt compilers), nodes-simple.js, nodes-advanced.js,
                               canvas-gallery.js (Canvas), update-check.js (both pages)
 js/vendor/                  ← litegraph.js 0.7.18 + CSS, vendored (Canvas, no CDN)
 install.sh                  ← one-command idempotent install/update (recommended)
@@ -422,7 +422,7 @@ workflows/
   api/*.json                ← single-branch API templates with {{PROMPT}}… placeholders
   *.json                    ← full UI-format workflows (drag-and-drop into ComfyUI)
   README.md                 ← workflow details
-tools/                      ← convert.py (UI→API), onboard.py, validate.py (see docs/TESTING.md)
+tools/                      ← convert.py (UI→API), onboard.py, validate.py, parity-prompts.js and prompt-systems.js (prompt tests, see docs/TESTING.md)
 docs/
   TROUBLESHOOTING.md        ← install/deploy troubleshooting: symptoms, diagnosis, repair, clean reinstall
   TROUBLESHOOTING.fr.md     ← same guide in French

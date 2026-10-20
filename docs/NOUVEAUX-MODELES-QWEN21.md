@@ -542,9 +542,13 @@ constructeur) et se soumet octet pour octet comme avant.
 **Décisions et écarts par rapport au Studio.**
 
 - **`ENRICH_SYSTEM` n'est pas exporté par `Engine`** (il vit dans `index.html`) : `js/engine.js` n'a pas été touché
-  (`Object.keys(Engine).length` reste 76). Le texte est repris localement dans `canvas.html`, comme le sont déjà
-  `ENHANCE.qwenInstruction` et `ENHANCE.videoPrompt`. Si `ENRICH_SYSTEM` change au Studio, la copie de `canvas.html` est
-  à aligner (I13-B, source unique, ne l'a pas encore traité).
+  (`Object.keys(Engine).length` reste 76). Le texte est repris localement dans `canvas.html`, comme l'est
+  `ENHANCE.qwenInstruction` (`videoPrompt` et `r2vBrief` viennent, depuis la 1.4.1, d'`Engine`). **État 1.4.1** : ce n'est pas une copie à aligner mais une **variante voulue** de `ENRICH_SYSTEM`, avec trois écarts de texte :
+  (1) « diffusion image models » au lieu de « diffusion image and video models » (la carte ne produit que des images ; écart absent du
+  commentaire de `canvas.html`, qui n'en cite que deux) ; (2) aucun négatif demandé (« and a matching negative prompt »
+  retiré : la carte passe `""`, inutilisé à cfg 1) ; (3) clé de sortie `{"prompt"}` au lieu de `{"positive_prompt", "negative_prompt"}`.
+  `ENRICH_SYSTEM` reste propre au Studio (la source unique de la 1.4.1 ne l'a pas déplacé dans `Engine`, qui compte 83 clés) : si le texte
+  générique change, décider alors si la variante suit. `tools/prompt-systems.js` fixe son empreinte (scénario C-Q1).
 - **Pas de « Variantes » ni de seed sur la carte** (elle n'en avait pas en Krea 2 : une carte = une image, seed aléatoire) :
   `batch` reste à 1. Le graphe du Studio à 4 variantes ne diffère de celui de la carte que par `batch_size` (vérifié).
 - **Pas de style Krea** sur la carte : le Studio ajoute `currentStyleText()` (style « Cinématique » par défaut) au prompt ;
