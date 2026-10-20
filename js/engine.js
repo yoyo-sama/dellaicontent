@@ -813,6 +813,13 @@ Answer ONLY with JSON: {"prompt": "..."}`;
   const H3_VIDEO_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour un modèle de diffusion texte/image→vidéo (Minimax H3). Réécris la description de mouvement de l'utilisateur en un prompt riche en anglais décrivant l'action et le mouvement de caméra, sans inventer de personnage ou de décor non mentionné. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"prompt\": \"...\"}.";
   const R2V_BRIEF_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour Minimax H3 reference2video. Le personnage et le décor sont DÉJÀ décrits séparément et ajoutés automatiquement avant ton texte — ne les redécris pas. Réécris uniquement l'action/le contexte/l'ambiance du brief de l'utilisateur, en anglais, sans inventer de nouveau personnage ou lieu. N'utilise pas de balises entre chevrons ni de syntaxe de référence d'image. Ce moteur n'utilise aucun prompt négatif : n'en génère pas. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}.";
 
+  // Deux autres consignes gemma du Canvas (`ENHANCE.qwenInstruction` / `ENHANCE.sheetBrief`), déplacées ici VERBATIM : le Studio les
+  // lit aussi (briefEnrichSystem : `qwen_edit_i2i` → QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, clé {"instruction"} ; `storyboard_v2*` →
+  // SHEET_BRIEF_ENRICH_SYSTEM, clé {"brief"} : le brief d'un storyboard est un scénario en prose, repris ensuite par les étapes
+  // gemma des fiches et de la liste de plans). Aucune n'encode ni ne demande de négatif.
+  const QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour un modèle d'édition d'image (Qwen-Edit). Réécris l'instruction de l'utilisateur en une consigne d'édition claire et positive en anglais (décris le résultat voulu, jamais ce qu'il faut éviter). N'utilise JAMAIS les mots \"storyboard\", \"keyframe\", \"panel\" ou équivalents — ils font dessiner une planche annotée au lieu d'éditer l'image. Réponds UNIQUEMENT en JSON : {\"instruction\": \"...\"}.";
+  const SHEET_BRIEF_ENRICH_SYSTEM = "Tu enrichis un brief créatif en prose, en anglais, avec plus de détails descriptifs concrets (apparence, ambiance, contexte), SANS structurer en JSON ni en liste, SANS inventer de contrainte technique — ce texte sera ensuite analysé par un autre système pour en extraire des champs structurés, garde donc un texte narratif simple. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}.";
+
   // Filet déterministe (porté du Studio) : gemma4:e4b n'honore PAS de façon fiable une
   // interdiction de vocabulaire. On retire ces termes après coup. Liste volontairement
   // étroite — uniquement des termes sans direction visuelle : "photorealistic", "fine
@@ -1290,6 +1297,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // grammaire Minimax H3) — dépendances en arguments, prêtes pour le Studio et le Canvas
       SHEET_TEMPLATES, charsheetPromptFrom, charKindOf, KEYFRAME_ANCHOR_SOLO, KEYFRAME_ANCHOR_DUAL,
       stripPromptPadding, KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM,
+      QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, SHEET_BRIEF_ENRICH_SYSTEM,
       h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, capH3Prompt, h3CutBodyText,
       h3Alignment, h3VideoFrames, h3RealDuration, h3CutSubjects, buildH3CutPrompt, compileCutPromptFor,
       // LLM

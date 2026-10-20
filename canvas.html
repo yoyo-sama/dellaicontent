@@ -799,14 +799,16 @@
     videoPrompt: window.Engine.H3_VIDEO_ENRICH_SYSTEM,
     // Qwen-Edit : interdiction explicite du vocabulaire « storyboard/keyframe/panel », qui
     // fait dessiner une planche annotée au lieu d'éditer l'image (AGENTS.md, pièges).
-    qwenInstruction: "Tu es un ingénieur de prompts pour un modèle d'édition d'image (Qwen-Edit). Réécris l'instruction de l'utilisateur en une consigne d'édition claire et positive en anglais (décris le résultat voulu, jamais ce qu'il faut éviter). N'utilise JAMAIS les mots \"storyboard\", \"keyframe\", \"panel\" ou équivalents — ils font dessiner une planche annotée au lieu d'éditer l'image. Réponds UNIQUEMENT en JSON : {\"instruction\": \"...\"}.",
+    // Texte dans js/engine.js (QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM) : le Studio le lit aussi (image2image Qwen-Edit 2509).
+    qwenInstruction: window.Engine.QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM,
     // r2v (js/engine.js, R2V_BRIEF_ENRICH_SYSTEM, partagée avec le Studio) : personnage et décor sont posés automatiquement dans le bloc subject_definitions de la
     // grammaire Ref2VA (Ref2VideoNode) — les redécrire ici les dupliquerait dans le prompt final.
     r2vBrief: window.Engine.R2V_BRIEF_ENRICH_SYSTEM,
     // Fiches + storyboard : ce brief est ENSUITE repassé à gemma par
     // characterSheetFromBrief/locationSheetFromBrief/shotListFromBrief pour en extraire des
     // champs structurés. On enrichit donc en prose simple, sans anticiper cette structuration.
-    sheetBrief: "Tu enrichis un brief créatif en prose, en anglais, avec plus de détails descriptifs concrets (apparence, ambiance, contexte), SANS structurer en JSON ni en liste, SANS inventer de contrainte technique — ce texte sera ensuite analysé par un autre système pour en extraire des champs structurés, garde donc un texte narratif simple. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}."
+    // Texte dans js/engine.js (SHEET_BRIEF_ENRICH_SYSTEM) : le Studio le lit aussi (✨ du brief de storyboard_v2*).
+    sheetBrief: window.Engine.SHEET_BRIEF_ENRICH_SYSTEM
   };
   const CARDS = {
     "adv/charsheet": {

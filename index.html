@@ -2480,7 +2480,9 @@
       styleTextFor, stripPromptPadding, fieldText, charKindOf, charFieldKeys, LOC_FIELD_KEYS, charDescFromFields, locDescFromFields,
       h3Subject, h3TokensOut, h3TokensIn, h3NormalizeTokens, H3_TOKEN_RE, H3_TOKEN_STUB, h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, h3Alignment, h3VideoFrames, h3RealDuration,
       // I13-B lot 2 : consignes gemma de Krea 2 et de Minimax H3 (t2v/i2v, r2v), partagées avec le Canvas
-      KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM
+      KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM,
+      // consignes du Canvas déplacées dans js/engine.js : édition Qwen-Edit 2509 (image2image) et brief de storyboard
+      QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, SHEET_BRIEF_ENRICH_SYSTEM
     } = window.Engine;
 
     // ── Configuration ──────────────────────────────────────────────
@@ -5120,10 +5122,11 @@ Answer ONLY with JSON: {"positive_prompt": "...", "negative_prompt": "..."}`;
     // `nSubjects` : un plan à deux sujets a DEUX phrases de rôle personnage (1re et 2e image de
     // référence) plus celle du décor (3e). gemma en perd une sans cette consigne explicite, et
     // le 2e personnage disparaît du rendu sans qu'aucun statut ne le signale (piège n°14).
-    const QWEN_EDIT_ENRICH_SYSTEM = nSubjects => `You are an image-edit instruction architect for Qwen-Image-Edit-2509, an editing model that composes one new cinematic film still out of reference images.
+    // `model` : nom du moteur des keyframes du workflow actif (keyframeModelName) ; le défaut est le texte d'origine, octet pour octet.
+    const QWEN_EDIT_ENRICH_SYSTEM = (nSubjects, model = "Qwen-Image-Edit-2509") => `You are an image-edit instruction architect for ${model}, an editing model that composes one new cinematic film still out of reference images.
 Rewrite the user's instruction into ONE precise English edit instruction.
 Rules:
-- Qwen-Image-Edit-2509 must be told WHAT TO CHANGE and WHAT TO PRESERVE. Never turn a local edit into a global restyle.
+- ${model} must be told WHAT TO CHANGE and WHAT TO PRESERVE. Never turn a local edit into a global restyle.
 - Every sentence that assigns a role to a reference image ("the first reference image ...", "the second reference image ...", "the third reference image ...") carries the identity anchoring: keep those sentences and their meaning intact.
 - Keep the user's subject, action and intent exactly. Invent no character, object or detail the instruction does not imply.
 - Identity comes from the reference images: face, body plan, surface, materials, markings, clothing and colors are preserved, never reimagined.
@@ -5136,6 +5139,9 @@ ${nSubjects > 1
   ? `- This shot has TWO characters. The instruction assigns the FIRST reference image to one character, the SECOND reference image to the other character, and the THIRD reference image to the environment: keep all THREE of those role sentences, each with its own image number, and keep both characters acting together in the same scene.`
   : `- This shot has ONE character. The instruction assigns the FIRST reference image to that character and the SECOND reference image to the environment: keep both of those role sentences, each with its own image number.`}
 Answer ONLY with JSON: {"prompt": "..."}`;
+
+    // Nom du moteur des keyframes tel que la consigne gemma le nomme (même critère que refCtx : le gabarit d'ancrage du workflow).
+    const keyframeModelName = wf => wf?.anchor === "api/qwen21_dual.json" ? "Qwen Image 2.1" : "Qwen-Image-Edit-2509";
 
     // Filet déterministe contre le remplissage de gemma (stripPromptPadding, PROMPT_PADDING) : js/engine.js.
 
@@ -5321,12 +5327,16 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     // Point de décision unique de l'enrichissement du brief : [consigne gemma, clé de sortie] selon le workflow, ou null
     // quand le workflow construit lui-même ses prompts (LTX 2.5 : TextGenerateLTX2Prompt dans le graphe) — aucun appel.
     // Chaque moteur a SA consigne : celle de Krea 2 (aucun négatif), celle de H3 (aucun négatif non plus ; t2v/i2v), celle du
-    // brief r2v (jetons <Subject N> protégés par enrichBrief). Le reste, storyboard compris, garde la consigne générique.
+    // brief r2v (jetons <Subject N> protégés par enrichBrief), celle de Qwen-Edit 2509 en image2image (clé {"instruction"}), celle du
+    // brief de storyboard (scénario en prose, clé {"brief"}). Le reste garde la consigne générique. Seule la clé "positive_prompt"
+    // réécrit le négatif de l'utilisateur.
     function briefEnrichSystem(wf) {
       if (isKrea2Workflow(wf)) return [KREA2_ENRICH_SYSTEM, "prompt"];
       if (wf?.id === "minimax_h3_t2v" || wf?.id === "minimax_h3_i2v") return [H3_VIDEO_ENRICH_SYSTEM, "prompt"];
       if (wf?.id === "minimax_h3_r2v") return [R2V_BRIEF_ENRICH_SYSTEM, "brief"];
-      if (wf?.enrich === "builtin" && wf.pipeline !== "storyboard_v2") return null;
+      if (wf?.id === "qwen_edit_i2i") return [QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, "instruction"];
+      if (wf?.pipeline === "storyboard_v2") return [SHEET_BRIEF_ENRICH_SYSTEM, "brief"];
+      if (wf?.enrich === "builtin") return null;
       return [ENRICH_SYSTEM, "positive_prompt"];
     }
     async function enrichBrief(wf) {
@@ -5419,12 +5429,12 @@ Answer ONLY with JSON: {"prompt": "..."}`;
     //   1. gemma qui perd les phrases de rôle des références → on garde le texte édité tel quel
     //      et on le DIT, plutôt que d'envoyer un prompt désancré ;
     //   2. l'ancrage est ré-apposé dans tous les cas, y compris quand gemma est injoignable.
-    async function enrichKeyframeText(editedText, dual) {
+    async function enrichKeyframeText(editedText, dual, model) {
       const anchorBlock = dual ? KEYFRAME_ANCHOR_DUAL : KEYFRAME_ANCHOR_SOLO;
       const stripped = stripKeyframeAnchor(editedText);
       let txt = "";
       try {
-        const out = await gemmaJSON(QWEN_EDIT_ENRICH_SYSTEM(dual ? 2 : 1), stripped);
+        const out = await gemmaJSON(QWEN_EDIT_ENRICH_SYSTEM(dual ? 2 : 1, model), stripped);
         txt = fieldText(out.prompt || out.Rewritten || out.rewritten || out.positive_prompt);
       } catch (err) {
         addEvent("WARN", `Enrichissement Qwen-Edit indisponible (${err.message}) — prompt édité conservé.`, "warn");
@@ -7694,7 +7704,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         title: "Prompt de l'image du plan",
         hint: "Ce texte est le prompt envoyé au moteur, pas une description de plan : il doit garder les phrases qui disent à quoi sert chaque image de référence. Pour ne décrire que l'action, passe par « ✎ Réécrire l'action » sur le plan. « ↩ Prompt d'origine » remet la compilation, et le bloc d'ancrage final est toujours remis.",
         text: kf.prompt || compiled,
-        enrich: text => enrichKeyframeText(text, dual),
+        enrich: text => enrichKeyframeText(text, dual, keyframeModelName(director.wf)),
         apply: text => regenerateKeyframe(i, ensureKeyframeAnchor(text, dual))
       });
     }

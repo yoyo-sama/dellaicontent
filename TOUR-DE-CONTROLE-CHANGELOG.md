@@ -1,5 +1,54 @@
 # Tour de contrôle — changelog
 
+## 2026-10-20 — v1.4.3 — Consignes gemma des 3 écarts restants (B4, B5, brief de storyboard)
+
+Demande : clore les trois écarts que la v1.4.1 avait relevés sans les changer (`docs/LESSONS.md` piège n°34) : **B4** la consigne des keyframes (`QWEN_EDIT_ENRICH_SYSTEM`) nommait « Qwen-Image-Edit-2509 »
+même en moteur Qwen Image 2.1 ; **B5** Qwen-Edit 2509 en `image2image` du Studio passait par la consigne générique (qui demande un `negative_prompt` perdu) alors que le Canvas a `qwenInstruction` ;
+**brief de storyboard** : le ✨ de `storyboard_v2*` envoyait la générique (prompt d'image + négatif) pour un scénario en prose. Version **1.4.3**. Décisions prises par l'orchestrateur, appliquées sans écart.
+
+**Fichiers** : `js/engine.js` (+8 −0), `index.html` (+18 −8), `canvas.html` (+4 −2), `tools/prompt-systems.js` (+42 −7), `VERSION`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`,
+`docs/LESSONS.md`, `docs/NOUVEAUX-MODELES-QWEN21.md`, les deux README, ce changelog. `workflows/`, `tools/parity-prompts.js`, `js/nodes-*.js`, `docker/`, `nginx.conf` intacts. Aucune chaîne d'interface ajoutée.
+
+**Ce qui change** :
+- **B5, source unique** : le texte de `ENHANCE.qwenInstruction` est déplacé VERBATIM dans `js/engine.js` sous `QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM` (exporté) ; le Canvas pointe dessus
+  (`qwenInstruction: window.Engine.QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM`), ce qu'il envoie à gemma est le même au sha256 près (`c1a42130…`). `briefEnrichSystem` (Studio) route `wf.id === "qwen_edit_i2i"`
+  vers `[QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, "instruction"]`, auto comme ✨ ; le négatif de l'utilisateur n'est jamais réécrit (seule la clé `positive_prompt` l'écrit). **Workflows concernés par B5** : un seul,
+  `qwen_edit_i2i`, y compris sa variante par marchés (le brief est enrichi une fois, `marketPrompt` y ajoute ensuite la phrase du marché) ; aucun autre workflow du manifest n'utilise Qwen-Edit 2509 pour éditer une image
+  (`storyboard_v2` l'utilise pour ses keyframes, qui ont leur consigne propre). `qwen21_i2i` reste sur la générique avec protection `<imageN>` (inchangé).
+- **Brief de storyboard** : `ENHANCE.sheetBrief` est déplacé VERBATIM dans `js/engine.js` sous `SHEET_BRIEF_ENRICH_SYSTEM` (exporté, sha256 `a3799383…`) ; le Canvas y pointe pour ses 3 champs (Personnage, Décor, Brief), octet envoyé
+  inchangé. `briefEnrichSystem` route `wf.pipeline === "storyboard_v2"` (donc `storyboard_v2` et `storyboard_v2_qwen21`) vers `[SHEET_BRIEF_ENRICH_SYSTEM, "brief"]` ; la clé de sortie du texte est bien `{"brief"}`, l'exception
+  `pipeline !== "storyboard_v2"` de la ligne `builtin` disparaît (la ligne SYS « construit ses propres prompts » reste pour les `builtin` hors storyboard). Compatible avec le brief du Studio (prose, aucun négatif, aucun style, aucun jeton
+  `<Subject N>`/`<imageN>` dans ce champ) : aucune raison d'escalader.
+- **B4** : `QWEN_EDIT_ENRICH_SYSTEM(nSubjects, model = "Qwen-Image-Edit-2509")` ; les deux occurrences du nom deviennent `${model}`. `keyframeModelName(wf)` renvoie « Qwen Image 2.1 » si `wf.anchor === "api/qwen21_dual.json"` (le
+  critère de `refCtx`), sinon le nom d'origine ; `openKeyframePrompt` le passe à `enrichKeyframeText(text, dual, model)` (seul site d'appel). En 2509 le texte est INCHANGÉ au caractère près (empreintes `62d932f4…` / `69d8fba4…`) ;
+  en 2.1 seul le nom change (2 occurrences ; empreintes `08c7744f…` à 1 sujet, `e57e867f…` à 2).
+- **Noms** : `Engine` **88 → 90 clés**, Studio **56 → 58 noms déstructurés** (mesurés par script sur `index.html` ; les deux nouveaux sont lus par `briefEnrichSystem`) : `QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM` (Studio : route
+  `qwen_edit_i2i` ; Canvas : `ENHANCE.qwenInstruction`) et `SHEET_BRIEF_ENRICH_SYSTEM` (Studio : route `storyboard_v2*` ; Canvas : `ENHANCE.sheetBrief`) — exportés parce que les deux pages les lisent, c'est la raison d'être de la source unique.
+
+**Écart relevé en relisant la consigne des keyframes pour le moteur 2.1 (non changé)** : rien d'autre n'y est faux. « cfg 1, jamais de négatif encodé » reste vrai en effet (`api/qwen21_dual.json` : `KSampler.cfg` 1, le nœud d'encodage 2.1 reçoit un
+négatif mais le sampler l'ignore à cfg 1) ; les phrases de rôle « first/second/third reference image » sont communes aux deux moteurs (`compileKeyframePrompt`) ; « an editing model » est une approximation pour 2.1 (modèle à références `<imageN>`)
+sans conséquence sur ce que gemma doit produire.
+
+**Preuves** (copies `~/.cache/ai-content-studio/ecarts/{before,after}/`, `before` = `git archive 6744f79`, fichiers suivis du dépôt vérifiés identiques à `before/` avant l'installation ; tout bouchonné, aucun job GPU, aucune requête vers
+`:8090`/`:8188`/`:11434`) :
+- `node tools/prompt-systems.js` : **364 contrôles · 35 scénarios · tout vert, mutants M1 à M9 tués** (nouveaux : M7 route `qwen_edit_i2i` retombée sur `ENRICH_SYSTEM` ; M8 route `storyboard_v2*` retombée sur `ENRICH_SYSTEM` ; M9 le moteur 2.1
+  reçoit le texte 2509). Même outil sur `before/` : **rouge exactement sur S-SB3, S-SB7 (nouveau scénario « ✨ manuel du brief de storyboard ») et S-Q3**, les 32 autres verts. Dump avant/après : 32 scénarios identiques (consigne par sha256,
+  contenu utilisateur, graphes, événements), les 10 du Canvas compris ; S-SB3, S-SB7, S-Q3 ne diffèrent que par la consigne reçue (S-SB3 : les deux appels 2.1 seulement). S-Q3 = C-Q2 et S-SB7 = C-SB1 = C-SB2 à l'octet près. 0 job sur les ✨.
+- `node tools/parity-prompts.js` : **158 294 contrôles · 179 groupes · 52 652 cas × 3 voies · `Engine` 90 clés, TOUT PASSE**.
+- Banc hors dépôt `b5check.js` : ✨ `qwen_edit_i2i` = 1 appel gemma, 0 job, négatif intact ; « Générer » (témoin) = 1 job portant le brief enrichi ; auto + 2 marchés = 1 appel gemma, 2 jobs portant chacun brief enrichi et phrase du marché.
+- Chaîne de bancs : matrice de graphes **37 scénarios identiques à HEAD** (36 identiques au golden `i13b-0` sauf `krea2_lora_style_enrich`, D1 connu) · **112 corps `/prompt` (407 215 o) · 219 uploads · 17 corps ollama (15 094 o)** :
+  inchangée, aucun des 17 corps ollama ne passe par les routes corrigées ; load-check 0 exception, 0 `console.error`, 0 `ReferenceError`, `engineKeys` **90** (Studio et Canvas), `hasRemoved []` ; `check-keys-engine` 94/0/6 ; `scan-register` 0 ;
+  audit i18n 0 texte non couvert ; `proofs-4a` 159, `proofs-4b` 92, `proofs-mem` 44, `bench-dnd` 141, `bench-queue` 42, `bench-q21` 79, `bench-refs` 61, `bench-gallery` 49/49, `bench-service` **152/152**, `bench-meta` 134/134 ;
+  `bench-canvas` (copie adaptée, assertion 88 → 90) PASS ; `bench-q21canvas` 46 PASS + 1 échec attendu (« graphe sauvegardé par HEAD sans propriété `engine` »).
+
+**Limites** : `bench-refs` compare le corps ollama du ✨ 2509 à celui de HEAD (témoin d'un lot précédent) : la copie du banc ignore la SEULE consigne système pour ce cas (différence voulue, B5), tout le reste (modèle, message utilisateur, graphes) est
+comparé tel quel. Au premier passage, `bench-dnd` et `bench-refs` ont échoué sur une course de chargement de la page du banc (`ReferenceError: addEvent is not defined`, aucun rapport avec le lot) ; rejoués seuls : 141 et 61 verts. Le rendu réel de gemma
+(qualité de la réécriture du brief de storyboard, de l'instruction Qwen-Edit en Studio) n'est pas fait : le test prouve ce que gemma reçoit et où le résultat est écrit.
+
+**Points ouverts** : B4, B5 et le brief de storyboard sont **clos**. Reste, voulu, `ENHANCE.qwenImagePrompt` (variante d'`ENRICH_SYSTEM`, `docs/NOUVEAUX-MODELES-QWEN21.md`).
+
+**Retour arrière** : `git revert` du commit du lot (aucune migration, aucune donnée).
+
 ## 2026-10-20 — v1.4.2 — Jetons `<Subject N>` protégés sur la carte r2v du Canvas
 
 Demande : le bouton « ✨ Enrichir (LLM) » du champ « Brief » de la carte r2v du Canvas envoyait le texte brut à gemma ; un `<Subject N>` saisi le traversait tel quel, contre la

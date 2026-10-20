@@ -43,6 +43,9 @@ const FP = /*FP-BEGIN*/{
   "KREA2_ENRICH_SYSTEM [Studio avant I13-B lot 2, clé positive_prompt]": "9318a954bda45d14969450401339126f884bc4532318573eb21eee75f84a09ab",
   "QWEN_EDIT_ENRICH_SYSTEM(1)": "62d932f42d289655ccc8253c33f270483ae7b658940efefcb1e81047e48d9ea5",
   "QWEN_EDIT_ENRICH_SYSTEM(2)": "69d8fba45a4a65bf5ed5624498e3536cfb82290f1c9caabb8926161086955dda",
+  // moteur Qwen Image 2.1 (v1.4.3, B4) : le même texte, le nom du moteur « Qwen Image 2.1 » à la place de « Qwen-Image-Edit-2509 » (2 occurrences)
+  "QWEN_EDIT_ENRICH_SYSTEM(1, Qwen Image 2.1)": "08c7744f408a96b7a8cec84d68c13f12e534209a342c59339ed47ef6d371137c",
+  "QWEN_EDIT_ENRICH_SYSTEM(2, Qwen Image 2.1)": "e57e867f1c0bcb6863a820dbea221b04a28a07d0e6176ebd1d64938f3913d2fe",
   "SHEET_DESC_ENRICH_SYSTEM(human)": "87a376e9d00ae8dfd8ab11f4d3787c7c0420873e1854cc869a25a0636d24b466",
   "SHEET_DESC_ENRICH_SYSTEM(other)": "0068b15796ce53c5c3de119b56a8b5e4a0dd81426033a7a6531c273bc7aa5706",
   "SHEET_DESC_ENRICH_SYSTEM(location)": "0ae3609d27bb85705d303a719c491e0d9152857fd607d20122cab4b062c0a962",
@@ -60,9 +63,9 @@ const FP = /*FP-BEGIN*/{
   "CHARACTER_SYSTEM(forceKind=other)": "1e2189353fb3e19b60a18f3190a29978dfed35e1f9a4765e3db5515be46af2a2",
   "ENHANCE.qwenImagePrompt": "dde8a1cd3edbc9b809330321ff336461e704a886ceec754868cb15d122f3c12c",
   "H3_VIDEO (ENHANCE.videoPrompt)": "0312447bf7cea171eaae070e5fb137b01f1823589237b05f26f724d13997ea89",
-  "ENHANCE.qwenInstruction": "c1a421308d0a259bf7d0c5359e9daa855ae5693769ac01e25eaba0d8e02db522",
+  "QWEN_EDIT_INSTRUCTION (ENHANCE.qwenInstruction)": "c1a421308d0a259bf7d0c5359e9daa855ae5693769ac01e25eaba0d8e02db522",
   "R2V_BRIEF (ENHANCE.r2vBrief)": "c34e55f2ff0096345bd7dec39684c04181161e124c423f494755482df007af4e",
-  "ENHANCE.sheetBrief": "a3799383a92581605fcae4da6ffb3b017246e31f622063d0d3d1be00d2b9800a"
+  "SHEET_BRIEF (ENHANCE.sheetBrief)": "a3799383a92581605fcae4da6ffb3b017246e31f622063d0d3d1be00d2b9800a"
 }/*FP-END*/;
 const NAME_OF = new Map(); for (const [n, h] of Object.entries(FP)) { if (NAME_OF.has(h)) die(`empreinte en double : ${NAME_OF.get(h)} / ${n}`); NAME_OF.set(h, n); }
 const nameOf = s => NAME_OF.get(sha(s)) || `consigne inconnue « ${s.slice(0, 60).replace(/\n/g, " ")}… » (sha ${sha(s).slice(0, 10)})`;
@@ -339,6 +342,9 @@ const SPEC = [
   { id: "S-SB6", page: "studio", run: `tab("storyboard");
     await __restore(__mkProj({ keyframes: true, holdDur: 2, nChars: 2, twoSubj: true, withAudio: true })); await settle();
     for (const eng of ["ltx25", "minimax_h3"]) { $("cutEngineSelect").value = eng; await generateCuts(); await settle(); }` },
+  // ✨ manuel du brief d'un storyboard : le workflow est `builtin` (aucun enrichissement auto), le bouton envoie la consigne du brief de storyboard
+  { id: "S-SB7", page: "studio", run: `tab("storyboard"); __extra = {};
+    for (const wf of ["storyboard_v2", "storyboard_v2_qwen21"]) { pick("storyboard_v2", wf); base(); await enrichClick(); __extra[wf] = { brief: brief.value, neg: negative.value }; }` },
   { id: "S-R1", page: "studio", run: `tab("storyboard"); await __restore(__mkProj()); await settle(); __extra = {};
     const seg = (p, mode) => Object.assign(newRelaySegment(), { prompt: p, duration: 1, mode });
     director.relay = { segments: [seg("She walks along the pier.", "continue"), seg("Close on her face.", "cut")], engine: "ltx25", video: null, scenario: "" };
@@ -552,7 +558,11 @@ E["S-SB2"] = (r, T) => {
   for (const k of ["human", "other", "location"]) T(r.extra[k] && r.extra[k].after.length > 200 && /reference sheet/.test(r.extra[k].after) && /enriched prompt text/.test(r.extra[k].after), `✨ planche ${k} : le squelette de la planche doit être ré-apposé autour de la description enrichie`);
 };
 E["S-SB3"] = (r, T) => {
-  seq(T, r, "✨ image du plan (2509 puis 2.1)", "QWEN_EDIT_ENRICH_SYSTEM(1)", "QWEN_EDIT_ENRICH_SYSTEM(2)", "QWEN_EDIT_ENRICH_SYSTEM(1)", "QWEN_EDIT_ENRICH_SYSTEM(2)");
+  seq(T, r, "✨ image du plan (2509 puis 2.1)", "QWEN_EDIT_ENRICH_SYSTEM(1)", "QWEN_EDIT_ENRICH_SYSTEM(2)", "QWEN_EDIT_ENRICH_SYSTEM(1, Qwen Image 2.1)", "QWEN_EDIT_ENRICH_SYSTEM(2, Qwen Image 2.1)");
+  // le moteur est nommé dans la consigne : 2509 → « Qwen-Image-Edit-2509 » (2 fois, texte d'origine), 2.1 → « Qwen Image 2.1 » (2 fois), jamais l'autre nom
+  const sys = r.ollama.map(c => c.system), cnt = (s, x) => s.split(x).length - 1;
+  [[0, 1], [1, 1], [2, 0], [3, 0]].forEach(([i, is2509]) => T(sys[i] && cnt(sys[i], "Qwen-Image-Edit-2509") === (is2509 ? 2 : 0) && cnt(sys[i], "Qwen Image 2.1") === (is2509 ? 0 : 2), `appel n°${i + 1} : moteur ${is2509 ? "2509" : "2.1"} nommé deux fois dans la consigne, et lui seul`));
+  T(sys[0] && sys[2] && sys[0].split("Qwen-Image-Edit-2509").join("Qwen Image 2.1") === sys[2] && sys[1].split("Qwen-Image-Edit-2509").join("Qwen Image 2.1") === sys[3], "2.1 = 2509 avec le seul nom du moteur remplacé (mêmes règles, mêmes phrases de rôle)");
   for (const [k, v] of Object.entries(r.extra)) {
     const a = k.endsWith("dual") ? v.dual : v.solo, b = k.endsWith("dual") ? v.solo : v.dual, n = (t, x) => t.split(x).length - 1;
     T(n(v.after, a) === 1 && n(v.after, b) === 0, `${k} : le bloc d'ancrage ${k.endsWith("dual") ? "DUAL" : "SOLO"} doit être remis une seule fois`);
@@ -599,7 +609,26 @@ E["S-Q2"] = (r, T) => {
   T(/Q21IMAGEREF2/.test(r.ollama[0]?.user) && !/<image/.test(r.ollama[0]?.user), `Qwen Image 2.1 i2i : <imageN> substitués avant l'appel, reçu « ${r.ollama[0]?.user} »`);
   T(/<image1>/.test(r.extra.brief) && /<image2>/.test(r.extra.brief) && !/Q21IMAGEREF/.test(r.extra.brief), "… et rétablis dans le brief");
 };
-E["S-Q3"] = (r, T) => { nCalls(T, r, 1); sysIs(T, r, 0, "ENRICH_SYSTEM"); };
+E["S-Q3"] = (r, T, all) => {
+  nCalls(T, r, 1); sysIs(T, r, 0, "QWEN_EDIT_INSTRUCTION (ENHANCE.qwenInstruction)");
+  T(r.ollama[0]?.user === rawBrief, "Qwen-Edit 2509 i2i : le brief part seul");
+  T(r.extra.brief.includes("enriched prompt text"), `Qwen-Edit 2509 i2i : la clé {"instruction"} de la sortie remplace le brief, reçu « ${r.extra.brief.slice(0, 60)} »`);
+  T(r.extra.neg === "low quality", "Qwen-Edit 2509 i2i : le négatif de l'utilisateur ne doit pas être réécrit");
+  T(r.nPrompts === 0, `le ✨ ne soumet aucun job (${r.nPrompts})`);
+  const c = all["C-Q2"]?.ollama[0]; if (c) T(sameSys(r.ollama[0], c), "la consigne Qwen-Edit du Studio doit être octet pour octet celle du Canvas (C-Q2)");
+};
+// ✨ manuel du brief d'un storyboard (storyboard_v2 et storyboard_v2_qwen21, workflows `builtin`) : consigne du brief de storyboard, pas la générique
+E["S-SB7"] = (r, T, all) => {
+  nCalls(T, r, 2); sysIs(T, r, 0, "SHEET_BRIEF (ENHANCE.sheetBrief)"); sysIs(T, r, 1, "SHEET_BRIEF (ENHANCE.sheetBrief)");
+  T(r.ollama.every(c => c.user === rawBrief), "le brief part tel quel (ni PRIMARY_STYLE ni négatif)");
+  for (const wf of ["storyboard_v2", "storyboard_v2_qwen21"]) {
+    const x = r.extra[wf] || {};
+    T((x.brief || "").includes("enriched prompt text"), `${wf} : la clé {"brief"} de la sortie remplace le brief, reçu « ${String(x.brief).slice(0, 60)} »`);
+    T(x.neg === "low quality", `${wf} : le négatif de l'utilisateur ne doit pas être réécrit`);
+  }
+  T(r.nPrompts === 0, `le ✨ ne soumet aucun job (${r.nPrompts})`);
+  for (const id of ["C-SB1", "C-SB2"]) { const c = all[id]?.ollama[0]; if (c) T(sameSys(r.ollama[0], c), `la consigne du brief de storyboard du Studio doit être octet pour octet celle du Canvas (${id})`); }
+};
 // Canvas
 E["C-K1"] = (r, T) => {
   nCalls(T, r, 1); sysIs(T, r, 0, "KREA2_ENRICH_SYSTEM"); T(r.ollama[0]?.user === "a fox in a yellow raincoat", "✨ : le prompt de la carte part seul");
@@ -611,7 +640,7 @@ E["C-Q1"] = (r, T) => {
   nCalls(T, r, 1); sysIs(T, r, 0, "ENHANCE.qwenImagePrompt");
   const n = r.prompts[0] && nodes(r.prompts[0], "TextEncodeQwenImage21")[0]; T(n && n.inputs.prompt === r.extra.prop, "graphe Qwen Image 2.1 : le prompt enrichi est celui du graphe");
 };
-E["C-Q2"] = (r, T) => { nCalls(T, r, 2); sysIs(T, r, 0, "ENHANCE.qwenInstruction"); sysIs(T, r, 1, "ENHANCE.qwenInstruction"); };
+E["C-Q2"] = (r, T) => { nCalls(T, r, 2); sysIs(T, r, 0, "QWEN_EDIT_INSTRUCTION (ENHANCE.qwenInstruction)"); sysIs(T, r, 1, "QWEN_EDIT_INSTRUCTION (ENHANCE.qwenInstruction)"); };
 E["C-L1"] = (r, T) => { T(r.extra.enhanceButton === false, "LTX 2.5 : aucun bouton ✨ sur la carte Vidéo"); nCalls(T, r, 0); r.prompts[0] ? ltxGraph(T, r.prompts[0], "graphe LTX", "the fox runs") : T(false, "graphe absent"); };
 E["C-H1"] = (r, T) => {
   T(r.extra.enhanceButton === true, "H3 : bouton ✨ présent"); nCalls(T, r, 1); sysIs(T, r, 0, "H3_VIDEO (ENHANCE.videoPrompt)");
@@ -619,12 +648,12 @@ E["C-H1"] = (r, T) => {
   T(typeof p === "string" && p.startsWith(r.extra.align + "\n\n" + r.extra.prop) && p.length <= 7000, `H3 : alignement h3Alignment(false, 2) en tête puis texte enrichi, reçu « ${String(p).slice(0, 90)} »`);
 };
 E["C-SB1"] = (r, T) => {
-  seq(T, r, "fiche personnage", "ENHANCE.sheetBrief", "CHARACTER_SYSTEM", "CHARACTER_SYSTEM(forceKind=human)", "CHARACTER_SYSTEM(forceKind=other)");
+  seq(T, r, "fiche personnage", "SHEET_BRIEF (ENHANCE.sheetBrief)", "CHARACTER_SYSTEM", "CHARACTER_SYSTEM(forceKind=human)", "CHARACTER_SYSTEM(forceKind=other)");
   T(/^enriched prompt text/.test(r.ollama[1]?.user || ""), "la fiche reçoit le brief enrichi par sheetBrief");
   r.prompts.forEach((g, i) => krea2Graph(T, g, `planche ${i + 1}`));
 };
 E["C-SB2"] = (r, T) => {
-  seq(T, r, "fiche décor puis storyboard", "ENHANCE.sheetBrief", "LOCATION_SYSTEM", "ENHANCE.sheetBrief", "SHOTLIST_SYSTEM(n=4)");
+  seq(T, r, "fiche décor puis storyboard", "SHEET_BRIEF (ENHANCE.sheetBrief)", "LOCATION_SYSTEM", "SHEET_BRIEF (ENHANCE.sheetBrief)", "SHOTLIST_SYSTEM(n=4)");
   T(r.extra.shots === 4, `4 plans (${r.extra.shots})`); r.prompts[0] ? krea2Graph(T, r.prompts[0], "planche décor") : T(false, "graphe absent");
 };
 E["C-H2"] = (r, T) => {
@@ -660,6 +689,12 @@ const MUTANTS = [
     edits: () => [['n.properties.engine === "minimax_h3" ? ENHANCE.videoPrompt : null', 'n.properties.engine === "minimax_h3" ? ENHANCE.krea2Prompt : null']] },
   { id: "M6", about: "h3TokensOut retiré de l'enrichissement r2v du Canvas (addEnhanceButton)", scenarios: ["C-H2"], file: "canvas.html",
     edits: () => [["E.h3TokensOut(inp.value)", "String(inp.value)"]] },
+  { id: "M7", about: "la route qwen_edit_i2i du Studio retombe sur ENRICH_SYSTEM (briefEnrichSystem)", scenarios: ["S-Q3"], file: "index.html",
+    edits: () => [['return [QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, "instruction"];', 'return [ENRICH_SYSTEM, "positive_prompt"];']] },
+  { id: "M8", about: "la route storyboard_v2* du Studio retombe sur ENRICH_SYSTEM (briefEnrichSystem)", scenarios: ["S-SB7"], file: "index.html",
+    edits: () => [['return [SHEET_BRIEF_ENRICH_SYSTEM, "brief"];', 'return [ENRICH_SYSTEM, "positive_prompt"];']] },
+  { id: "M9", about: "le moteur Qwen Image 2.1 des keyframes reçoit le texte 2509 (keyframeModelName)", scenarios: ["S-SB3"], file: "index.html",
+    edits: () => [['wf?.anchor === "api/qwen21_dual.json" ? "Qwen Image 2.1" : "Qwen-Image-Edit-2509"', '"Qwen-Image-Edit-2509"']] },
 ];
 
 // ── Principal ───────────────────────────────────────────────────────────────────────────────────────────────────

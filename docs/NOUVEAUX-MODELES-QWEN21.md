@@ -492,8 +492,8 @@ objet sans référence ; on garde le graphe réellement rendu.)
   `updateModelLabel` masque en plus le contrôle « Style (LoRA) » pour tout id `qwen21_*` et le rétablit sur Krea 2.
   Le style texte (`currentStyleText()`) reste : il est ajouté en fin de prompt à la soumission, pour tout moteur.
 - **Enrichissement** : chemin générique (`enrichBrief` → `ENRICH_SYSTEM`), jamais `KREA2_ENRICH_SYSTEM` (réservé à
-  `KREA2_WORKFLOWS`). C'est ce que fait déjà Qwen-Edit 2509 dans ce pipeline ; `QWEN_EDIT_ENRICH_SYSTEM` est propre
-  aux keyframes. Aucune nouvelle consigne. Le négatif enrichi est encodé (§ 1) mais inutilisé à cfg 1.
+  `KREA2_WORKFLOWS`). (Qwen-Edit 2509 a la sienne depuis la 1.4.3 : `QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM`) ; `QWEN_EDIT_ENRICH_SYSTEM` est propre
+  aux keyframes, et nomme « Qwen Image 2.1 » quand c'est le moteur du workflow (1.4.3). Aucune nouvelle consigne. Le négatif enrichi est encodé (§ 1) mais inutilisé à cfg 1.
 - **Taille** : t2i = table `RATIOS` (~1 MP : 1280×720, 720×1280, 1024², 832×1040, tous dans la plage qualifiée).
   i2i = ~1 MP au **ratio de l'image d'entrée**, multiples de 32, même formule que la carte Canvas (2.1 fixe son
   latent de départ : un ratio faux recomposerait le cadre, § 3) — le contrôle Ratio ne joue donc pas en i2i, comme
@@ -542,12 +542,12 @@ constructeur) et se soumet octet pour octet comme avant.
 **Décisions et écarts par rapport au Studio.**
 
 - **`ENRICH_SYSTEM` n'est pas exporté par `Engine`** (il vit dans `index.html`) : `js/engine.js` n'a pas été touché
-  (`Object.keys(Engine).length` reste 76). Le texte est repris localement dans `canvas.html`, comme l'est
-  `ENHANCE.qwenInstruction` (`videoPrompt` et `r2vBrief` viennent, depuis la 1.4.1, d'`Engine`). **État 1.4.1** : ce n'est pas une copie à aligner mais une **variante voulue** de `ENRICH_SYSTEM`, avec trois écarts de texte :
+  (`Object.keys(Engine).length` reste 76). Le texte est repris localement dans `canvas.html`, comme l'était
+  `ENHANCE.qwenInstruction` (`videoPrompt` et `r2vBrief` viennent, depuis la 1.4.1, d'`Engine`, `qwenInstruction` et `sheetBrief` depuis la 1.4.3 ; `qwenImagePrompt` reste la seule consigne propre au Canvas). **État 1.4.1** : ce n'est pas une copie à aligner mais une **variante voulue** de `ENRICH_SYSTEM`, avec trois écarts de texte :
   (1) « diffusion image models » au lieu de « diffusion image and video models » (la carte ne produit que des images ; écart absent du
   commentaire de `canvas.html`, qui n'en cite que deux) ; (2) aucun négatif demandé (« and a matching negative prompt »
   retiré : la carte passe `""`, inutilisé à cfg 1) ; (3) clé de sortie `{"prompt"}` au lieu de `{"positive_prompt", "negative_prompt"}`.
-  `ENRICH_SYSTEM` reste propre au Studio (la source unique de la 1.4.1 ne l'a pas déplacé dans `Engine`, qui compte 88 clés) : si le texte
+  `ENRICH_SYSTEM` reste propre au Studio (la source unique de la 1.4.1 ne l'a pas déplacé dans `Engine`, qui compte 90 clés) : si le texte
   générique change, décider alors si la variante suit. `tools/prompt-systems.js` fixe son empreinte (scénario C-Q1).
 - **Pas de « Variantes » ni de seed sur la carte** (elle n'en avait pas en Krea 2 : une carte = une image, seed aléatoire) :
   `batch` reste à 1. Le graphe du Studio à 4 variantes ne diffère de celui de la carte que par `batch_size` (vérifié).
