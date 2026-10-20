@@ -62,7 +62,7 @@ la carte r2v du Canvas envoie les `<Subject N>` bruts à gemma (NOTE du test) ; 
 
 **Limites connues** :
 - **`bench-service` 151/152** : un seul échec, de contraste en thème clair (`i.tag-pill « b3b-tag » 3,99:1` < 4,5:1) ; préexistant (même résultat sur `a6d65c0`, alors que la
-  livraison de la 1.4.0 donnait 152/152, cause non expliquée), **non corrigé**, à traiter à part.
+  livraison de la 1.4.0 donnait 152/152, cause non expliquée), **corrigé le 2026-10-20** juste après (voir « Correctif »), `bench-service` repasse à 152/152.
 - `check-keys` sort en code 1 (6 clés `I18N` orphelines, préexistantes) ; les bancs `check-keys` et `bench-canvas` lisent aussi `js/engine.js` / comptent les clés d'Engine
   (76 → 83) : à rejouer en copies adaptées ; les bancs restent hors dépôt.
 - `tools/parity-prompts.js` exige `git show a6d65c0:index.html` (ou `--baseline-file`) : l'historique doit rester disponible. `tools/prompt-systems.js` exige Node 22 et
@@ -73,7 +73,9 @@ la carte r2v du Canvas envoie les `<Subject N>` bruts à gemma (NOTE du test) ; 
 - **Rendu réel réduit de Minimax H3 avec la nouvelle consigne** (D2 t2v/i2v et D4 r2v) : à faire par l'utilisateur sur le GB10 (`docs/TESTING.md` § 6, point 4) ; le test prouve la
   consigne reçue et la grammaire envoyée, pas la qualité du rendu. Rien n'a été rendu sur GPU dans ce chantier.
 - B4, B5, ✨ manuel du brief de storyboard, carte r2v du Canvas (`<Subject N>` bruts) : signalés ci-dessus, à trancher.
-- Contraste `i.tag-pill` (ci-dessus).
+- Contraste `i.tag-pill` : corrigé (voir « Correctif »).
+
+**Correctif (2026-10-20, après v1.4.1)** : `.tag-pill` (pastille de tag des cartes de la galerie, `index.html`) passe de `color: var(--text-2)` à `color: var(--text)` : en thème clair `#6b778c` sur `#e8f2fb` donnait 3,99:1 (< 4,5:1), il donne maintenant 12,7:1 (sombre : 11,2:1). Un seul changement CSS, aucun autre fichier ; `bench-service` 152/152 sur le dépôt (contraste clair et sombre : 0 texte < 4,5:1). Le défaut venait du lot B3b (le même banc affichait 152/152 sur le jeu de test du lot, selon la donnée).
 
 **Retour arrière** : `git revert` du commit du lot 3 (documentation), puis de `c72873f` (lot 2), puis de `f60666f` (lot 1), **du plus récent au plus ancien** (le lot 2 s'appuie sur
 `js/engine.js` et `index.html` du lot 1).
