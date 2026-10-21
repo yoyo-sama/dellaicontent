@@ -14,6 +14,7 @@ Aucune n'installe ni ne supprime quoi que ce soit sans que ce soit dit explicite
 | `Enhancement failed: NetworkError when attempting to fetch resource` | La requête vers `/ollama/api/chat` n'a pas abouti (connexion refusée ou coupée) | [1](#1-diagnostic-en-trois-commandes) |
 | ComfyUI tourne mais ne voit aucun modèle | Les modèles ont été téléchargés dans un dossier que ce ComfyUI-là ne lit pas | [2](#2-comfyui-ne-voit-pas-les-modèles) |
 | Un cadenas sur `comfyui/` dans le gestionnaire de fichiers | Dossier créé par dockerd en `root:root` (bind-mount dont la source n'existait pas) — tous les téléchargements de modèles échouent ensuite en « permission denied » | [2](#2-comfyui-ne-voit-pas-les-modèles) |
+| Reference2video : la description vision des images de référence échoue en silence — la vidéo se rend quand même, le journal montre seulement `Description de « … » indisponible (ollama 413)` | nginx refuse le corps de la requête : avant la v1.4.4, `location ^~ /ollama/` n'avait pas de `client_max_body_size` (1 Mo par défaut) et une image base64 d'environ 750 Ko ou plus recevait un 413 | [3](#3-ollama) |
 | `skipped (native Ollama installed but not started)` | Ollama est installé hors Docker et son service est arrêté | [3](#3-ollama) |
 | `skipped (port 11434 busy)` / `port is already allocated` | Un autre processus tient le port | [3](#3-ollama) |
 | Vous réinstallez sur un poste où une version précédente du script a déjà tourné | Migration de l'ancienne mise en page vers les stacks voisines | [4](#4-réinstaller-sur-un-poste-où-une-version-précédente-du-script-a-déjà-tourné) |
@@ -109,6 +110,21 @@ sudo systemctl enable --now ollama
 
 Puis relancez `install.sh`. Si le port est tenu par autre chose, `sudo ss -ltnp 'sport = :11434'`
 dit par qui.
+
+### La description vision des références échoue en `ollama 413`
+
+Le pipeline reference2video fait décrire chaque image de référence par gemma (vision) : l'image
+voyage en base64 dans le corps de `/ollama/api/chat`. La limite de corps par défaut de nginx est
+de 1 Mo : dès ~750 Ko d'image, la requête reçoit un **413** et la description est sautée (la vidéo
+se rend quand même, la référence pèse simplement moins). Depuis la v1.4.4, `nginx.conf` pose
+`client_max_body_size 100m;` dans `location ^~ /ollama/`. Le fichier est monté en fichier unique :
+après la mise à jour, **recréez** le conteneur nginx, sinon le nginx en marche garde l'ancienne
+configuration :
+
+```bash
+cd ~/ai-content-studio
+docker compose up -d --force-recreate -t 0 ai-content-studio
+```
 
 ## 4. Réinstaller sur un poste où une version précédente du script a déjà tourné
 

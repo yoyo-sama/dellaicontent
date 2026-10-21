@@ -1,5 +1,56 @@
 # Tour de contrôle — changelog
 
+## 2026-10-22 — v1.4.4 — correctifs issus des rendus réels (consigne r2v, nginx /ollama/, journal)
+
+Demande : corriger les trois défauts relevés par les rendus réels du 2026-10-21/22 (`~/.cache/ai-content-studio/rendus/journal.md`). Version **1.4.4**.
+**Rendus réels v1.4.1 → v1.4.3** (HEAD `6e01de3`, une phrase) : 10 soumissions `/prompt` (9 calculées, 1 en cache), routage gemma conforme partout (empreintes attendues, 0 appel pour LTX 2.5), rendus corrects en Krea 2 (Studio et Canvas), H3 t2v / i2v FL2VA / r2v, LTX 2.5 t2v et `flf2v_chain`, Qwen-Edit 2509, et fiches/rôles gemma seuls ;
+trois défauts (ci-dessous) et un incident du pilote de test (connexion CDP tombée sur un corps vision de 3,4 Mo : un job r2v parti sans réécriture du préfixe, `output/studio/minimax_h3_r2v_00013_.mp4`, laissé en place).
+
+**Fichiers** : `js/engine.js` (+3 −1), `index.html` (+3 −2), `nginx.conf` (+3), `tools/prompt-systems.js`, `VERSION`, `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/TROUBLESHOOTING.md` + `.fr.md`,
+`docs/LESSONS.md` (piège n°35), les deux README, ce changelog. `canvas.html`, `js/nodes-*.js`, `workflows/`, `docker/`, `tools/parity-prompts.js` intacts ; aucun texte d'`addEvent`/`throw` modifié, aucune chaîne d'interface ajoutée.
+
+**Ce qui change** :
+- **Consigne r2v (`R2V_BRIEF_ENRICH_SYSTEM`, partagée Studio/Canvas)** : le ✨ du brief r2v perdait presque toujours les jetons `<Subject N>` (6 essais sur 7 en rendu réel ; le filet tenait : texte d'origine + WARN/erreur). Cause : la phrase « N'utilise pas de balises entre
+  chevrons ni de syntaxe de référence d'image » ; gemma4:e4b rangeait le substitut `SUBJECTREF1` dans cette syntaxe et le supprimait ou le remplaçait (« REF1 », « The subject », « Subject 1 »). La fin de phrase est retirée (les chevrons restent
+  interdits) et une règle positive ajoutée : « Les mots tels que SUBJECTREF1, SUBJECTREF2… désignent les personnages et lieux du brief : recopie-les EXACTEMENT, tels quels (même casse, sans espace), à la place où ils apparaissent ;
+  ne les traduis pas et ne les remplace jamais par « the subject », « he », « she » ou un nom ; n'en supprime aucun et n'en invente aucun. » Le reste est inchangé. Empreinte `c34e55f2…` → **`207c517f…`** (S-H3 = C-H2 à l'octet).
+- **nginx** : `client_max_body_size 100m;` dans `location ^~ /ollama/` (la description vision des références r2v envoie les images en base64 ; le défaut de 1 Mo répondait 413 dès ~750 Ko d'image, « ollama 413 » sur des planches PNG de 2,5 Mo).
+  **À appliquer : recréer le conteneur nginx** (`docker compose up -d --force-recreate -t 0 ai-content-studio`), le fichier est monté en fichier unique.
+- **Journal du Studio** : `enrichBrief` émettait `OK « Brief enrichi par … »` juste après le `WARN « Enrichissement écarté : … »` (jetons `<Subject N>` ou `<imageN>` disparus). Seule la condition change : un drapeau `applied`, posé quand le brief
+  est réellement réécrit, garde l'événement OK (textes d'événements inchangés au caractère près).
+
+**Mesures sur le VRAI gemma4:e4b** (Ollama :11434, corps exact de `gemmaJSON` : `gemma4:e4b`, `stream:false`, `format:"json"`, `think:false`, aucune option ; contenu = `h3TokensOut(brief)` ; critère = celui des deux pages, chaque `<Subject n>` cité présent
+après `h3NormalizeTokens(h3TokensIn(…))` ; 144 appels au total ; banc hors dépôt `~/.cache/ai-content-studio/fixrendus/gemma/`) :
+
+| Consigne | 20 briefs à 1 ou 2 substituts (courts/longs, ponctuation, « SUBJECTREF1's ») | 8 briefs sans substitut |
+|---|---|---|
+| v0 = HEAD (`c34e55f2`) | **12/20 (60 %)** conservés ; réécrits 4/12 | réécrits 3/8, aucun jeton inventé |
+| **v1 = retenue (`207c517f`)** | **20/20 + 20/20 = 40/40 (100 %)** en 2 passages ; réécrits 10/40, ×1,03 en longueur | anglais, aucun personnage/lieu/négatif inventé, aucun jeton inventé ; réécrits 0/8 (recopie) |
+| v2 = v1 + « Réécris et enrichis … (gestes, mouvement, caméra, lumière, atmosphère) » | 20/20 (1 passage), réécrits 20/20, ×8,6 | **jeton `SUBJECTREF1` inventé 7/8** → écartée |
+| v3 = v2 + « si le brief n'en contient aucun, ta réponse n'en contient aucun » | 20/20 (1 passage), ×8,0 | **jeton inventé 6/8** → écartée |
+
+Bout en bout par les vraies pages (copie `after/` servie sur :8866, `/ollama` relayé vers le vrai gemma, `/comfy/` jamais relayé, POST `*/comfy/prompt` intercepté par CDP : **0** reçu, **0** intercepté) : ✨ du brief r2v du Studio **6/6 acceptés**
+(un `OK « Brief enrichi »`, aucun WARN), ✨ de la carte r2v du Canvas **6/6 acceptés** (aucune erreur sous le bouton, champ = propriété) ; base au rendu réel : 1/7. **Limite** : sur ces 12 essais gemma a renvoyé le brief tel quel (0/12 réécrit) ;
+voir les points ouverts.
+
+**Preuves** (copies `~/.cache/ai-content-studio/fixrendus/{before,after}/`, `before` = `git archive 6e01de3`, fichiers suivis du dépôt vérifiés identiques à `before/` avant l'installation) :
+- `node tools/prompt-systems.js` : **378 contrôles · 35 scénarios · tout vert, mutants M1 à M10 tués** (nouveau : **M10** l'événement OK émis sans sa condition, tué par S-H3 et S-Q2). S-H3 (16 contrôles) et S-Q2 (14) jouent un 2ᵉ ✨ où le bouchon « oublie » les jetons :
+  brief inchangé, WARN, **aucun** `OK « Brief enrichi »` ; après l'enrichissement accepté, exactement un. Empreinte gardée pour nommer l'ancienne : `R2V_BRIEF [avant v1.4.4]` (27 empreintes). Même outil sur `before/` : **rouge exactement sur S-H3, S-Q2, C-H2**
+  (consigne `[avant v1.4.4]` ; OK après le WARN en S-H3 et S-Q2), les 32 autres verts ; dump avant/après : 32 scénarios identiques, les 3 autres identiques hors consigne reçue et événement OK.
+- `node tools/parity-prompts.js` : **158 294 contrôles · 179 groupes · 52 652 cas × 3 voies · `Engine` 90 clés, TOUT PASSE**.
+- nginx : instance de test `nginx:alpine` (`nginx-test-fixrendus`, :8866, `nginx.conf` du dépôt aux ports de test, `/ollama/` vers un serveur bouchon qui renvoie la taille reçue) : POST de 3 145 815 o → **413** avec la conf de HEAD, **200** (`{"received": 3145815}`)
+  avec la nouvelle ; petit POST 200 dans les deux cas. Conteneur et confs supprimés ; le conteneur de production n'a pas été recréé.
+- Chaîne de bancs (copie de `ecarts/chain`, ports 8871-8875, CDP 9471-9473, image de test `ai-content-studio-gallery:test-fixrendus` retirée à la fin) : matrice de graphes **37 scénarios identiques à HEAD · 112 corps `/prompt` (407 215 o) · 219 uploads ·
+  17 corps ollama (15 094 o)** (aucun corps ollama de la matrice ne passe par le ✨ r2v) ; load-check 0 exception, `engineKeys` 90 ; `check-keys-engine` 94/0/6 (= HEAD) ; `scan-register` 0 ; audit i18n 0 texte non couvert ; proofs-4a 159/0, proofs-4b 92/0, proofs-mem 44/0 ;
+  bench-queue, bench-q21 TOUT PASSE ; bench-gallery 49/49 ; **bench-service 152/152** ; **bench-meta 134/134** ; zéro job sur interaction (`0 /comfy/prompt` sur tous les clics). bench-dnd 141/141 et bench-refs 61/61 (au 2ᵉ passage : le témoin `chain/witness/` manquait à la copie de la chaîne, d'où « addEvent is not defined » au 1ᵉʳ ; pas une course) ; bench-canvas 16/16 avec la version d'origine (`Object.keys(Engine)` égal avant/après : la copie adaptée du lot ECARTS attendait 88 → 90) ; bench-q21canvas : le même unique échec qu'au lot précédent (« graphe sauvegardé par HEAD : aucune propriété `engine` », attente périmée depuis Q21), le reste vert.
+
+**Points ouverts (pour l'orchestrateur)** :
+- **Le ✨ r2v recopie** : avec la consigne retenue, gemma conserve les substituts mais réécrit peu (10/40 au banc, 0/12 par les pages ; l'ancienne consigne réécrivait déjà peu : 4/12). Une consigne qui demande d'enrichir réécrit vraiment mais invente
+  un `SUBJECTREF1` sur un brief sans jeton (v2, v3). Pistes non implémentées : consigne « enrichir » (v2) + garde de code qui écarte toute sortie contenant un substitut non cité ; ou consigne différente selon la présence de jetons.
+- **Négatif réécrit malgré un écartement** (vu en vérifiant les sorties du bloc, non changé : hors périmètre « seule la condition de l'OK change ») : sur la route générique (`qwen21_i2i`), quand les `<imageN>` sont perdus, le brief est conservé mais
+  `negative_prompt` de gemma remplace quand même le négatif de l'utilisateur.
+- **Sortie sans la clé attendue** : `enrichBrief` n'émet plus rien dans ce cas (auparavant un OK trompeur) ; un WARN dédié demanderait un nouveau texte d'événement.
+
 ## 2026-10-20 — v1.4.3 — Consignes gemma des 3 écarts restants (B4, B5, brief de storyboard)
 
 Demande : clore les trois écarts que la v1.4.1 avait relevés sans les changer (`docs/LESSONS.md` piège n°34) : **B4** la consigne des keyframes (`QWEN_EDIT_ENRICH_SYSTEM`) nommait « Qwen-Image-Edit-2509 »

@@ -64,7 +64,9 @@ const FP = /*FP-BEGIN*/{
   "ENHANCE.qwenImagePrompt": "dde8a1cd3edbc9b809330321ff336461e704a886ceec754868cb15d122f3c12c",
   "H3_VIDEO (ENHANCE.videoPrompt)": "0312447bf7cea171eaae070e5fb137b01f1823589237b05f26f724d13997ea89",
   "QWEN_EDIT_INSTRUCTION (ENHANCE.qwenInstruction)": "c1a421308d0a259bf7d0c5359e9daa855ae5693769ac01e25eaba0d8e02db522",
-  "R2V_BRIEF (ENHANCE.r2vBrief)": "c34e55f2ff0096345bd7dec39684c04181161e124c423f494755482df007af4e",
+  // v1.4.4 : les substituts SUBJECTREFn sont nommés et autorisés (l'ancienne phrase « ni de syntaxe de référence d'image » les faisait perdre)
+  "R2V_BRIEF (ENHANCE.r2vBrief)": "207c517f3ce613c73500538302a3efc10554cf00cff023063fefc36f66b65e54",
+  "R2V_BRIEF [avant v1.4.4]": "c34e55f2ff0096345bd7dec39684c04181161e124c423f494755482df007af4e",
   "SHEET_BRIEF (ENHANCE.sheetBrief)": "a3799383a92581605fcae4da6ffb3b017246e31f622063d0d3d1be00d2b9800a"
 }/*FP-END*/;
 const NAME_OF = new Map(); for (const [n, h] of Object.entries(FP)) { if (NAME_OF.has(h)) die(`empreinte en double : ${NAME_OF.get(h)} / ${n}`); NAME_OF.set(h, n); }
@@ -306,7 +308,10 @@ const SPEC = [
   { id: "S-H1", page: "studio", run: `pick("text2video", "minimax_h3_t2v"); base(); $("autoEnrichBtn").click(); $("turboToggle").checked = true; $("mpSelect").value = "0.6"; $("videoDuration").value = "2"; await go(); __extra = { neg: negative.value };` },
   { id: "S-H2", page: "studio", run: `pick("image2video", "minimax_h3_i2v"); base(); $("autoEnrichBtn").click(); __setFiles("imageInput", [__file("first.png", 60)]); __setFiles("lastImageInput", [__file("last.png", 61)]); $("turboToggle").checked = true; $("videoDuration").value = "3"; await go(); __extra = { neg: negative.value, align: Engine.h3Alignment(true, 3) };` },
   { id: "S-H3", page: "studio", run: `tab("storyboard"); pick("reference2video", "minimax_h3_r2v"); base(); $("skipSheetsToggle").checked = true; $("skipSheetsToggle").dispatchEvent(new Event("change"));
-    __setFiles("refImagesInput", [__file("ref0.png", 70), __file("ref1.png", 71)]); brief.value = "<Subject 1> hugs <Subject 2> on the pier at dawn"; await enrichClick(); __extra = { brief: brief.value, neg: negative.value };` },
+    __setFiles("refImagesInput", [__file("ref0.png", 70), __file("ref1.png", 71)]); brief.value = "<Subject 1> hugs <Subject 2> on the pier at dawn"; await enrichClick(); __extra = { brief: brief.value, neg: negative.value, ev: __log.events.slice() };
+    // gemma (bouchon) renvoie une sortie SANS les jetons : enrichissement écarté, brief intact, WARN et AUCUN OK « Brief enrichi »
+    const orig = "<Subject 1> looks at <Subject 2>"; brief.value = orig; const k = __log.events.length;
+    __cfg.dropTokens = true; await enrichClick(); __cfg.dropTokens = false; __extra.drop = { orig, brief: brief.value, ev: __log.events.slice(k) };` },
   { id: "S-H4", page: "studio", run: `tab("storyboard"); pick("reference2video", "minimax_h3_r2v"); base(); $("skipSheetsToggle").checked = false; $("skipSheetsToggle").dispatchEvent(new Event("change"));
     __setFiles("refImagesInput", [__file("x0.png", 73), __file("x1.png", 74)]); $("turboToggle").checked = false; await go();
     for (let i = 0; i < 40 && !anchorsReady(); i++) await wait(250);
@@ -367,7 +372,9 @@ const SPEC = [
     }` },
   // témoins « non affectés » : Qwen Image 2.1 / Qwen-Edit gardent la consigne générique
   { id: "S-Q1", page: "studio", run: `pick("text2image", "qwen21_t2i"); base(); await enrichClick(); __extra = { brief: brief.value, neg: negative.value };` },
-  { id: "S-Q2", page: "studio", run: `pick("image2image", "qwen21_i2i"); base(); brief.value = "Put the <image2> hat on the fox of <image1>"; await enrichClick(); __extra = { brief: brief.value };` },
+  { id: "S-Q2", page: "studio", run: `pick("image2image", "qwen21_i2i"); base(); brief.value = "Put the <image2> hat on the fox of <image1>"; await enrichClick(); __extra = { brief: brief.value, ev: __log.events.slice() };
+    const orig = brief.value = "Put the <image2> hat on the fox of <image1>", k = __log.events.length;
+    __cfg.dropTokens = true; await enrichClick(); __cfg.dropTokens = false; __extra.drop = { orig, brief: brief.value, ev: __log.events.slice(k) };` },
   { id: "S-Q3", page: "studio", run: `pick("image2image", "qwen_edit_i2i"); base(); await enrichClick(); __extra = { brief: brief.value, neg: negative.value };` },
   // ── Canvas ──
   { id: "C-K1", page: "canvas", run: `const k = add("simple/krea2", { prompt: "a fox in a yellow raincoat" }); SEL(k); await wait(100); await enhance("prompt"); __extra = { prop: k.properties.prompt, field: document.getElementById("pf-prompt").value };
@@ -528,8 +535,18 @@ E["S-H2"] = (r, T, all) => {
   T(typeof p === "string" && p.length <= 7000, "prompt H3 ≤ 7000 car.");
   const a = all["S-H1"]?.ollama[0]; if (a) T(sameSys(r.ollama[0], a), "t2v et i2v reçoivent la même consigne H3 (S-H1)");
 };
+// Journal d'un ✨ du brief : « OK Brief enrichi » seulement si l'enrichissement est appliqué, jamais après un WARN d'écartement (v1.4.4)
+const nOk = ev => (ev || []).filter(e => /^OK Brief enrichi par /.test(e)).length;
+const okJournal = (T, r, label, warnRe) => {
+  T(nOk(r.extra.ev) === 1, `${label} : enrichissement accepté → 1 événement OK « Brief enrichi » attendu, ${nOk(r.extra.ev)} reçu(s)`);
+  const d = r.extra.drop || {};
+  T(d.brief === d.orig, `${label} : sortie de gemma sans jeton → brief inchangé attendu, reçu « ${d.brief} »`);
+  T((d.ev || []).some(e => warnRe.test(e)), `${label} : sortie de gemma sans jeton → WARN « Enrichissement écarté » attendu (journal ${JSON.stringify(d.ev)})`);
+  T(nOk(d.ev) === 0, `${label} : enrichissement écarté → AUCUN événement OK « Brief enrichi » (journal ${JSON.stringify(d.ev)})`);
+};
 E["S-H3"] = (r, T, all) => {
-  nCalls(T, r, 1); sysIs(T, r, 0, "R2V_BRIEF (ENHANCE.r2vBrief)");
+  nCalls(T, r, 2); sysIs(T, r, 0, "R2V_BRIEF (ENHANCE.r2vBrief)"); sysIs(T, r, 1, "R2V_BRIEF (ENHANCE.r2vBrief)");
+  okJournal(T, r, "r2v", /^WARN Enrichissement écarté : les mentions <Subject N>/);
   const u = r.ollama[0]?.user || "";
   T(!/<Subject/i.test(u) && /SUBJECTREF1/.test(u) && /SUBJECTREF2/.test(u), `les jetons <Subject N> ne doivent jamais atteindre gemma (substitués par SUBJECTREFn), reçu « ${u.slice(0, 80)} »`);
   T(/<Subject 1>/.test(r.extra.brief) && /<Subject 2>/.test(r.extra.brief) && !/SUBJECTREF/.test(r.extra.brief), `le brief final doit retrouver <Subject 1> et <Subject 2>, reçu « ${r.extra.brief.slice(0, 80)} »`);
@@ -605,7 +622,8 @@ E["S-R3"] = (r, T) => {
 // témoins « non affectés » : Qwen Image 2.1 et Qwen-Edit gardent la consigne générique
 E["S-Q1"] = (r, T) => { nCalls(T, r, 1); sysIs(T, r, 0, "ENRICH_SYSTEM"); T(r.ollama[0]?.user === rawBrief, "Qwen Image 2.1 t2i : brief seul"); };
 E["S-Q2"] = (r, T) => {
-  nCalls(T, r, 1); sysIs(T, r, 0, "ENRICH_SYSTEM");
+  nCalls(T, r, 2); sysIs(T, r, 0, "ENRICH_SYSTEM"); sysIs(T, r, 1, "ENRICH_SYSTEM");
+  okJournal(T, r, "i2i Qwen Image 2.1", /^WARN Enrichissement écarté : les mentions <imageN>/);
   T(/Q21IMAGEREF2/.test(r.ollama[0]?.user) && !/<image/.test(r.ollama[0]?.user), `Qwen Image 2.1 i2i : <imageN> substitués avant l'appel, reçu « ${r.ollama[0]?.user} »`);
   T(/<image1>/.test(r.extra.brief) && /<image2>/.test(r.extra.brief) && !/Q21IMAGEREF/.test(r.extra.brief), "… et rétablis dans le brief");
 };
@@ -695,6 +713,8 @@ const MUTANTS = [
     edits: () => [['return [SHEET_BRIEF_ENRICH_SYSTEM, "brief"];', 'return [ENRICH_SYSTEM, "positive_prompt"];']] },
   { id: "M9", about: "le moteur Qwen Image 2.1 des keyframes reçoit le texte 2509 (keyframeModelName)", scenarios: ["S-SB3"], file: "index.html",
     edits: () => [['wf?.anchor === "api/qwen21_dual.json" ? "Qwen Image 2.1" : "Qwen-Image-Edit-2509"', '"Qwen-Image-Edit-2509"']] },
+  { id: "M10", about: "l'événement OK « Brief enrichi » d'enrichBrief émis sans condition (même après un écartement)", scenarios: ["S-H3", "S-Q2"], file: "index.html",
+    edits: () => [['if (applied) addEvent("OK", `Brief enrichi', 'addEvent("OK", `Brief enrichi']] },
 ];
 
 // ── Principal ───────────────────────────────────────────────────────────────────────────────────────────────────

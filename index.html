@@ -5353,7 +5353,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       $("stepEnrich").classList.add("active");
       try {
         const out = await gemmaJSON(system, user);
-        let stripped = 0;
+        let stripped = 0, applied = false;   // OK « Brief enrichi » seulement si le brief a VRAIMENT été réécrit (pas après un écartement)
         if (out[key]) {
           const got = r2v ? h3NormalizeTokens(h3TokensIn(out[key])) : out[key];
           const raw = q21 ? got.replace(Q21_STUB_RE, (_, n) => `<image${n}>`).replace(Q21_TOKEN_RE, (_, n) => `<image${n}>`) : got;
@@ -5363,12 +5363,13 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             addEvent("WARN", "Enrichissement écarté : les mentions <Subject N> de ta consigne avaient disparu de la sortie de gemma — consigne d'origine conservée.", "warn");
           else {
             brief.value = krea2 ? stripPromptPadding(raw) : raw;
+            applied = true;
             stripped = got.length - brief.value.length;
           }
         }
         // Seule la consigne générique demande un négatif ; Krea 2 et H3 n'en encodent aucun (il ne serait pas encodé : piège n°16).
         if (key === "positive_prompt" && out.negative_prompt) negative.value = out.negative_prompt;
-        addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
+        if (applied) addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
         if (stripped > 0) addEvent("SYS", `Remplissage retiré du prompt (${stripped} caractères sans direction visuelle).`, "sys");
       } finally {
         $("stepEnrich").classList.remove("active");
