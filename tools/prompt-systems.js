@@ -325,6 +325,31 @@ const SPEC = [
     await one("invNoTok", "walks to the window", "SUBJECTREF1 walks slowly to the window, in soft grey light");
     await one("ok", "walks to the window", "walks slowly to the window, footsteps echoing, in soft grey light");
     __extra.nPrompts = __log.prompts.length;` },
+  // v1.4.7 : garde du mouvement de caméra H3 (t2v/i2v seulement) — clause remise quand gemma l'a perdu, sortie intacte sinon ;
+  // + pureté de restoreCameraClause (briefs sans caméra : octet pour octet) et table fermée des clauses
+  { id: "S-H7", page: "studio", run: `base(); __extra = {};
+    const one = async (key, orig, text) => { brief.value = orig; const k = __log.events.length; __cfg.text = text; await enrichClick(); __cfg.text = undefined;
+      __extra[key] = { orig, text, brief: brief.value, ev: __log.events.slice(k) }; };
+    pick("text2video", "minimax_h3_t2v");
+    await one("lost", "She turns her head toward the sea and smiles as snow falls; slow push-in.", "She turns her head toward the sea and smiles as snow falls, with a gentle lift of her chin, in soft daylight.");
+    await one("none", "A fox runs through a snowy forest.", "A fox runs through a snowy forest with its tail flicking, in soft sunlight.");
+    await one("kept", "The cat stretches on the windowsill; static camera.", "The cat stretches on the windowsill, the camera locked off and static, in warm light.");
+    pick("image2video", "minimax_h3_i2v");
+    await one("i2v", "Elle ouvre la fenêtre, plan fixe.", "She opens the window and looks outside, in soft daylight.");
+    pick("text2image", "krea2_t2i");
+    await one("krea", "A woman reads on a bench, plan fixe.", "A woman reads on a bench, in soft light.");
+    tab("storyboard"); pick("reference2video", "minimax_h3_r2v");
+    await one("r2v", "walks to the window; slow push-in", "walks slowly to the window, in soft grey light");
+    __extra.nPrompts = __log.prompts.length;
+    const O = "A woman walks along a pier, her coat swaying, in pale dawn light.", R = Engine.restoreCameraClause;
+    __extra.pure = ["A fox runs through a snowy forest.", "a dog jumps into a lake", "He lifts the cup and takes a sip.", "They hug and laugh.", "Une danseuse tourne sur elle-même dans un studio vide.",
+      "Il marche vers la caméra.", "A young chef chops vegetables quickly in a crowded restaurant kitchen.", "She raises her umbrella and steps into the rain.", "The horse gallops away.",
+      "A cook slides a pan of onions across the stove.", "A bird circles around the tower.", "Sans zoom, une femme lit.", "no push-in, a man waves", ""].filter(b => R(b, O) !== O);
+    __extra.table = [["Un homme lit, caméra fixe.", "static camera"], ["A cyclist rides; the camera pans left to follow.", "the camera pans left"], ["Un homme lit, la caméra tourne lentement autour de lui.", "the camera slowly orbits"],
+      ["Deux enfants courent, caméra à l’épaule.", "handheld camera"], ["Aerial shot slowly pulling back from a lighthouse.", "slow pull-out"], ["Un travelling latéral suit une femme qui marche.", "the camera tracks sideways"],
+      ["A robot waters plants, slow dolly in.", "slow push-in"], ["Close-up of hands kneading dough.", "close-up shot"], ["Une femme danse ; panoramique vers la droite.", "the camera pans right"],
+      ["He looks up as the camera tilts up to reveal the stars.", "the camera tilts up"], ["A man talks, slow zoom out.", "slow zoom out"]].map(([b, c]) => [b, R(b, O) === O.slice(0, -1) + "; " + c + "."]).filter(x => !x[1]).map(x => x[0]);
+    __extra.same = R("x", "y") === "y" && R(null, "y") === "y" && R("slow push-in", "  ") === "  ";` },
   { id: "S-H4", page: "studio", run: `tab("storyboard"); pick("reference2video", "minimax_h3_r2v"); base(); $("skipSheetsToggle").checked = false; $("skipSheetsToggle").dispatchEvent(new Event("change"));
     __setFiles("refImagesInput", [__file("x0.png", 73), __file("x1.png", 74)]); $("turboToggle").checked = false; await go();
     for (let i = 0; i < 40 && !anchorsReady(); i++) await wait(250);
@@ -402,6 +427,19 @@ const SPEC = [
     __extra = { enhanceButton: !!document.querySelector('[data-enhance="prompt"]') }; await v.generate();` },
   { id: "C-H1", page: "canvas", run: `const src = resolved("simple/import", {}, "in.png"); const v = add("simple/video", { prompt: "the fox runs", engine: "minimax_h3", duration: 2, mp: "0.5" }); src.connect(0, v, 0); SEL(v); await wait(100);
     __extra = { enhanceButton: !!document.querySelector('[data-enhance="prompt"]'), align: Engine.h3Alignment(false, 2) }; await enhance("prompt"); __extra.prop = v.properties.prompt; await v.generate();` },
+  // v1.4.7 : même garde au Canvas (✨ de la carte Vidéo H3, rien d'autre)
+  { id: "C-H4", page: "canvas", run: `const v = add("simple/video", { prompt: "x", engine: "minimax_h3", duration: 2, mp: "0.5" }); SEL(v); await wait(100); __extra = {};
+    const errEl = () => document.querySelector('[data-enhance="prompt"]').nextElementSibling;
+    const one = async (key, orig, text) => { await setField("prompt", orig); __cfg.text = text; await enhance("prompt"); __cfg.text = undefined;
+      __extra[key] = { orig, text, prop: v.properties.prompt, field: document.getElementById("pf-prompt").value, err: errEl().textContent }; };
+    await one("lost", "She turns her head toward the sea and smiles as snow falls; slow push-in.", "She turns her head toward the sea and smiles as snow falls, with a gentle lift of her chin, in soft daylight.");
+    await one("lost2", "Elle ouvre la fenêtre, plan fixe.", "She opens the window and looks outside, in soft daylight.");
+    await one("none", "A fox runs through a snowy forest.", "A fox runs through a snowy forest with its tail flicking, in soft sunlight.");
+    await one("kept", "The cat stretches on the windowsill; static camera.", "The cat stretches on the windowsill, the camera locked off and static, in warm light.");
+    const r = add("adv/r2v", { brief: "x", duration: 2 }); SEL(r); await wait(100);
+    await setField("brief", "walks to the window; slow push-in"); __cfg.text = "walks slowly to the window, in soft grey light"; await enhance("brief"); __cfg.text = undefined;
+    __extra.r2v = { prop: r.properties.brief, text: "walks slowly to the window, in soft grey light" };
+    __extra.nPrompts = __log.prompts.length;` },
   { id: "C-SB1", page: "canvas", run: `__extra = {};
     const a = add("adv/charsheet", { brief: "a fox in a yellow raincoat" }); SEL(a); await wait(100); await enhance("brief"); await a.generate();
     const h = add("adv/charsheet", { brief: "a fox in a yellow raincoat", kind: "human" }); await h.generate();
@@ -560,6 +598,37 @@ E["S-H2"] = (r, T, all) => {
   T(typeof p === "string" && p.startsWith(r.extra.align + "\n\n") && p.includes("enriched prompt text"), `i2v + dernière image : alignement FL2VA en tête puis texte enrichi, reçu « ${String(p).slice(0, 90)} »`);
   T(typeof p === "string" && p.length <= 7000, "prompt H3 ≤ 7000 car.");
   const a = all["S-H1"]?.ollama[0]; if (a) T(sameSys(r.ollama[0], a), "t2v et i2v reçoivent la même consigne H3 (S-H1)");
+};
+// v1.4.7 : garde du mouvement de caméra H3 (Studio)
+const CAM_EV = "SYS Mouvement de caméra de ton brief remis dans le prompt enrichi.";
+const nCam = ev => (ev || []).filter(e => e === CAM_EV).length;
+const sans = s => s.replace(/[.]$/, "");
+E["S-H7"] = (r, T) => {
+  nCalls(T, r, 6); [0, 1, 2, 3].forEach(i => sysIs(T, r, i, "H3_VIDEO (ENHANCE.videoPrompt)")); sysIs(T, r, 4, "KREA2_ENRICH_SYSTEM"); sysIs(T, r, 5, "R2V_BRIEF (ENHANCE.r2vBrief)");
+  const x = r.extra, nOkEv = k => nOk(x[k]?.ev);
+  T(x.lost?.brief === sans(x.lost.text) + "; slow push-in.", `t2v, push-in perdu : clause « ; slow push-in. » attendue, reçu « ${x.lost?.brief} »`);
+  T(nCam(x.lost?.ev) === 1 && nOkEv("lost") === 1, `t2v, push-in perdu : 1 événement SYS caméra + 1 OK (journal ${JSON.stringify(x.lost?.ev)})`);
+  T(x.i2v?.brief === sans(x.i2v.text) + "; static camera.", `i2v, plan fixe perdu : clause « ; static camera. » attendue, reçu « ${x.i2v?.brief} »`);
+  T(nCam(x.i2v?.ev) === 1, `i2v : 1 événement SYS caméra (journal ${JSON.stringify(x.i2v?.ev)})`);
+  for (const k of ["none", "kept", "krea", "r2v"]) {
+    T(x[k]?.brief === x[k]?.text, `${k} : sortie de gemma intacte attendue (pas de caméra perdue / autre route), reçu « ${x[k]?.brief} »`);
+    T(nCam(x[k]?.ev) === 0 && nOkEv(k) === 1, `${k} : aucun événement SYS caméra, 1 OK (journal ${JSON.stringify(x[k]?.ev)})`);
+  }
+  T(x.nPrompts === 0, `le ✨ ne soumet aucun job (${x.nPrompts})`);
+  T((x.pure || []).length === 0, `restoreCameraClause : brief sans caméra → sortie octet pour octet, modifiés : ${JSON.stringify(x.pure)}`);
+  T((x.table || []).length === 0, `restoreCameraClause : table des clauses, écarts : ${JSON.stringify(x.table)}`);
+  T(x.same === true, "restoreCameraClause : entrées non textuelles / sortie vide rendues telles quelles");
+};
+E["C-H4"] = (r, T) => {
+  nCalls(T, r, 5); [0, 1, 2, 3].forEach(i => sysIs(T, r, i, "H3_VIDEO (ENHANCE.videoPrompt)")); sysIs(T, r, 4, "R2V_BRIEF (ENHANCE.r2vBrief)");
+  const x = r.extra;
+  for (const [k, clause] of [["lost", "slow push-in"], ["lost2", "static camera"]]) {
+    const w = sans(x[k]?.text || "") + "; " + clause + ".";
+    T(x[k]?.prop === w && x[k]?.field === w && x[k]?.err === "", `Canvas ${k} : « ; ${clause}. » attendu dans propriété et champ, reçu « ${x[k]?.prop} » / « ${x[k]?.field} » / err « ${x[k]?.err} »`);
+  }
+  for (const k of ["none", "kept"]) T(x[k]?.prop === x[k]?.text && x[k]?.field === x[k]?.text, `Canvas ${k} : sortie de gemma intacte attendue, reçu « ${x[k]?.prop} »`);
+  T(x.r2v?.prop === x.r2v?.text, `Canvas r2v : la garde ne s'applique pas à la consigne r2v, reçu « ${x.r2v?.prop} »`);
+  T(x.nPrompts === 0, `le ✨ ne soumet aucun job (${x.nPrompts})`);
 };
 // Journal d'un ✨ du brief : « OK Brief enrichi » seulement si l'enrichissement est appliqué, jamais après un WARN d'écartement (v1.4.4)
 const nOk = ev => (ev || []).filter(e => /^OK Brief enrichi par /.test(e)).length;
@@ -794,6 +863,14 @@ const MUTANTS = [
     edits: () => [["else if (r2v && [...raw.matchAll(H3_TOKEN_RE)].some(m => !citedH3.includes(m[1])))", "else if (false)"]] },
   { id: "M14", about: "Canvas addEnhanceButton : garde des <Subject N> inventés retirée (v1.4.6)", scenarios: ["C-H3"], file: "canvas.html",
     edits: () => [["if ([...fixed.matchAll(E.H3_TOKEN_RE)].some(m => !cited.includes(m[1])))", "if (false)"]] },
+  { id: "M15", about: "enrichBrief : appel de restoreCameraClause retiré (v1.4.7)", scenarios: ["S-H7"], file: "index.html",
+    edits: () => [["const fixed = restoreCameraClause(src, brief.value);", "const fixed = brief.value;"]] },
+  { id: "M16", about: "Canvas addEnhanceButton : appel de restoreCameraClause retiré (v1.4.7)", scenarios: ["C-H4"], file: "canvas.html",
+    edits: () => [["clean = E.restoreCameraClause(inp.value, clean);", "clean = clean;"]] },
+  { id: "M17", about: "enrichBrief : garde de caméra appliquée à TOUTES les routes (condition H3 retirée)", scenarios: ["S-H7"], file: "index.html",
+    edits: () => [["if (system === H3_VIDEO_ENRICH_SYSTEM) { const fixed = restoreCameraClause", "if (true) { const fixed = restoreCameraClause"]] },
+  { id: "M18", about: "Canvas addEnhanceButton : garde de caméra appliquée à TOUTES les consignes (condition H3 retirée)", scenarios: ["C-H4"], file: "canvas.html",
+    edits: () => [["if (system === E.H3_VIDEO_ENRICH_SYSTEM) clean = E.restoreCameraClause", "if (true) clean = E.restoreCameraClause"]] },
 ];
 
 // ── Principal ───────────────────────────────────────────────────────────────────────────────────────────────────

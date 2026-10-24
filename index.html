@@ -2480,7 +2480,7 @@
       styleTextFor, stripPromptPadding, fieldText, charKindOf, charFieldKeys, LOC_FIELD_KEYS, charDescFromFields, locDescFromFields,
       h3Subject, h3TokensOut, h3TokensIn, h3NormalizeTokens, H3_TOKEN_RE, H3_TOKEN_STUB, h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, h3Alignment, h3VideoFrames, h3RealDuration,
       // I13-B lot 2 : consignes gemma de Krea 2 et de Minimax H3 (t2v/i2v, r2v), partagées avec le Canvas
-      KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM,
+      KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM, restoreCameraClause,
       // consignes du Canvas déplacées dans js/engine.js : édition Qwen-Edit 2509 (image2image) et brief de storyboard
       QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, SHEET_BRIEF_ENRICH_SYSTEM
     } = window.Engine;
@@ -5353,7 +5353,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       $("stepEnrich").classList.add("active");
       try {
         const out = await gemmaJSON(system, user);
-        let stripped = 0, applied = false;   // OK « Brief enrichi » seulement si le brief a VRAIMENT été réécrit (pas après un écartement)
+        let stripped = 0, applied = false, camera = false;   // OK « Brief enrichi » seulement si le brief a VRAIMENT été réécrit (pas après un écartement)
         if (out[key]) {
           const got = r2v ? h3NormalizeTokens(h3TokensIn(out[key])) : out[key];
           const raw = q21 ? got.replace(Q21_STUB_RE, (_, n) => `<image${n}>`).replace(Q21_TOKEN_RE, (_, n) => `<image${n}>`) : got;
@@ -5366,6 +5366,8 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             addEvent("WARN", "Enrichissement écarté : gemma a ajouté une mention <Subject N> absente de ta consigne — consigne d'origine conservée.", "warn");
           else {
             brief.value = krea2 ? stripPromptPadding(raw) : raw;
+            // v1.4.7 : H3 t2v/i2v seulement — le mouvement de caméra du brief, perdu en fin de phrase par gemma, est remis par le code.
+            if (system === H3_VIDEO_ENRICH_SYSTEM) { const fixed = restoreCameraClause(src, brief.value); camera = fixed !== brief.value; brief.value = fixed; }
             applied = true;
             stripped = got.length - brief.value.length;
           }
@@ -5374,6 +5376,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
         // Jamais après un écartement ni sur une sortie sans la clé : le brief reste celui de l'utilisateur, son négatif aussi.
         if (applied && key === "positive_prompt" && out.negative_prompt) negative.value = out.negative_prompt;
         if (applied) addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
+        if (camera) addEvent("SYS", "Mouvement de caméra de ton brief remis dans le prompt enrichi.", "sys");
         if (stripped > 0) addEvent("SYS", `Remplissage retiré du prompt (${stripped} caractères sans direction visuelle).`, "sys");
       } finally {
         $("stepEnrich").classList.remove("active");

@@ -827,6 +827,55 @@ Answer ONLY with JSON: {"prompt": "..."}`;
   const QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM = "Tu es un ingénieur de prompts pour un modèle d'édition d'image (Qwen-Edit). Réécris l'instruction de l'utilisateur en une consigne d'édition claire et positive en anglais (décris le résultat voulu, jamais ce qu'il faut éviter). N'utilise JAMAIS les mots \"storyboard\", \"keyframe\", \"panel\" ou équivalents — ils font dessiner une planche annotée au lieu d'éditer l'image. Réponds UNIQUEMENT en JSON : {\"instruction\": \"...\"}.";
   const SHEET_BRIEF_ENRICH_SYSTEM = "Tu enrichis un brief créatif en prose, en anglais, avec plus de détails descriptifs concrets (apparence, ambiance, contexte), SANS structurer en JSON ni en liste, SANS inventer de contrainte technique — ce texte sera ensuite analysé par un autre système pour en extraire des champs structurés, garde donc un texte narratif simple. Réponds UNIQUEMENT en JSON : {\"brief\": \"...\"}.";
 
+  // v1.4.7 : garde du mouvement de caméra H3 (t2v/i2v ; consigne H3_VIDEO_ENRICH_SYSTEM INCHANGÉE). Mesuré v1.4.6 : gemma4:e4b PERD le
+  // mouvement de caméra du brief quand il est en fin de phrase (« ; slow push-in. », « plan fixe », « static camera » : 6 sorties sur 40) et
+  // une 5ᵉ version de la consigne n'y change rien (LESSONS piège n°36 : un élément de fin de phrase se perd, on le remet par le code).
+  // Fonction pure, source unique Studio + Canvas : si le BRIEF contient un mouvement de caméra (FR/EN, sans accents ni casse, hors négation
+  // « sans zoom ») que la SORTIE ne contient en aucun équivalent, la sortie reçoit « ; <clause anglaise>. » ; sinon elle est rendue
+  // inchangée (même chaîne). Table fermée : [regex du brief, équivalents dans la sortie, [[affinage lu dans les 40 caractères du brief, clause]…]].
+  // Limite connue : le mouvement du brief est jugé absent même si gemma en a mis un AUTRE (pas de détection de contradiction).
+  const CAMERA_KINDS = [
+    [/plan fixe|camera fixe|cadre fixe|(static|fixed) (camera|shot)|locked[- ]off|(still|stationary) camera|camera (is |stays |remains |holds )?(static|fixed|locked|still)/,
+      /static|locked[- ]off|fixed (camera|shot|frame)|(still|stationary|unmoving) camera|(camera|shot|frame)( \w+)? (is |stays |remains |holds |stay |remain |hold )?(fixed|still|locked|stationary|motionless)|tripod|(camera|shot|frame) (does not|doesn't) move/,
+      [[null, "static camera"]]],
+    [/push(es|ing)?[- ]?in\b|dolly(ing)?[- ]?(in|forward)|travelling avant|camera (s')?(avance|approche|rapproche)|(camera|shot) (\w+ )?(moves?|creeps?|drifts?|pushes) (slowly |gently )?(in|closer|forward|toward)/,
+      /push(es|ing|ed)?[- ]?in|dolly(ing)?[- ]?(in|forward)|(camera|shot|frame|lens)\b[^.;]{0,40}\b(closer|forward|toward|towards|in on|inward|approach\w*|advanc\w*)/,
+      [[null, "slow push-in"]]],
+    [/pull(s|ing|ed)?[- ]?(back|out|away)|dolly(ing)?[- ]?(out|back)|push(es|ing)?[- ]?out|travelling arriere|camera (s')?(recule|eloigne)/,
+      /pull(s|ing|ed)?[- ]?(back|out|away)|dolly(ing)?[- ]?(out|back)|push(es|ing)?[- ]?out|recede|retreat|(camera|shot|frame|lens)\b[^.;]{0,40}\b(back|away|farther|further|outward)/,
+      [[null, "slow pull-out"]]],
+    [/tracking|travell?ing(?! (avant|arriere))|follow(ing)? shot|camera (\w+ )?(tracks?|follows?|suit)\b|dolly (left|right|along|alongside|beside)/,
+      /track|travell?ing|dolly|(camera|shot|frame)\b[^.;]{0,30}\b(follow|alongside|beside|along)|follow(ing)? shot/,
+      [[/lateral|sideways/, "the camera tracks sideways"], [/left|gauche/, "the camera tracks left"], [/right|droite/, "the camera tracks right"], [null, "smooth tracking shot"]]],
+    [/(camera|shot)[^.;,]{0,20}\bpan(s|ning|ned)?\b|\bpan(s|ning)? (left|right|up|down|across|slowly|gently)|\bpan (left|right|up|down)|\bpanning\b|whip pan|panoramique/,
+      /(camera|shot|frame|lens)\b[^.;]{0,25}\bpan\w*|\bpan(s|ning)? (to the )?(left|right|up|down|across)|\bpanning\b|panoram/,
+      [[/left|gauche/, "the camera pans left"], [/right|droite/, "the camera pans right"], [null, "a slow pan"]]],
+    [/(camera|shot)[^.;,]{0,25}\btilt\w*|\btilt(s|ing)?[- ](the camera )?(up|down)|tilt[- ]shot|camera (s')?incline/,
+      /(camera|shot|frame|lens)\b[^.;]{0,25}\btilt\w*|\btilt(s|ing)?( the camera)?[- ](up|down)|(up|down)ward tilt/,
+      [[/down|bas|vers le sol/, "the camera tilts down"], [/up|haut/, "the camera tilts up"], [null, "a slow camera tilt"]]],
+    [/\bzoom/, /zoom/, [[/zoom[- ]?(out|arriere)|dezoom/, "slow zoom out"], [null, "slow zoom in"]]],
+    [/orbit|(camera|shot)[^.;,]{0,30}\b(around|round|autour)|arc shot|travelling circulaire/,
+      /orbit|circl\w* (around|round)|arc\w* (around|round)|revolv|(camera|shot|frame|lens)\b[^.;]{0,30}\b(around|round)/,
+      [[null, "the camera slowly orbits"]]],
+    [/crane (shot|up|down)|craning|\bjib\b|\bgrue\b|camera[^.;,]{0,15}\b(rises?|lifts?|descends?|lowers?|monte|descend)/,
+      /crane|craning|jib|boom|(camera|shot|frame|lens)\b[^.;]{0,30}\b(rise|rises|rising|lift|lifts|ascend\w*|descend\w*|lower\w*|up|down)\b/,
+      [[/down|descend|lower|baisse/, "the camera cranes down"], [null, "the camera cranes up"]]],
+    [/hand-?held|shaky|camera a l.epaule|a l.epaule|shoulder[- ]?(cam|mounted|held)/, /hand-?held|shoulder|shaky|camera shake/, [[null, "handheld camera"]]],
+    [/close[- ]?up|gros plan/, /close[- ]?up|tight (shot|frame|framing)|closely framed/, [[null, "close-up shot"]]],
+  ];
+  const camNorm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[’‘]/g, "'").toLowerCase();
+  function restoreCameraClause(brief, enriched) {
+    if (typeof brief !== "string" || typeof enriched !== "string" || !enriched.trim()) return enriched;
+    const b = camNorm(brief), o = camNorm(enriched), add = [];
+    for (const [inBrief, inOut, clauses] of CAMERA_KINDS) {
+      const m = inBrief.exec(b);
+      if (!m || /\b(no|not|without|never|sans|pas|jamais|don't)\b[\w' ]*$/.test(b.slice(Math.max(0, m.index - 16), m.index)) || inOut.test(o)) continue;
+      const near = b.slice(m.index, m.index + 40), text = clauses.find(([re]) => !re || re.test(near))[1];
+      if (!add.includes(text)) add.push(text);
+    }
+    return add.length ? enriched.replace(/[\s.!?…,;:]*$/, "") + "; " + add.join(", ") + "." : enriched;
+  }
+
   // Filet déterministe (porté du Studio) : gemma4:e4b n'honore PAS de façon fiable une
   // interdiction de vocabulaire. On retire ces termes après coup. Liste volontairement
   // étroite — uniquement des termes sans direction visuelle : "photorealistic", "fine
@@ -1303,7 +1352,7 @@ Answer ONLY with JSON: {"prompt": "..."}`;
       // I13 : corrections de prompt du Studio (planches selon le sujet, ancrages keyframe,
       // grammaire Minimax H3) — dépendances en arguments, prêtes pour le Studio et le Canvas
       SHEET_TEMPLATES, charsheetPromptFrom, charKindOf, KEYFRAME_ANCHOR_SOLO, KEYFRAME_ANCHOR_DUAL,
-      stripPromptPadding, KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM,
+      stripPromptPadding, KREA2_ENRICH_SYSTEM, H3_VIDEO_ENRICH_SYSTEM, R2V_BRIEF_ENRICH_SYSTEM, restoreCameraClause,
       QWEN_EDIT_INSTRUCTION_ENRICH_SYSTEM, SHEET_BRIEF_ENRICH_SYSTEM,
       h3AssignSubjects, h3Summary, h3RefBody, buildH3RefPrompt, capH3Prompt, h3CutBodyText,
       h3Alignment, h3VideoFrames, h3RealDuration, h3CutSubjects, buildH3CutPrompt, compileCutPromptFor,

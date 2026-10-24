@@ -1725,7 +1725,9 @@
           if (cited.length) txt = fixed;
         }
         // Le champ n'est écrasé QU'en cas de succès : sur erreur, le texte saisi survit.
-        const clean = system === E.KREA2_ENRICH_SYSTEM ? E.stripPromptPadding(txt) : txt;
+        let clean = system === E.KREA2_ENRICH_SYSTEM ? E.stripPromptPadding(txt) : txt;
+        // v1.4.7 : H3 t2v/i2v seulement — le mouvement de caméra du brief, perdu en fin de phrase par gemma, est remis par le code.
+        if (system === E.H3_VIDEO_ENRICH_SYSTEM) clean = E.restoreCameraClause(inp.value, clean);
         inp.value = clean;
         setProp(node, f.k, f.w, clean);
       } catch (e) {
