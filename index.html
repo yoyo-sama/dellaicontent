@@ -5361,6 +5361,9 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             addEvent("WARN", "Enrichissement écarté : les mentions <imageN> de ta consigne avaient disparu de la sortie de gemma — consigne d'origine conservée.", "warn");
           else if (citedH3.some(n => !raw.includes(h3Subject(n))))
             addEvent("WARN", "Enrichissement écarté : les mentions <Subject N> de ta consigne avaient disparu de la sortie de gemma — consigne d'origine conservée.", "warn");
+          // v1.4.6 : un <Subject n> que le brief ne cite pas (brief sans jeton compris) désignerait une référence au hasard → écarté aussi.
+          else if (r2v && [...raw.matchAll(H3_TOKEN_RE)].some(m => !citedH3.includes(m[1])))
+            addEvent("WARN", "Enrichissement écarté : gemma a ajouté une mention <Subject N> absente de ta consigne — consigne d'origine conservée.", "warn");
           else {
             brief.value = krea2 ? stripPromptPadding(raw) : raw;
             applied = true;

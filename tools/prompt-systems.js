@@ -62,10 +62,14 @@ const FP = /*FP-BEGIN*/{
   "CHARACTER_SYSTEM(forceKind=human)": "59ca22976439b39bdacad85e602757319e1f91d8fee4763dba34448e753c70e5",
   "CHARACTER_SYSTEM(forceKind=other)": "1e2189353fb3e19b60a18f3190a29978dfed35e1f9a4765e3db5515be46af2a2",
   "ENHANCE.qwenImagePrompt": "dde8a1cd3edbc9b809330321ff336461e704a886ceec754868cb15d122f3c12c",
-  "H3_VIDEO (ENHANCE.videoPrompt)": "0312447bf7cea171eaae070e5fb137b01f1823589237b05f26f724d13997ea89",
+  // v1.4.6 : consigne H3 qui ENRICHIT (brief repris entier + deux courts compléments, sujet et caméra conservés, un seul plan)
+  "H3_VIDEO (ENHANCE.videoPrompt)": "5d26d56b546c13cc599f7e23ba1792b0322561b4e744064eb3a37452b142b36e",
+  "H3_VIDEO [avant v1.4.6]": "0312447bf7cea171eaae070e5fb137b01f1823589237b05f26f724d13997ea89",
   "QWEN_EDIT_INSTRUCTION (ENHANCE.qwenInstruction)": "c1a421308d0a259bf7d0c5359e9daa855ae5693769ac01e25eaba0d8e02db522",
-  // v1.4.4 : les substituts SUBJECTREFn sont nommés et autorisés (l'ancienne phrase « ni de syntaxe de référence d'image » les faisait perdre)
-  "R2V_BRIEF (ENHANCE.r2vBrief)": "207c517f3ce613c73500538302a3efc10554cf00cff023063fefc36f66b65e54",
+  // v1.4.4 : les substituts SUBJECTREFn sont nommés et autorisés (l'ancienne phrase « ni de syntaxe de référence d'image » les faisait perdre) ;
+  // v1.4.6 : la consigne ENRICHIT (deux ou trois courts compléments), exemple sans substitut, garde de code contre un <Subject N> inventé
+  "R2V_BRIEF (ENHANCE.r2vBrief)": "d55d0fc3d08606df97bec3600dfce7fed44c93486c9f9ccfc64287667700bdea",
+  "R2V_BRIEF [v1.4.4-v1.4.5]": "207c517f3ce613c73500538302a3efc10554cf00cff023063fefc36f66b65e54",
   "R2V_BRIEF [avant v1.4.4]": "c34e55f2ff0096345bd7dec39684c04181161e124c423f494755482df007af4e",
   "SHEET_BRIEF (ENHANCE.sheetBrief)": "a3799383a92581605fcae4da6ffb3b017246e31f622063d0d3d1be00d2b9800a"
 }/*FP-END*/;
@@ -171,7 +175,7 @@ const STUBS = String.raw`(() => {
   // le texte rendu le recopie (comme le ferait gemma), ce qui prouve l'aller-retour des jetons.
   const reply = user => {
     if (C.noKey) return { negative_prompt: "blurry", unrelated: "x" };   // C.noKey : gemma répond du JSON valide SANS la clé attendue (mais avec un négatif)
-    const t = /SUBJECTREF\d|Q21IMAGEREF\d/.test(user) && !C.dropTokens ? "enriched: " + user : TEXT;   // C.dropTokens : gemma « oublie » les jetons (sortie sans eux)
+    const t = C.text ?? (/SUBJECTREF\d|Q21IMAGEREF\d/.test(user) && !C.dropTokens ? "enriched: " + user : TEXT);   // C.dropTokens : gemma « oublie » les jetons (sortie sans eux) ; C.text : texte imposé
     return { positive_prompt: t, negative_prompt: "blurry", prompt: t, brief: t, description: t, action: t, instruction: t, label: "",
       kind: "human", face: "round face with freckles", hair: "short brown hair", outfit: "blue wool coat", accessories: "", palette: "blue and brown",
       place: "a quiet harbor pier", architecture: "wooden piers", materials: "wet planks", lighting: "soft dawn light",
@@ -313,6 +317,14 @@ const SPEC = [
     // gemma (bouchon) renvoie une sortie SANS les jetons : enrichissement écarté, brief intact, WARN et AUCUN OK « Brief enrichi »
     const orig = "<Subject 1> looks at <Subject 2>"; brief.value = orig; const k = __log.events.length;
     __cfg.dropTokens = true; await enrichClick(); __cfg.dropTokens = false; __extra.drop = { orig, brief: brief.value, ev: __log.events.slice(k) };` },
+  // v1.4.6 : garde des jetons inventés (gemma cite un <Subject n> absent du brief, brief sans jeton compris) ; sortie sans jeton acceptée
+  { id: "S-H6", page: "studio", run: `tab("storyboard"); pick("reference2video", "minimax_h3_r2v"); base(); __extra = {};
+    const one = async (key, orig, text) => { brief.value = orig; const k = __log.events.length; __cfg.text = text; await enrichClick(); __cfg.text = undefined;
+      __extra[key] = { orig, text, brief: brief.value, neg: negative.value, ev: __log.events.slice(k) }; };
+    await one("inv", "<Subject 1> looks at <Subject 2>", "SUBJECTREF1 slowly looks at SUBJECTREF2 while SUBJECTREF3 watches, in soft light");
+    await one("invNoTok", "walks to the window", "SUBJECTREF1 walks slowly to the window, in soft grey light");
+    await one("ok", "walks to the window", "walks slowly to the window, footsteps echoing, in soft grey light");
+    __extra.nPrompts = __log.prompts.length;` },
   { id: "S-H4", page: "studio", run: `tab("storyboard"); pick("reference2video", "minimax_h3_r2v"); base(); $("skipSheetsToggle").checked = false; $("skipSheetsToggle").dispatchEvent(new Event("change"));
     __setFiles("refImagesInput", [__file("x0.png", 73), __file("x1.png", 74)]); $("turboToggle").checked = false; await go();
     for (let i = 0; i < 40 && !anchorsReady(); i++) await wait(250);
@@ -406,6 +418,17 @@ const SPEC = [
     SEL(r); await wait(100); const orig = "<Subject 1> looks at <Subject 2>"; await setField("brief", orig);
     __cfg.dropTokens = true; await enhance("brief"); __cfg.dropTokens = false;
     __extra.drop = { orig, prop: r.properties.brief, field: document.getElementById("pf-brief").value, err: document.querySelector('[data-enhance="brief"]').nextElementSibling.textContent };` },
+  // v1.4.6 : garde des jetons inventés au Canvas (même règle que S-H6), message traduit (FR/EN/ES/DE), sortie sans jeton recopiée OCTET POUR OCTET
+  { id: "C-H3", page: "canvas", run: `const r = add("adv/r2v", { brief: "<Subject 1> looks at <Subject 2>", duration: 2 }); SEL(r); await wait(100); __extra = {};
+    const errEl = () => document.querySelector('[data-enhance="brief"]').nextElementSibling;
+    const one = async (key, orig, text) => { await setField("brief", orig); __cfg.text = text; await enhance("brief"); __cfg.text = undefined;
+      __extra[key] = { orig, text, prop: r.properties.brief, field: document.getElementById("pf-brief").value, err: errEl().textContent }; };
+    await one("inv", "<Subject 1> looks at <Subject 2>", "SUBJECTREF1 slowly looks at SUBJECTREF2 while SUBJECTREF3 watches, in soft light");
+    await one("invNoTok", "walks to the window", "SUBJECTREF1 walks slowly to the window, in soft grey light");
+    await one("ok", "walks to the window", "walks slowly ,  to the window , in soft grey light .");
+    for (const lang of ["en", "es", "de"]) { const ls = document.getElementById("langSelect"); ls.value = lang; ls.dispatchEvent(new Event("change")); SEL(r); await wait(100);
+      await one("inv_" + lang, "walks to the window", "SUBJECTREF2 walks to the window"); }
+    const ls = document.getElementById("langSelect"); ls.value = "fr"; ls.dispatchEvent(new Event("change"));` },
   { id: "C-CV", page: "canvas", run: `const cs = resolved("adv/charsheet", { charDesc: "a red fox in a raincoat" }, "charsheet_1.png"), ls = resolved("adv/locsheet", { locDesc: "a harbor pier at dawn" }, "locsheet_1.png");
     const sb = add("adv/storyboard", { brief: "the fox crosses the pier", shotCount: 2, segmentDuration: 2 }); cs.connect(0, sb, 0); ls.connect(0, sb, 1);
     Object.assign(sb.properties, { charDesc: "a red fox in a raincoat", locDesc: "a harbor pier at dawn", styleId: "cinematic",
@@ -556,6 +579,23 @@ E["S-H3"] = (r, T, all) => {
   T(r.extra.neg === "low quality", "r2v n'encode pas de négatif : le champ négatif ne doit pas être réécrit");
   const c = all["C-H2"]?.ollama[0]; if (c) T(sameSys(r.ollama[0], c), "la consigne r2v du Studio doit être octet pour octet celle du Canvas (C-H2)");
 };
+// garde v1.4.6 : sortie avec un <Subject n> absent du brief → WARN dédié, AUCUN OK, brief et négatif intacts ; sortie sans jeton acceptée
+const INV_WARN = /^WARN Enrichissement écarté : gemma a ajouté une mention <Subject N> absente de ta consigne — consigne d'origine conservée\.$/;
+E["S-H6"] = (r, T) => {
+  nCalls(T, r, 3); [0, 1, 2].forEach(i => sysIs(T, r, i, "R2V_BRIEF (ENHANCE.r2vBrief)"));
+  for (const k of ["inv", "invNoTok"]) {
+    const x = r.extra[k] || {}, w = (x.ev || []).filter(e => INV_WARN.test(e));
+    T(w.length === 1, `${k} : jeton inventé → exactement 1 WARN « gemma a ajouté une mention <Subject N> » attendu, journal ${JSON.stringify(x.ev)}`);
+    T(nOk(x.ev) === 0, `${k} : jeton inventé → AUCUN événement OK « Brief enrichi » (journal ${JSON.stringify(x.ev)})`);
+    T(x.brief === x.orig, `${k} : jeton inventé → brief d'origine conservé, reçu « ${x.brief} »`);
+    T(x.neg === "low quality", `${k} : jeton inventé → négatif intact, reçu « ${x.neg} »`);
+  }
+  T(r.ollama[1]?.user === "walks to the window", `brief sans jeton : envoyé tel quel, reçu « ${r.ollama[1]?.user} »`);
+  const o = r.extra.ok || {};
+  T(o.brief === o.text && nOk(o.ev) === 1 && !(o.ev || []).some(e => /^WARN/.test(e)), `brief sans jeton + sortie sans jeton → accepté (brief = sortie, 1 OK, 0 WARN), reçu « ${o.brief} » journal ${JSON.stringify(o.ev)}`);
+  T(o.neg === "low quality", "r2v n'encode pas de négatif : le champ négatif ne doit pas être réécrit");
+  T(r.extra.nPrompts === 0, `le ✨ ne soumet aucun job (${r.extra.nPrompts})`);
+};
 E["S-H4"] = (r, T) => {
   seq(T, r, "r2v avec fiches", "CHARACTER_SYSTEM", "LOCATION_SYSTEM", "REF_VISION_SYSTEM", "REF_VISION_SYSTEM");
   T(r.nPrompts === 3, `3 graphes (planche perso, planche décor, r2v), ${r.nPrompts}`);
@@ -698,6 +738,23 @@ E["C-H2"] = (r, T) => {
   T(d.prop === d.orig && d.field === d.orig, `sortie de gemma sans jeton : le brief doit rester inchangé, reçu propriété « ${d.prop} » champ « ${d.field} »`);
   T(/<Subject N>/.test(d.err || "") && /^Enrichissement impossible : /.test(d.err || ""), `sortie de gemma sans jeton : l'erreur doit s'afficher sous le bouton, reçu « ${d.err} »`);
 };
+E["C-H3"] = (r, T) => {
+  nCalls(T, r, 6); [0, 1, 2, 3, 4, 5].forEach(i => sysIs(T, r, i, "R2V_BRIEF (ENHANCE.r2vBrief)"));
+  const MSG = { fr: "gemma a ajouté une mention <Subject N> absente de ta consigne — ton texte d'origine est conservé.",
+    en: "gemma added a <Subject N> mention that is not in your instruction — your original text is kept.",
+    es: "gemma ha añadido una mención <Subject N> que no está en tu consigna — se conserva tu texto original.",
+    de: "gemma hat einen <Subject N>-Verweis hinzugefügt, der nicht in deiner Anweisung steht — dein ursprünglicher Text bleibt erhalten." };
+  const PRE = { fr: "Enrichissement impossible : ", en: "Enhancement failed: ", es: "Enriquecimiento imposible: ", de: "Anreicherung fehlgeschlagen: " };
+  for (const [k, lang] of [["inv", "fr"], ["invNoTok", "fr"], ["inv_en", "en"], ["inv_es", "es"], ["inv_de", "de"]]) {
+    const x = r.extra[k] || {};
+    T(x.prop === x.orig && x.field === x.orig, `${k} : jeton inventé → champ et propriété intacts, reçu propriété « ${x.prop} » champ « ${x.field} »`);
+    T(x.err === PRE[lang] + MSG[lang], `${k} : erreur traduite (${lang}) attendue sous le bouton, reçu « ${x.err} »`);
+  }
+  T(r.ollama[1]?.user === "walks to the window", `brief sans jeton : envoyé tel quel (aucune substitution), reçu « ${r.ollama[1]?.user} »`);
+  const o = r.extra.ok || {};
+  T(o.prop === o.text && o.field === o.text && o.err === "", `brief sans jeton + sortie sans jeton → sortie recopiée octet pour octet, sans normalisation, reçu « ${o.prop} » / err « ${o.err} »`);
+  T(r.nPrompts === 0, `le ✨ ne soumet aucun job (${r.nPrompts})`);
+};
 E["C-CV"] = (r, T) => {
   nCalls(T, r, 0); T(r.nPrompts === 6, `6 graphes (2 cuts × 3 moteurs), ${r.nPrompts}`);
   r.prompts.slice(0, 2).forEach((g, i) => ltxGraph(T, g, `cut ltx25 ${i + 1}`));
@@ -733,6 +790,10 @@ const MUTANTS = [
     edits: () => [['if (applied && key === "positive_prompt" && out.negative_prompt)', 'if (key === "positive_prompt" && out.negative_prompt)']] },
   { id: "M12", about: "enrichBrief : branche « clé attendue absente » (WARN Enrichissement ignoré) retirée", scenarios: ["S-Q4"], file: "index.html",
     edits: t => { const i = t.indexOf("} else addEvent(\"WARN\", \"Enrichissement ignoré"); const j = i < 0 ? -1 : t.indexOf("\n", i); return j < 0 ? null : [[t.slice(i, j), "}"]]; } },
+  { id: "M13", about: "enrichBrief : garde des <Subject N> inventés retirée (v1.4.6)", scenarios: ["S-H6"], file: "index.html",
+    edits: () => [["else if (r2v && [...raw.matchAll(H3_TOKEN_RE)].some(m => !citedH3.includes(m[1])))", "else if (false)"]] },
+  { id: "M14", about: "Canvas addEnhanceButton : garde des <Subject N> inventés retirée (v1.4.6)", scenarios: ["C-H3"], file: "canvas.html",
+    edits: () => [["if ([...fixed.matchAll(E.H3_TOKEN_RE)].some(m => !cited.includes(m[1])))", "if (false)"]] },
 ];
 
 // ── Principal ───────────────────────────────────────────────────────────────────────────────────────────────────

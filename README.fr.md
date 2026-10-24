@@ -2,7 +2,7 @@
 
 # Dell AI Content Studio — démo Media & Entertainment sur GB10
 
-**Version actuelle : 1.4.5** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
+**Version actuelle : 1.4.6** — voir `TOUR-DE-CONTROLE-CHANGELOG.md` pour l'historique des changements.
 
 Studio créatif IA **100 % local** : génération d'images (Krea 2, Qwen-Edit, Qwen Image 2.1) et de vidéos avec audio (LTX 2.5, Minimax H3) via ComfyUI sur un Dell Pro Max GB10, enrichissement de prompt par LLM local (Ollama). L'application est servie par nginx, sans build, sans framework (à l'exception de deux petits services : `updater`, dédié aux mises à jour, et `gallery`, qui indexe le dossier de sorties de ComfyUI pour la galerie, voir plus bas) — deux modes statiques au choix : le formulaire `index.html` (scénarios guidés, voir plus bas) et l'éditeur de nœuds `canvas.html` (voir section dédiée ci-dessous).
 
@@ -240,7 +240,7 @@ d'écran (une seule ouverte à la fois) et le canvas prend toute la largeur ; le
 la vue sur les cartes. La carte Fiche personnage a un sélecteur « Type de sujet » (auto /
 humain / autre) qui corrige le choix du LLM à la génération suivante, et les cartes Storyboard,
 Vidéo, Génération vidéo et Reference2Video composent leurs prompts avec les règles corrigées du Studio (planches
-selon le sujet, grammaire de prompt Minimax H3). Les deux pages partagent une seule copie des compilateurs de prompt et des consignes gemma de Krea 2 et Minimax H3 (`js/engine.js`). Sur la carte Reference2Video, les mentions `<Subject N>` du brief ne traversent jamais le LLM (remplacées avant l'appel, rétablies après) ; si l'une manque dans la réponse, le brief est conservé et une erreur s'affiche sous le bouton.
+selon le sujet, grammaire de prompt Minimax H3). Les deux pages partagent une seule copie des compilateurs de prompt et des consignes gemma de Krea 2 et Minimax H3 (`js/engine.js`). Sur la carte Reference2Video, les mentions `<Subject N>` du brief ne traversent jamais le LLM (remplacées avant l'appel, rétablies après) ; si l'une manque dans la réponse, ou si la réponse ajoute une mention `<Subject N>` absente du brief, le brief est conservé et une erreur s'affiche sous le bouton.
 La carte Création d'image a un sélecteur Moteur — Krea 2 Turbo par défaut, ou Qwen Image 2.1 (mêmes tailles et même
 graphe que le Studio ; pas de LoRA de style dans ce cas).
 
