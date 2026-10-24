@@ -1,5 +1,31 @@
 # Tour de contrôle — changelog
 
+## 2026-10-24 — v1.4.5 — enrichBrief : négatif préservé après écartement, WARN sur clé manquante
+
+Demande (décidée par l'utilisateur) : deux défauts de bord de `enrichBrief` (Studio, `index.html`), changements minimaux. Version **1.4.5**.
+
+**Fichiers** : `index.html` (+3 −2), `tools/prompt-systems.js` (+21 −3), `VERSION`, `AGENTS.md`, `docs/TESTING.md`, les deux README, ce changelog. `js/engine.js`, `canvas.html`, `workflows/`, `docker/`, `nginx.conf`,
+`tools/parity-prompts.js` intacts ; aucun texte d'`addEvent`/`throw` existant modifié, aucune clé I18N (le nouveau WARN est en français non traduit, comme tous les événements du journal).
+
+**Ce qui change** :
+- **Négatif de l'utilisateur après un écartement.** `if (key === "positive_prompt" && out.negative_prompt) negative.value = …` s'exécutait même quand l'enrichissement était ÉCARTÉ (jetons `<imageN>` perdus sur `qwen21_i2i`, route générique) :
+  le brief était gardé mais le négatif écrasé par celui de gemma. La condition devient `applied && key === "positive_prompt" && out.negative_prompt` (`applied` : le brief a vraiment été réécrit, drapeau posé en v1.4.4).
+  Aucun autre chemin ne dépendait de l'ancien comportement : `enrichBrief` n'a que deux appelants (clic ✨ et auto-enrichissement de « Générer »), seule la route générique (`positive_prompt`) écrit un négatif, et les autres écartements
+  (`<Subject N>` en r2v) portent sur des routes qui n'en écrivent pas.
+- **Sortie de gemma sans la clé attendue.** Si `out[key]` est absent ou vide, `enrichBrief` restait muet. Une branche `else` émet maintenant un seul `WARN` « Enrichissement ignoré : la réponse de gemma ne contient pas le champ attendu — consigne d'origine conservée. » ;
+  aucun `OK`, brief et négatif intacts (conséquence de `applied` resté faux : un `negative_prompt` présent mais sans `positive_prompt` n'écrase plus rien non plus).
+
+**Décision** : correctifs de comportement dans le seul fichier `index.html` ; les deux défauts partageaient la même fonction et le même drapeau `applied`, donc un seul lot.
+
+**Preuves** (copies `~/.cache/ai-content-studio/enrichedges/{before,after}/`, `before` = `git archive 7c60720`, fichiers suivis du dépôt vérifiés identiques à `before/` avant l'installation ; gemma et ComfyUI bouchonnés, 0 job) :
+- `node tools/prompt-systems.js` : **390 contrôles · 36 scénarios · tout vert, mutants M1 à M12 tués** (nouveaux : **M11** négatif écrit après un écartement, tué par S-Q2 ; **M12** branche « clé absente » retirée, tué par S-Q4).
+  S-Q2 (+2 contrôles : négatif intact après l'écartement avec un bouchon qui renvoie un négatif DIFFÉRENT ; négatif de gemma après l'enrichissement accepté) ; S-Q4 nouveau (10 contrôles : 1 WARN « Enrichissement ignoré », 0 OK, brief et négatif intacts, 0 job).
+  Même outil sur `before/` : **rouge exactement sur S-Q2 (négatif écrasé) et S-Q4 (pas de WARN, négatif écrasé)**, les 34 autres scénarios verts ; dump avant/après : 34 scénarios identiques.
+- `node tools/parity-prompts.js` : 158 294 contrôles · 179 groupes · 52 652 cas × 3 voies · `Engine` 90 clés, TOUT PASSE.
+- Matrice de graphes : 37 scénarios · 112 corps `/prompt` (407 215 o) · 219 uploads · 17 corps ollama (15 094 o), 37/37 identiques à HEAD, 36/37 au golden (exception D1 connue, `krea2_lora_style_enrich`).
+- Chaîne de bancs : load-check, scan-register, audit i18n (0), check-keys-engine (94/0/6), proofs-4a (159), proofs-4b (92), proofs-mem (44), bench-dnd (141), bench-queue (42), bench-q21, bench-refs, bench-gallery (49/49), bench-service (152/152), bench-meta (134/134),
+  bench-canvas d'origine (avant/après) tous verts ; zéro job sur interaction. `bench-q21canvas` garde son seul échec périmé (graphe sauvegardé par HEAD sans propriété `engine`), identique à la 1.4.4.
+
 ## 2026-10-22 — v1.4.4 — correctifs issus des rendus réels (consigne r2v, nginx /ollama/, journal)
 
 Demande : corriger les trois défauts relevés par les rendus réels du 2026-10-21/22 (`~/.cache/ai-content-studio/rendus/journal.md`). Version **1.4.4**.

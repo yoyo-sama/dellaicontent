@@ -170,6 +170,7 @@ const STUBS = String.raw`(() => {
   // Réponse gemma : clés de TOUTES les consignes ; si le message utilisateur porte un jeton substitué (SUBJECTREFn, Q21IMAGEREFn),
   // le texte rendu le recopie (comme le ferait gemma), ce qui prouve l'aller-retour des jetons.
   const reply = user => {
+    if (C.noKey) return { negative_prompt: "blurry", unrelated: "x" };   // C.noKey : gemma répond du JSON valide SANS la clé attendue (mais avec un négatif)
     const t = /SUBJECTREF\d|Q21IMAGEREF\d/.test(user) && !C.dropTokens ? "enriched: " + user : TEXT;   // C.dropTokens : gemma « oublie » les jetons (sortie sans eux)
     return { positive_prompt: t, negative_prompt: "blurry", prompt: t, brief: t, description: t, action: t, instruction: t, label: "",
       kind: "human", face: "round face with freckles", hair: "short brown hair", outfit: "blue wool coat", accessories: "", palette: "blue and brown",
@@ -372,9 +373,11 @@ const SPEC = [
     }` },
   // témoins « non affectés » : Qwen Image 2.1 / Qwen-Edit gardent la consigne générique
   { id: "S-Q1", page: "studio", run: `pick("text2image", "qwen21_t2i"); base(); await enrichClick(); __extra = { brief: brief.value, neg: negative.value };` },
-  { id: "S-Q2", page: "studio", run: `pick("image2image", "qwen21_i2i"); base(); brief.value = "Put the <image2> hat on the fox of <image1>"; await enrichClick(); __extra = { brief: brief.value, ev: __log.events.slice() };
-    const orig = brief.value = "Put the <image2> hat on the fox of <image1>", k = __log.events.length;
-    __cfg.dropTokens = true; await enrichClick(); __cfg.dropTokens = false; __extra.drop = { orig, brief: brief.value, ev: __log.events.slice(k) };` },
+  { id: "S-Q2", page: "studio", run: `pick("image2image", "qwen21_i2i"); base(); brief.value = "Put the <image2> hat on the fox of <image1>"; await enrichClick(); __extra = { brief: brief.value, neg: negative.value, ev: __log.events.slice() };
+    const orig = brief.value = "Put the <image2> hat on the fox of <image1>", k = __log.events.length; negative.value = "low quality";
+    __cfg.dropTokens = true; await enrichClick(); __cfg.dropTokens = false; __extra.drop = { orig, brief: brief.value, neg: negative.value, ev: __log.events.slice(k) };` },
+  // sortie de gemma sans la clé attendue (JSON valide, mais seulement un négatif) : brief et négatif intacts, un WARN « Enrichissement ignoré », aucun OK
+  { id: "S-Q4", page: "studio", run: `pick("text2image", "qwen21_t2i"); base(); const orig = brief.value; __cfg.noKey = true; await enrichClick(); __cfg.noKey = false; __extra = { orig, brief: brief.value, neg: negative.value, ev: __log.events.slice() };` },
   { id: "S-Q3", page: "studio", run: `pick("image2image", "qwen_edit_i2i"); base(); await enrichClick(); __extra = { brief: brief.value, neg: negative.value };` },
   // ── Canvas ──
   { id: "C-K1", page: "canvas", run: `const k = add("simple/krea2", { prompt: "a fox in a yellow raincoat" }); SEL(k); await wait(100); await enhance("prompt"); __extra = { prop: k.properties.prompt, field: document.getElementById("pf-prompt").value };
@@ -626,6 +629,17 @@ E["S-Q2"] = (r, T) => {
   okJournal(T, r, "i2i Qwen Image 2.1", /^WARN Enrichissement écarté : les mentions <imageN>/);
   T(/Q21IMAGEREF2/.test(r.ollama[0]?.user) && !/<image/.test(r.ollama[0]?.user), `Qwen Image 2.1 i2i : <imageN> substitués avant l'appel, reçu « ${r.ollama[0]?.user} »`);
   T(/<image1>/.test(r.extra.brief) && /<image2>/.test(r.extra.brief) && !/Q21IMAGEREF/.test(r.extra.brief), "… et rétablis dans le brief");
+  T(r.extra.neg === "blurry", `enrichissement accepté (consigne générique) : le négatif est celui de gemma, reçu « ${r.extra.neg} »`);
+  T(r.extra.drop?.neg === "low quality", `enrichissement écarté : le négatif de l'utilisateur doit rester intact, reçu « ${r.extra.drop?.neg} »`);
+};
+E["S-Q4"] = (r, T) => {
+  nCalls(T, r, 1); sysIs(T, r, 0, "ENRICH_SYSTEM");
+  const ev = r.extra.ev || [], w = ev.filter(e => /^WARN Enrichissement ignoré : la réponse de gemma ne contient pas le champ attendu/.test(e));
+  T(w.length === 1, `sortie sans la clé attendue → exactement 1 WARN « Enrichissement ignoré » attendu, ${w.length} reçu(s) (journal ${JSON.stringify(ev)})`);
+  T(nOk(ev) === 0, `sortie sans la clé attendue → AUCUN événement OK « Brief enrichi » (journal ${JSON.stringify(ev)})`);
+  T(r.extra.brief === r.extra.orig, `sortie sans la clé attendue → brief intact, reçu « ${r.extra.brief} »`);
+  T(r.extra.neg === "low quality", `sortie sans la clé attendue (mais avec un négatif) → négatif intact, reçu « ${r.extra.neg} »`);
+  T(r.nPrompts === 0, `le ✨ ne soumet aucun job (${r.nPrompts})`);
 };
 E["S-Q3"] = (r, T, all) => {
   nCalls(T, r, 1); sysIs(T, r, 0, "QWEN_EDIT_INSTRUCTION (ENHANCE.qwenInstruction)");
@@ -715,6 +729,10 @@ const MUTANTS = [
     edits: () => [['wf?.anchor === "api/qwen21_dual.json" ? "Qwen Image 2.1" : "Qwen-Image-Edit-2509"', '"Qwen-Image-Edit-2509"']] },
   { id: "M10", about: "l'événement OK « Brief enrichi » d'enrichBrief émis sans condition (même après un écartement)", scenarios: ["S-H3", "S-Q2"], file: "index.html",
     edits: () => [['if (applied) addEvent("OK", `Brief enrichi', 'addEvent("OK", `Brief enrichi']] },
+  { id: "M11", about: "enrichBrief écrit le négatif de gemma même après un écartement (condition applied retirée)", scenarios: ["S-Q2"], file: "index.html",
+    edits: () => [['if (applied && key === "positive_prompt" && out.negative_prompt)', 'if (key === "positive_prompt" && out.negative_prompt)']] },
+  { id: "M12", about: "enrichBrief : branche « clé attendue absente » (WARN Enrichissement ignoré) retirée", scenarios: ["S-Q4"], file: "index.html",
+    edits: t => { const i = t.indexOf("} else addEvent(\"WARN\", \"Enrichissement ignoré"); const j = i < 0 ? -1 : t.indexOf("\n", i); return j < 0 ? null : [[t.slice(i, j), "}"]]; } },
 ];
 
 // ── Principal ───────────────────────────────────────────────────────────────────────────────────────────────────

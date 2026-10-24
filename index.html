@@ -5366,9 +5366,10 @@ Answer ONLY with JSON: {"prompt": "..."}`;
             applied = true;
             stripped = got.length - brief.value.length;
           }
-        }
+        } else addEvent("WARN", "Enrichissement ignoré : la réponse de gemma ne contient pas le champ attendu — consigne d'origine conservée.", "warn");
         // Seule la consigne générique demande un négatif ; Krea 2 et H3 n'en encodent aucun (il ne serait pas encodé : piège n°16).
-        if (key === "positive_prompt" && out.negative_prompt) negative.value = out.negative_prompt;
+        // Jamais après un écartement ni sur une sortie sans la clé : le brief reste celui de l'utilisateur, son négatif aussi.
+        if (applied && key === "positive_prompt" && out.negative_prompt) negative.value = out.negative_prompt;
         if (applied) addEvent("OK", `Brief enrichi par ${OLLAMA_MODEL}${krea2 ? " (consigne Krea 2, positif seul)" : ""}.`, "ok");
         if (stripped > 0) addEvent("SYS", `Remplissage retiré du prompt (${stripped} caractères sans direction visuelle).`, "sys");
       } finally {
